@@ -1,0 +1,6 @@
+{"timestamp": "2026-03-25T12:48:22.672676", "user": "CEO", "action": "mode_change", "payload": {"mode": "live"}, "response": {"status": "OK", "mode": "live"}}
+{"timestamp": "2026-03-25T12:48:24.017755", "user": "CEO", "action": "mode_change", "payload": {"mode": "observe"}, "response": {"status": "OK", "mode": "observe"}}
+{"timestamp": "2026-03-25T12:48:25.235647", "user": "CEO", "action": "mode_change", "payload": {"mode": "live"}, "response": {"status": "OK", "mode": "live"}}
+{"timestamp": "2026-03-25T12:48:26.326125", "user": "CEO", "action": "mode_change", "payload": {"mode": "observe"}, "response": {"status": "OK", "mode": "observe"}}
+{"timestamp": "2026-03-25T17:39:25.931519", "user": "CEO", "action": "mode_change", "payload": {"mode": "live"}, "response": {"status": "OK", "mode": "live"}}
+{"timestamp": "2026-03-25T17:39:27.059585", "user": "CEO", "action": "mode_change", "payload": {"mode": "observe"}, "response": {"status": "OK", "mode": "observe"}}
