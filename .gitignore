@@ -173,3 +173,6 @@ atlas_backend/cache/
 *.state
 *.download
 *.part
+
+# ── Node.js / React ────────────────────────────────────────────
+atlas_ui/node_modules/
