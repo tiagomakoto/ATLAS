@@ -146,8 +146,14 @@ async def obter_analytics(ticker: str):
         paths = get_paths()
         ativo_data = get_ativo(ticker)
         
-        ir_series = [c.get("ir", 0) for c in ativo_data.get("historico", []) if c.get("ir") is not None]
-        walk_forward = compute_walk_forward(ir_series) if ir_series else {"series": []}
+        # Extrair ciclo_ids do historico
+        ciclo_ids = [c.get("ciclo_id") for c in ativo_data.get("historico", [])]
+
+        # Calcular IR series
+        ir_series = [c.get("ir", 0) for c in ativo_data.get("historico", [])]
+        
+        # ✅ B02: Passar ciclo_ids para compute_walk_forward
+        walk_forward = compute_walk_forward(ir_series, ciclo_ids=ciclo_ids) if ir_series else {"series": []}
         
         ohlcv_path = Path(paths["ohlcv_dir"]) / f"{ticker}.parquet"
         ohlcv_disponivel = ohlcv_path.exists()

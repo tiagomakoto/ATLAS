@@ -6,7 +6,7 @@ export default function OfflineBanner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch("/mode", {
+        const res = await fetch("http://localhost:8000/mode", {
           signal: AbortSignal.timeout(2000)
         });
         setBackendDown(!res.ok);
@@ -30,9 +30,16 @@ export default function OfflineBanner() {
       textAlign: "center",
       fontFamily: "monospace",
       fontSize: 11,
-      letterSpacing: 1
+      letterSpacing: 1,
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 9999,
+      borderBottom: "2px solid var(--atlas-red)",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
     }}>
-      ⚠ BACKEND OFFLINE — dados podem estar desatualizados
+      ⚠️ BACKEND OFFLINE — Verifique se o servidor em localhost:8000 está ativo
     </div>
   );
 }

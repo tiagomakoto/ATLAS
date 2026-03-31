@@ -1,37 +1,26 @@
 from fastapi import APIRouter, HTTPException
 from core.config_manager import load_config, update_config
 
-# NOTA: o backend não verifica se o diff foi exibido ao operador.
-# O frontend DEVE enforçar o fluxo: diff → confirmar → salvar.
-# Limitação conhecida e documentada.
-
 router = APIRouter()
 
 @router.post("/config/update")
 def update(payload: dict):
-    description = payload.get("description", "").strip()
+    ticker = payload.get("ticker")      # ← EXTRAIR ticker
+    
+    print(ticker)
     data = payload.get("data")
+    description = payload.get("description", "").strip()
     confirm = payload.get("confirm", False)
 
+    if not ticker:
+        raise HTTPException(status_code=400, detail={"error": "TICKER_REQUIRED"})
     if not description:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "DESCRIPTION_REQUIRED"}
-        )
-
-    # 🔴 PROTEÇÃO — exige confirmação explícita
+        raise HTTPException(status_code=400, detail={"error": "DESCRIPTION_REQUIRED"})
     if not confirm:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "CONFIRMATION_REQUIRED",
-                "message": "Envie confirm=true para aplicar alteração"
-            }
-        )
+        raise HTTPException(status_code=400, detail={"error": "CONFIRMATION_REQUIRED"})
+    if not data:
+        raise HTTPException(status_code=400, detail={"error": "DATA_REQUIRED"})
 
-    version = update_config(data, description)
+    version = update_config(ticker, data, description)
 
-    return {
-        "status": "OK",
-        "version": version["version_id"]
-    }
+    return {"status": "OK", "version": version["version_id"]}

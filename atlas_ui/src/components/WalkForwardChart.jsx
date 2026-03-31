@@ -14,21 +14,12 @@ import {
 export default function WalkForwardChart({ data }) {
   const series = data?.walkForward?.series || data?.series || [];
 
-  // Calcular domínio Y incluindo zero
-  const irValues = series.map(s => s.ir_mean).filter(v => v !== null && v !== undefined);
-  const minIR = irValues.length > 0 ? Math.min(...irValues) : -1;
-  const maxIR = irValues.length > 0 ? Math.max(...irValues) : 1;
-  const yDomain = [
-    Math.min(minIR, 0) - 0.1,
-    Math.max(maxIR, 0) + 0.1
-  ];
-
   if (!series.length) {
     return (
-      <div style={{ 
-        fontFamily: "monospace", 
-        fontSize: 11, 
-        color: "var(--atlas-text-secondary)", 
+      <div style={{
+        fontFamily: "monospace",
+        fontSize: 11,
+        color: "var(--atlas-text-secondary)",
         padding: 20,
         textAlign: "center",
         background: "var(--atlas-bg)",
@@ -41,27 +32,27 @@ export default function WalkForwardChart({ data }) {
   }
 
   return (
-    <div style={{ 
-      background: "var(--atlas-bg)", 
-      border: "1px solid var(--atlas-border)", 
-      borderRadius: 4, 
-      padding: 16 
+    <div style={{
+      background: "var(--atlas-bg)",
+      border: "1px solid var(--atlas-border)",
+      borderRadius: 4,
+      padding: 16
     }}>
-      <div style={{ 
-        fontFamily: "monospace", 
-        fontSize: 10, 
-        color: "var(--atlas-text-secondary)", 
+      <div style={{
+        fontFamily: "monospace",
+        fontSize: 10,
+        color: "var(--atlas-text-secondary)",
         marginBottom: 12,
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center"
       }}>
-        <span>WALK FORWARD ANALYSIS</span>
+        WALK FORWARD ANALYSIS
         <span style={{ fontSize: 9, color: "var(--atlas-text-secondary)", fontStyle: "italic" }}>
           * Janela inicial excluída do backtest
         </span>
       </div>
-      
+
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={series}>
           <CartesianGrid 
@@ -85,8 +76,9 @@ export default function WalkForwardChart({ data }) {
             }} 
           />
           
+          {/* ✅ B02: Eixo X com ciclo_label se disponível, senão window_end */}
           <XAxis 
-            dataKey="window_end" 
+            dataKey={series[0]?.ciclo_label ? "ciclo_label" : "window_end"} 
             tick={{ 
               fontSize: 9, 
               fontFamily: "monospace", 
@@ -94,11 +86,10 @@ export default function WalkForwardChart({ data }) {
             }}
             tickLine={false}
             axisLine={{ stroke: "var(--atlas-border)" }}
+            interval="preserveStartEnd"
           />
           
-          {/* ✅ YAxis COM tickFormatter: 2 casas decimais */}
           <YAxis 
-            domain={yDomain}
             tick={{ 
               fontSize: 9, 
               fontFamily: "monospace", 
@@ -106,7 +97,7 @@ export default function WalkForwardChart({ data }) {
             }}
             tickLine={false}
             axisLine={{ stroke: "var(--atlas-border)" }}
-            tickFormatter={(value) => value.toFixed(2)}  // ✅ FORMATAR PARA 2 CASAS
+            tickFormatter={(value) => value.toFixed(2)}
           />
           
           <Tooltip

@@ -5,7 +5,11 @@ def compute_returns(prices):
     prices = np.array(prices)
     return np.diff(prices) / prices[:-1]
 
-def compute_walk_forward(ir_series, window_size=12):
+
+def compute_walk_forward(ir_series, window_size=12, ciclo_ids=None):
+    """
+    B02: Adicionado parâmetro ciclo_ids para rótulo no eixo X.
+    """
     results = []
     for i in range(window_size, len(ir_series) + 1):
         window = ir_series[i - window_size:i]
@@ -14,18 +18,24 @@ def compute_walk_forward(ir_series, window_size=12):
             float(np.mean(np.random.choice(window, len(window), replace=True)))
             for _ in range(1000)
         ]
-        results.append({
+        point = {
             "window_end": i,
             "ir_mean": mean_ir,
             "ci_lower": float(np.percentile(boot, 2.5)),
             "ci_upper": float(np.percentile(boot, 97.5)),
             "n": len(window)
-        })
+        }
+        # ✅ B02: Adicionar ciclo_label se ciclo_ids disponível
+        if ciclo_ids and i <= len(ciclo_ids):
+            point["ciclo_label"] = ciclo_ids[i - 1]
+        results.append(point)
+    
     return {
         "type": "walk_forward",
         "series": results,
         "total_n": len(ir_series)
     }
+
 
 def compute_distribution(returns):
     returns = np.array(returns)
@@ -43,6 +53,7 @@ def compute_distribution(returns):
         },
         "n": len(returns)
     }
+
 
 def compute_acf(returns, lags=30):
     returns = np.array(returns)
@@ -62,6 +73,7 @@ def compute_acf(returns, lags=30):
         "confidence_band": confidence_band,
         "n": n
     }
+
 
 def compute_tail_metrics(returns):
     returns = np.array(returns)

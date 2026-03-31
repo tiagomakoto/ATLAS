@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import CycleBar from "../components/CycleBar";
 import ModeToggle from "../components/ModeToggle";
 import HealthIndicator from "../components/HealthIndicator";
-import ActionPanel from "../components/ActionPanel";
 import EventFeed from "../components/EventFeed";
 import WalkForwardChart from "../components/WalkForwardChart";
 import DistributionChart from "../components/DistributionChart";
@@ -57,7 +56,7 @@ const VisaoGeral = ({ state, analytics, activeTicker, onTickerSelect, bookFonte,
         );
 
         const ativosValidos = detalhes.filter(Boolean);
-        setListaAtivos(ativosValidos);  // ✅ Salva no estado
+        setListaAtivos(ativosValidos);
 
         const resBook = await fetch(`${API_BASE}/ativos/book?fonte=${bookFonte}`);
         const dataBook = await resBook.json();
@@ -124,24 +123,6 @@ const VisaoGeral = ({ state, analytics, activeTicker, onTickerSelect, bookFonte,
   );
 };
 
-const ManutencaoView = () => (
-  <div style={{ fontFamily: "monospace", fontSize: 11 }}>
-    <h4 style={{ color: "var(--atlas-text-primary)", marginBottom: 12 }}>Manutenção</h4>
-    <div style={{ marginBottom: 16 }}>
-      <strong>Upload EOD</strong>
-      <p style={{ color: "var(--atlas-text-secondary)", marginTop: 4 }}>Formatos aceitos: .csv, .parquet</p>
-    </div>
-    <div style={{ marginBottom: 16 }}>
-      <strong>Upload Calendário de Eventos</strong>
-      <p style={{ color: "var(--atlas-text-secondary)", marginTop: 4 }}>tipo_evento: earnings, dividendo, copom, vencimento_opcoes, rebalanceamento, macro</p>
-    </div>
-    <div>
-      <strong>Versionamento de Config</strong>
-      <p style={{ color: "var(--atlas-text-secondary)", marginTop: 4 }}>Histórico acessível via ConfigEditor (sem alteração de lógica)</p>
-    </div>
-  </div>
-);
-
 // === COMPONENTE PRINCIPAL ===
 export default function MainScreen({ state, analytics, activeTicker, onTickerChange, isLoading, globalTab, setGlobalTab, internalTab, setInternalTab }) {
   const mode = state.mode || "observation";
@@ -155,19 +136,18 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
     { id: "trending", label: "Trending", implemented: false },
   ];
 
+  // ✅ REMOVIDO "manutencao" — agora está dentro do AtivoView
   const internalTabs = [
     { id: "visao_geral", label: "Visão Geral" },
     { id: "ativo", label: "Ativo" },
-    { id: "manutencao", label: "Manutenção" },
   ];
 
   return (
     <div style={{ background: "var(--atlas-bg)", color: "var(--atlas-text-primary)", minHeight: "100vh" }}>
-      
-      {/* ✅ HEADER SEPARADO */}
+      {/* HEADER SEPARADO */}
       <Header state={state} cycleData={cycleData} mode={mode} />
 
-      {/* ✅ NAV DE NAVEGAÇÃO GLOBAL COM TOOLTIPS + C02 */}
+      {/* NAV DE NAVEGAÇÃO GLOBAL COM TOOLTIPS */}
       <nav style={{ display: "flex", borderBottom: "1px solid var(--atlas-border)", background: "var(--atlas-surface)" }}>
         {globalTabs.map((tab) => {
           const isPlaceholder = !tab.implemented;
@@ -193,9 +173,7 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                     <div style={{ marginTop: 4 }}>
                       Módulo ativo — visão completa do Delta Chaos
                     </div>
-                    <div style={{ marginTop: 4 }}>
-                      • Ativos parametrizados
-                    </div>
+                    <div style={{ marginTop: 4 }}>• Ativos parametrizados</div>
                     <div>• Posições abertas</div>
                     <div>• Analytics em tempo real</div>
                   </div>
@@ -229,7 +207,6 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                 }}
               >
                 {tab.label}
-                {/* ✅ C02: Badge `·` em vez de ⚠ */}
                 {isPlaceholder && (
                   <span 
                     style={{ 
@@ -287,24 +264,19 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                   setBookFonte={setBookFonte}
                 />
               )}
-              {internalTab === "ativo" && <AtivoView activeTicker={activeTicker} analytics={analytics} />}
-              {internalTab === "manutencao" && <ManutencaoView />}
+
+              {internalTab === "ativo" && (
+                <AtivoView 
+                  activeTicker={activeTicker} 
+                  analytics={analytics}
+                  onTickerChange={onTickerChange}
+                />
+              )}
             </>
           )}
         </main>
 
-        {/* ✅ CORREÇÃO: ActionPanel APENAS na aba "Ativo" */}
-        {globalTab === "delta_chaos" && internalTab === "ativo" && (
-          <aside style={{ 
-            width: 300, 
-            borderLeft: "1px solid var(--atlas-border)", 
-            padding: 20, 
-            background: "var(--atlas-surface)",
-            overflowY: "auto"
-          }}>
-            <ActionPanel activeTicker={activeTicker} onTickerChange={onTickerChange} />
-          </aside>
-        )}
+        {/* ✅ REMOVIDO: ActionPanel lateral */}
       </div>
     </div>
   );

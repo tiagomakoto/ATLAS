@@ -1,15 +1,5 @@
-
-from fastapi import APIRouter
-
-router = APIRouter(prefix="/config/diff", tags=["config_diff"])
-
-@router.get("")
-def get_config_diff():
-    return {"status": "placeholder"}
-
 def compute_diff(old: dict, new: dict):
     diff = {}
-
     keys = set(old.keys()).union(new.keys())
 
     for k in keys:
@@ -20,5 +10,3 @@ def compute_diff(old: dict, new: dict):
             }
 
     return diff
-
-
