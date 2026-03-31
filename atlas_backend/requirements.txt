@@ -1,7 +1,38 @@
+# ATLAS Backend — requirements unificado
+# Inclui dependências do Atlas e do Delta Chaos
+# Instalar com: pip install -r requirements.txt
+ 
+# ── ATLAS Backend ─────────────────────────────────────────────────
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 pydantic>=2.0.0
+ 
+# ── Analytics (compartilhado) ─────────────────────────────────────
 numpy>=1.26.0
 scipy>=1.12.0
-pandas>=2.0.0      
-pyarrow>=14.0.0    
+pandas>=2.0.0
+pyarrow>=14.0.0
+ 
+# ── Delta Chaos — dados de mercado ────────────────────────────────
+yfinance>=0.2.36
+openpyxl>=3.1.0
+ 
+# ── Delta Chaos — utilitários ─────────────────────────────────────
+tqdm>=4.66.0
+ 
+# ── Delta Chaos — dependências implícitas ─────────────────────────
+# (instaladas como dependências de yfinance/pandas mas listadas
+#  explicitamente para garantir versão mínima compatível)
+requests>=2.31.0
+urllib3>=2.0.0
+
+
+
+
+
+
+
+
+
+
+

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import CycleBar from "./components/CycleBar";
 import ModeToggle from "./components/ModeToggle";
 import HealthIndicator from "./components/HealthIndicator";
-import ReadingPanel from "./components/ReadingPanel";
 import MainScreen from "./layouts/MainScreen";
 import FooterStatus from "./components/FooterStatus";
 import RegimeAlert from "./components/RegimeAlert";
@@ -87,6 +86,10 @@ export default function App() {
 
   return (
     <div style={{ background: "var(--atlas-bg)", color: "var(--atlas-text-primary)", minHeight: "100vh" }}>
+      
+      {/* ✅ ADICIONAR ESTA LINHA */}
+      <OfflineBanner />
+      
       <RegimeAlert alert={state.alert} />
       <MainScreen 
         state={state} 
