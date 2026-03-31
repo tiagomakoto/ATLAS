@@ -1,15 +1,175 @@
-# Python compiled files
+# ═══════════════════════════════════════════════════════════════
+# ATLAS + DELTA CHAOS — .gitignore
+# ═══════════════════════════════════════════════════════════════
+
+# ── Python ─────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Python cache
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
 
-# Virtual environments
-venv/
+# ── Virtual Environments ───────────────────────────────────────
 .venv/
+venv/
+ENV/
 env/
+env.bak/
+venv.bak/
+.venv.bak/
+
+# ── Node.js / React ────────────────────────────────────────────
+node_modules/
+.npm/
+.pnpm-store/
+yarn-error.log
+yarn.lock
+package-lock.json
+*.log
+.nyc_output/
+coverage/
+
+# ── Vite / Build ───────────────────────────────────────────────
+atlas_ui/dist/
+atlas_ui/build/
+*.map
+
+# ── FastAPI / Uvicorn ──────────────────────────────────────────
+*.pid
+*.sock
+
+# ── Data Directories ───────────────────────────────────────────
+TAPE/ohlcv/*.parquet
+TAPE/gregas/*.parquet
+TAPE/cotahist/*.TXT
+TAPE/cotahist/*.ZIP
+TAPE/externas/*.parquet
+TAPE/selic_historica.parquet
+TAPE/*.parquet
+
+BOOK/book_*.json
+BOOK/book_*.parquet
+BOOK/book_audit_log.json
+
+ORBIT/*.json
+ORBIT/*.parquet
+
+TradeLog/*.json
+TradeLog/*.parquet
+
+opcoes_hoje/*.xlsx
+opcoes_hoje/*.csv
+opcoes_historico/*.xlsx
+opcoes_historico/*.csv
+
+# ── Master JSONs de Ativos ─────────────────────────────────────
+ativos/VALE3.json
+ativos/PETR4.json
+ativos/BOVA11.json
+
+# ── Configs com paths pessoais ─────────────────────────────────
+atlas_backend/config/paths.json
+!atlas_backend/config/paths.json.example
+
+delta_chaos_config.json
+!delta_chaos_config.json.example
+
+# ── Environment / Secrets ──────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+*.secret
+credentials.json
+service_account.json
+*.pem
+*.key
+
+# ── IDE / Editor ───────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ── OS / System ────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ── Jupyter / Notebooks ────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+*.pkl
+
+# ── Logs / Temp ────────────────────────────────────────────────
+*.log
+logs/
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+
+# ── Git / GitHub ───────────────────────────────────────────────
+.git/
+!.gitignore
+.github/
+.gitattributes
+.gitmodules
+
+# ── Docker ─────────────────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+
+# ── Misc ───────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.exe
+*.msi
+*.dmg
+
+# ── Atlas Específico ───────────────────────────────────────────
+atlas_backend/cache/
+*.cache
+*.session
+*.state
+*.download
+*.part
