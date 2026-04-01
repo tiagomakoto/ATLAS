@@ -1,15 +1,17 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — BOOK v2.0
-# Alterações em relação à v1.2:
-# MIGRADO (P2): imports explícitos de init e tape — sem escopo global
-# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
-# MANTIDO: dataclasses, métricas, persistência atômica, dashboard REFLECT
-# ════════════════════════════════════════════════════════════════════
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+import json
+import os
+# DELTA CHAOS â€” BOOK v2.0
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
+# MIGRADO (P2): imports explÃ­citos de init e tape â€” sem escopo global
+# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
+# MANTIDO: dataclasses, mÃ©tricas, persistÃªncia atÃ´mica, dashboard REFLECT
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-from init import carregar_config, BOOK_DIR
-from tape import tape_carregar_ativo
+from .init import carregar_config, BOOK_DIR
+from delta_chaos.tape import tape_carregar_ativo
 
-# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
+# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -18,23 +20,23 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — BOOK v1.2
-# Alterações em relação à v1.1:
-# ADICIONADO: seção REFLECT no dashboard() — estado e histórico por ativo
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” BOOK v1.2
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.1:
+# ADICIONADO: seÃ§Ã£o REFLECT no dashboard() â€” estado e histÃ³rico por ativo
 # ADICIONADO: import tape_carregar_ativo para leitura do estado REFLECT
-# MANTIDO: toda a lógica de Operacao, persistência e métricas
-# ════════════════════════════════════════════════════════════════════
+# MANTIDO: toda a lÃ³gica de Operacao, persistÃªncia e mÃ©tricas
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 from dataclasses import dataclass, field
 from typing import Optional, List
 import math, json, os
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 
-
-# ── Constantes ───────────────────────────────────────────────────────
+# â”€â”€ Constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 SCHEMA_VERSION   = "1.0"
 
 _cfg_book    = carregar_config()["book"]
@@ -47,7 +49,7 @@ ROLL_DIAS        = 7
 PREMIO_MINIMO    = 0.30
 COOLING_OFF_DIAS = 21
 
-# ── Dataclasses ──────────────────────────────────────────────────────
+# â”€â”€ Dataclasses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @dataclass
 class Core:
@@ -104,7 +106,7 @@ class Operacao:
     legs:                List[Leg] = field(default_factory=list)
 
 
-# ── Classe BOOK ──────────────────────────────────────────────────────
+# â”€â”€ Classe BOOK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class BOOK:
 
@@ -115,9 +117,9 @@ class BOOK:
         self.fonte        = fonte
         self._abertas_idx: dict = {}
         self._carregar()
-        print(f"  BOOK ({fonte}) — {len(self._ops)} operações")
+        print(f"  BOOK ({fonte}) â€” {len(self._ops)} operaÃ§Ãµes")
 
-    # ── Índice ────────────────────────────────────────────────────
+    # â”€â”€ Ãndice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @property
     def posicoes_abertas(self) -> list:
@@ -153,7 +155,7 @@ class BOOK:
                 op.core.motivo_nao_entrada is None)
         }
 
-    # ── Abertura ──────────────────────────────────────────────────
+    # â”€â”€ Abertura â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def registrar(self, op: Operacao) -> Operacao:
         self._counter += 1
@@ -173,7 +175,7 @@ class BOOK:
             schema_version = SCHEMA_VERSION,
             core = Core(
                 ativo              = ativo,
-                estrategia         = "—",
+                estrategia         = "â€”",
                 data_entrada       = data,
                 fonte              = self.fonte,
                 motivo_nao_entrada = motivo,
@@ -191,7 +193,7 @@ class BOOK:
         )
         self._ops.append(op)
 
-    # ── Fechamento ────────────────────────────────────────────────
+    # â”€â”€ Fechamento â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def fechar(self, op_id: str, data: str,
                precos_saida: list, motivo: str,
@@ -211,13 +213,13 @@ class BOOK:
             leg.premio_saida = p_saida
             slip = op.context.slippage_aplicado
             if leg.posicao == "vendida":
-                # entrada: recebeu menos; saída: pagou mais
+                # entrada: recebeu menos; saÃ­da: pagou mais
                 entrada_liq = leg.premio_entrada * (1 - slip)
                 saida_liq   = p_saida * (1 + slip)
                 pnl += ((entrada_liq - saida_liq) *
                          op.core.n_contratos)
             else:
-                # entrada: pagou mais; saída: recebeu menos
+                # entrada: pagou mais; saÃ­da: recebeu menos
                 entrada_liq = leg.premio_entrada * (1 + slip)
                 saida_liq   = p_saida * (1 - slip)
                 pnl += ((saida_liq - entrada_liq) *
@@ -236,9 +238,9 @@ class BOOK:
 
         self._registrar_fechamento(op_id)
         self._salvar()
-        print(f"  ✓ Fechado {op_id}: P&L={pnl:+.4f} ({motivo})")
+        print(f"  âœ“ Fechado {op_id}: P&L={pnl:+.4f} ({motivo})")
 
-    # ── Métricas ──────────────────────────────────────────────────
+    # â”€â”€ MÃ©tricas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @property
     def risco_atual(self) -> float:
@@ -264,7 +266,7 @@ class BOOK:
             (premio_liq * _fator + 1e-10))
         return max(n, _n_min)
 
-    # ── Dashboard ─────────────────────────────────────────────────
+    # â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def dashboard(self) -> None:
         fechadas = [op for op in self._ops if op.core.motivo_saida]
@@ -350,7 +352,7 @@ class BOOK:
                          if op.core.motivo_nao_entrada is None])
         pct_ativo = total_ops / max(len(self._ops), 1) * 100
 
-        # ── REFLECT por ativo ────────────────────────────────────
+        # â”€â”€ REFLECT por ativo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         reflect_history_len = carregar_config()["reflect"]["reflect_history_length"]
         todos_ativos = sorted(set(op.core.ativo for op in self._ops))
         reflect_info = {}
@@ -361,7 +363,7 @@ class BOOK:
                 hist  = cfg.get("reflect_history", [])
                 score = cfg.get("reflect_score", 0.0)
                 block = cfg.get("reflect_permanent_block_flag", False)
-                # Últimos N estados para o dashboard
+                # Ãšltimos N estados para o dashboard
                 hist_str = " ".join(
                     h.get("state","?")
                     for h in hist[-reflect_history_len:])
@@ -376,56 +378,56 @@ class BOOK:
                     "state": "?", "score": 0.0,
                     "history": "", "blocked": False}
 
-        # ── Impressão ─────────────────────────────────────────────
-        sep = "═" * 55
+        # â”€â”€ ImpressÃ£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        sep = "â•" * 55
         print(f"\n  {sep}")
-        print(f"  BOOK ({self.fonte}) — capital R${self.capital:,.0f}")
+        print(f"  BOOK ({self.fonte}) â€” capital R${self.capital:,.0f}")
         print(f"  {sep}")
         print(f"  Total: {len(self._ops)} | "
               f"abertas: {len(abertas)} | "
               f"fechadas: {len(fechadas)}")
 
         if abertas:
-            print(f"\n  Posições abertas:")
+            print(f"\n  PosiÃ§Ãµes abertas:")
             for op in abertas:
                 print(f"    {op.op_id:8} {op.core.ativo:8} "
                       f"{op.core.estrategia:15} "
                       f"regime={op.orbit.regime_entrada}")
 
-        print(f"\n  ── Retorno ──────────────────────────────")
+        print(f"\n  â”€â”€ Retorno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         print(f"  P&L realizado:     R${pnl_total:+,.2f}")
         print(f"  Acerto:            {acerto:.1f}%")
         print(f"  IR realizado:      {ir:+.4f}")
         print(f"  Sharpe realizado:  {sharpe:+.4f}")
         print(f"  Risco atual:       "
               f"{self.risco_atual:.1f}% "
-              f"(máx {RISCO_TOTAL*100:.0f}%)")
+              f"(mÃ¡x {RISCO_TOTAL*100:.0f}%)")
 
-        print(f"\n  ── REFLECT (metamodelo) ─────────────────")
+        print(f"\n  â”€â”€ REFLECT (metamodelo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         for ativo, info in reflect_info.items():
-            bloq  = "⛔ BLOQUEADO" if info["blocked"] else ""
+            bloq  = "â›” BLOQUEADO" if info["blocked"] else ""
             score = f"{info['score']:+.3f}" if info["score"] != 0.0 else "  n/a"
             print(f"  {ativo:8} Edge {info['state']}  "
               f"Score={score:>8}  "
               f"Hist=[Edge {' | Edge '.join(info['history'].split())}]  {bloq}")
 
-        print(f"\n  ── Valor esperado (P1) ──────────────────")
-        print(f"  Ganho médio:       R${ganho_medio:+,.2f}  "
+        print(f"\n  â”€â”€ Valor esperado (P1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+        print(f"  Ganho mÃ©dio:       R${ganho_medio:+,.2f}  "
               f"({len(venc)} trades)")
-        print(f"  Perda média:       R${perda_media:+,.2f}  "
+        print(f"  Perda mÃ©dia:       R${perda_media:+,.2f}  "
               f"({len(perd)} trades)")
         print(f"  Valor esperado:    R${valor_esperado:+,.2f} por trade")
 
-        print(f"\n  ── Risco (P2) ───────────────────────────")
-        print(f"  Drawdown máximo:   R${max_dd:,.2f}")
+        print(f"\n  â”€â”€ Risco (P2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+        print(f"  Drawdown mÃ¡ximo:   R${max_dd:,.2f}")
         print(f"  Max stops seguidos:{max_stops_seq}")
 
-        print(f"\n  ── Modelo (P3) ──────────────────────────")
-        print(f"  IR treino médio:   {ir_treino_medio:+.4f}")
+        print(f"\n  â”€â”€ Modelo (P3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+        print(f"  IR treino mÃ©dio:   {ir_treino_medio:+.4f}")
         print(f"  IR realizado:      {ir:+.4f}")
         print(f"  Gap IR:            {gap_ir:+.4f}")
 
-        print(f"\n  ── Por ano (P3) ─────────────────────────")
+        print(f"\n  â”€â”€ Por ano (P3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         for ano in sorted(anos.keys()):
             d  = anos[ano]
             ac = d["venc"] / max(d["n"],1) * 100
@@ -433,18 +435,18 @@ class BOOK:
                   f"P&L=R${d['pnl']:+,.2f}  "
                   f"acerto={ac:.0f}%  stops={d['stops']}")
 
-        print(f"\n  ── Por motivo (P4) ──────────────────────")
+        print(f"\n  â”€â”€ Por motivo (P4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         for m, d in sorted(motivos.items()):
             medio = d["pnl"] / max(d["n"],1)
             print(f"  {m:12} n={d['n']:3}  "
                   f"P&L=R${d['pnl']:+,.2f}  "
-                  f"médio=R${medio:+,.2f}")
+                  f"mÃ©dio=R${medio:+,.2f}")
 
-        print(f"\n  ── Operacional (P5) ─────────────────────")
-        print(f"  Tempo com posição: {pct_ativo:.1f}%")
+        print(f"\n  â”€â”€ Operacional (P5) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+        print(f"  Tempo com posiÃ§Ã£o: {pct_ativo:.1f}%")
         print(f"\n  {sep}")
 
-    # ── DataFrame ─────────────────────────────────────────────────
+    # â”€â”€ DataFrame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def df(self) -> pd.DataFrame:
         rows = []
@@ -472,7 +474,7 @@ class BOOK:
             })
         return pd.DataFrame(rows)
 
-    # ── Persistência ──────────────────────────────────────────────
+    # â”€â”€ PersistÃªncia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _salvar(self) -> None:
         try:
@@ -488,13 +490,13 @@ class BOOK:
             }
     
             if self.fonte == "backtest":
-                # S1 — backtest: save direto, sem overhead de tempfile
-                # O backtest é descartável — não há risco de
-                # perder posições abertas entre sessões.
+                # S1 â€” backtest: save direto, sem overhead de tempfile
+                # O backtest Ã© descartÃ¡vel â€” nÃ£o hÃ¡ risco de
+                # perder posiÃ§Ãµes abertas entre sessÃµes.
                 with open(path, "w") as f:
                     json.dump(dados, f, indent=2, default=str)
             else:
-                # S1 — paper/real: escrita atômica via tempfile + os.replace
+                # S1 â€” paper/real: escrita atÃ´mica via tempfile + os.replace
                 # Cada trade fechado precisa ser persistido imediatamente
                 # e com garantia de integridade.
                 import tempfile
@@ -506,7 +508,7 @@ class BOOK:
                     tmp_path = tf.name
                 os.replace(tmp_path, path)
     
-            # Parquet — sempre direto (formato binário,
+            # Parquet â€” sempre direto (formato binÃ¡rio,
             # pandas lida com escrita segura internamente)
             self.df().to_parquet(
                 os.path.join(BOOK_DIR, f"{nome}.parquet"),
@@ -519,7 +521,7 @@ class BOOK:
                     os.remove(tmp_path)
             except Exception:
                 pass
-            print(f"  ⚠ BOOK salvar: {e}")
+            print(f"  âš  BOOK salvar: {e}")
  
 
     def _carregar(self) -> None:
@@ -538,7 +540,7 @@ class BOOK:
             self._reconstruir_idx()
     
         except Exception as e:
-            # S3 — backup + audit_log antes de reiniciar vazio
+            # S3 â€” backup + audit_log antes de reiniciar vazio
             ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
             nome = f"book_{self.fonte}"
             path = os.path.join(BOOK_DIR, f"{nome}.json")
@@ -553,7 +555,7 @@ class BOOK:
                     shutil.copy2(path, bak)
                     bak_nome = os.path.basename(bak)
                 else:
-                    bak_nome = "arquivo não encontrado"
+                    bak_nome = "arquivo nÃ£o encontrado"
             except Exception as e2:
                 bak_nome = f"backup falhou: {e2}"
     
@@ -579,18 +581,18 @@ class BOOK:
             except Exception:
                 pass
     
-            # 3. Aviso crítico — visível, não silencioso
-            print(f"\n  {'█'*55}")
-            print(f"  CRÍTICO — S3: BOOK não carregado")
+            # 3. Aviso crÃ­tico â€” visÃ­vel, nÃ£o silencioso
+            print(f"\n  {'â–ˆ'*55}")
+            print(f"  CRÃTICO â€” S3: BOOK nÃ£o carregado")
             print(f"  Fonte:  {self.fonte}")
             print(f"  Motivo: {e}")
             print(f"  Backup: {bak_nome}")
             print(f"  Audit:  book_audit_log.json atualizado")
-            print(f"  AÇÃO NECESSÁRIA: verifique o backup antes")
-            print(f"  de operar. Posições abertas podem estar")
-            print(f"  invisíveis ao sistema.")
-            print(f"  {'█'*55}\n")
-            # Estado vazio — mas agora com aviso explícito
+            print(f"  AÃ‡ÃƒO NECESSÃRIA: verifique o backup antes")
+            print(f"  de operar. PosiÃ§Ãµes abertas podem estar")
+            print(f"  invisÃ­veis ao sistema.")
+            print(f"  {'â–ˆ'*55}\n")
+            # Estado vazio â€” mas agora com aviso explÃ­cito
 
     def _op_to_dict(self, op) -> dict:
         return {
@@ -693,11 +695,11 @@ class BOOK:
                 legs = legs,
             )
         except Exception as e:
-            print(f"  ⚠ _dict_to_op: {e}")
+            print(f"  âš  _dict_to_op: {e}")
             return None
 
 if __name__ == "__main__":
-    print("✓ BOOK v1.2 carregado")
+    print("âœ“ BOOK v1.2 carregado")
     print("  Dataclasses: Operacao Core Context OrbitData Leg")
-    print("  Índice em memória — posicoes_abertas O(1)")
-    print("  Dashboard: seção REFLECT com estado e histórico por ativo")
+    print("  Ãndice em memÃ³ria â€” posicoes_abertas O(1)")
+    print("  Dashboard: seÃ§Ã£o REFLECT com estado e histÃ³rico por ativo")

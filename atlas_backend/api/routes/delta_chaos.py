@@ -17,6 +17,11 @@
 # Automação total é fase futura — nenhum endpoint dispara sem confirm=true.
 # ════════════════════════════════════════════════════════════════════
 
+import sys, os
+_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _parent not in sys.path:
+    sys.path.insert(0, _parent)
+
 import sys
 import json
 import asyncio
@@ -27,13 +32,27 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from atlas_backend.core.terminal_stream import (
-    emit_log, emit_error,
-    StreamCapture,
-    register_ws, unregister_ws,
-)
+from core.terminal_stream import emit_log, emit_error
 
 router = APIRouter(prefix="/delta-chaos", tags=["delta-chaos"])
+
+
+# WebSocket connections registry
+_ws_connections: list = []
+def register_ws(ws):
+    if ws not in _ws_connections:
+        _ws_connections.append(ws)
+
+def unregister_ws(ws):
+    if ws in _ws_connections:
+        _ws_connections.remove(ws)
+
+async def broadcast_log(message: str, level: str = "info"):
+    for ws in _ws_connections[:]:
+        try:
+            await ws.send_json({"type": "terminal_log", "level": level, "message": message})
+        except:
+            unregister_ws(ws)
 
 
 # ── Modelos de request ───────────────────────────────────────────────
@@ -111,22 +130,22 @@ def _require_confirm(confirm: bool, endpoint: str) -> None:
 
 def _lazy_edge(universo: list, capital: int = 10_000, modo: str = "paper"):
     """Importa e instancia EDGE sob demanda — evita import circular no topo."""
-    from edge import EDGE
+    from delta_chaos.edge import EDGE
     return EDGE(capital=capital, modo=modo, universo=universo)
 
 
 def _lazy_gate_eod(ticker: str, verbose: bool = True) -> str:
-    from gate_eod import gate_eod
+    from delta_chaos.gate_eod import gate_eod
     return gate_eod(ticker, verbose=verbose)
 
 
 def _lazy_executar_gate(ticker: str) -> str:
-    from gate import executar_gate
+    from delta_chaos.gate import executar_gate
     return executar_gate(ticker)
 
 
 def _lazy_executar_tune(ticker: str) -> dict:
-    from tune import executar_tune
+    from delta_chaos.tune import executar_tune
     return executar_tune(ticker)
 
 
@@ -136,7 +155,7 @@ def _universo_configurado() -> list:
     Usado pelo EOD quando nenhum universo explícito é passado.
     """
     import os
-    from init import ATIVOS_DIR
+    from delta_chaos.init import ATIVOS_DIR
     if not os.path.exists(ATIVOS_DIR):
         return []
     return [
@@ -230,7 +249,7 @@ async def eod_executar(payload: EodExecutarPayload):
     """
     _require_confirm(payload.confirm, "EOD executar")
 
-    from init import OPCOES_HOJE_DIR
+    from delta_chaos.init import OPCOES_HOJE_DIR
     xlsx_dir = payload.xlsx_dir or OPCOES_HOJE_DIR
 
     # Valida todos os xlsx antes de iniciar
@@ -252,19 +271,15 @@ async def eod_executar(payload: EodExecutarPayload):
 
     emit_log(f"EOD iniciado — {payload.description or str(date.today())}")
 
-    old_stdout = sys.stdout
-    sys.stdout = StreamCapture()
     resultado_df = None
     erro = None
-
     try:
         edge = _lazy_edge(universo=ativos, modo="paper")
         resultado_df = edge.executar_eod(xlsx_dir=xlsx_dir)
+        emit_log(f"EOD processado — {len(resultado_df) if resultado_df is not None else 0} registros")
     except Exception as e:
         erro = str(e)
         emit_error(e)
-    finally:
-        sys.stdout = old_stdout
 
     if erro:
         raise HTTPException(status_code=500, detail=f"EOD falhou: {erro}")
@@ -296,14 +311,12 @@ async def orbit_endpoint(payload: OrbitPayload):
         f"({payload.description or 'sem descrição'})"
     )
 
-    old_stdout = sys.stdout
-    sys.stdout = StreamCapture()
     erro = None
     resultado = None
 
     try:
-        from tape import tape_backtest, tape_carregar_ativo
-        from orbit import ORBIT as _ORBIT
+        from delta_chaos.tape import tape_backtest, tape_carregar_ativo
+        from delta_chaos.orbit import ORBIT as _ORBIT
         import datetime as _dt
 
         ticker = payload.ticker.strip().upper()
@@ -333,8 +346,6 @@ async def orbit_endpoint(payload: OrbitPayload):
     except Exception as e:
         erro = str(e)
         emit_error(e)
-    finally:
-        sys.stdout = old_stdout
 
     if erro:
         raise HTTPException(status_code=500, detail=f"ORBIT falhou: {erro}")
@@ -363,8 +374,6 @@ async def tune_endpoint(payload: TunePayload):
         f"({payload.description or 'sem descrição'})"
     )
 
-    old_stdout = sys.stdout
-    sys.stdout = StreamCapture()
     resultado = None
     erro = None
 
@@ -373,8 +382,6 @@ async def tune_endpoint(payload: TunePayload):
     except Exception as e:
         erro = str(e)
         emit_error(e)
-    finally:
-        sys.stdout = old_stdout
 
     if erro:
         raise HTTPException(status_code=500, detail=f"TUNE falhou: {erro}")
@@ -414,16 +421,12 @@ async def gate_endpoint(payload: GatePayload):
         f"({payload.description or 'sem descrição'})"
     )
 
-    old_stdout = sys.stdout
-    sys.stdout = StreamCapture()
     resultado_str = None
     erro = None
-
     try:
         resultado_str = _lazy_executar_gate(payload.ticker)
     except ValueError as e:
         # ValueError = GATE bloqueado em etapa eliminatória — não é erro 500
-        sys.stdout = old_stdout
         emit_log(f"GATE bloqueado: {e}", level="warning")
         return {
             "resultado": "EXCLUÍDO",
@@ -432,8 +435,6 @@ async def gate_endpoint(payload: GatePayload):
     except Exception as e:
         erro = str(e)
         emit_error(e)
-    finally:
-        sys.stdout = old_stdout
 
     if erro:
         raise HTTPException(status_code=500, detail=f"GATE falhou: {erro}")

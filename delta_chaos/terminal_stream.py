@@ -1,25 +1,26 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — atlas_backend/core/terminal_stream.py
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” atlas_backend/core/terminal_stream.py
 # Roteamento de logs para WebSocket /ws/logs
-# Fallback: print() quando WebSocket não disponível
-# ════════════════════════════════════════════════════════════════════
+# Fallback: print() quando WebSocket nÃ£o disponÃ­vel
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+import json
 import asyncio
 import json
 from datetime import datetime
 from typing import Optional, Set
 
-# Set de conexões WebSocket ativas — gerenciado pelo router
+# Set de conexÃµes WebSocket ativas â€” gerenciado pelo router
 _ws_connections: Set = set()
 
 
 def register_ws(ws) -> None:
-    """Registra uma conexão WebSocket ativa."""
+    """Registra uma conexÃ£o WebSocket ativa."""
     _ws_connections.add(ws)
 
 
 def unregister_ws(ws) -> None:
-    """Remove uma conexão WebSocket ao desconectar."""
+    """Remove uma conexÃ£o WebSocket ao desconectar."""
     _ws_connections.discard(ws)
 
 
@@ -41,7 +42,7 @@ def emit_log(msg: str, level: str = "info") -> None:
     dead = set()
     for ws in _ws_connections:
         try:
-            # Tenta enviar — se o loop estiver rodando, agenda coroutine
+            # Tenta enviar â€” se o loop estiver rodando, agenda coroutine
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.ensure_future(ws.send_text(payload))
@@ -61,7 +62,7 @@ def emit_error(e: Exception) -> None:
 
 class StreamCapture:
     """
-    Redireciona sys.stdout para emit_log durante execução de endpoints.
+    Redireciona sys.stdout para emit_log durante execuÃ§Ã£o de endpoints.
 
     Uso:
         old_stdout = sys.stdout

@@ -1,5 +1,5 @@
-{
-  "memory_limit_mb": 512,
-  "health_staleness_minutes": 10,
-  "backup_interval_seconds": 60
+﻿{
+    "memory_limit_mb":  512,
+    "backup_interval_seconds":  60,
+    "health_staleness_minutes":  10
 }

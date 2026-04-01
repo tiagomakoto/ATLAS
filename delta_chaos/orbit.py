@@ -1,23 +1,23 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — ORBIT v4.0
-# Alterações em relação à v3.4:
-# MIGRADO (P2): imports explícitos de init e tape — sem escopo global
-# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
-# MANTIDO: S1–S6, calibração Ridge, regimes, NEUTRO_LATERAL/MORTO
-# ════════════════════════════════════════════════════════════════════
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” ORBIT v4.0
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v3.4:
+# MIGRADO (P2): imports explÃ­citos de init e tape â€” sem escopo global
+# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
+# MANTIDO: S1â€“S6, calibraÃ§Ã£o Ridge, regimes, NEUTRO_LATERAL/MORTO
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-from init import (
+from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, BOOK_DIR,
     OHLCV_DIR, EXTERNAS_DIR,
 )
-from tape import (
+from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ciclo,
     tape_ohlcv, tape_ibov, tape_serie_externa,
     tape_regime_para_data,
     _obter_selic,
 )
 
-# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
+# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -26,14 +26,14 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — ORBIT v3.4
-# Alterações em relação à v3.3:
-# CORRIGIDO (SCAN-10): removida importação morta de tape_reflect_cycle
-#   tape_reflect_cycle é chamado pelo EDGE, não pelo ORBIT
-# CORRIGIDO: pbar.set_postfix estava após continue — nunca executava
-# MANTIDO: todo o restante idêntico à v3.3
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” ORBIT v3.4
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v3.3:
+# CORRIGIDO (SCAN-10): removida importaÃ§Ã£o morta de tape_reflect_cycle
+#   tape_reflect_cycle Ã© chamado pelo EDGE, nÃ£o pelo ORBIT
+# CORRIGIDO: pbar.set_postfix estava apÃ³s continue â€” nunca executava
+# MANTIDO: todo o restante idÃªntico Ã  v3.3
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 import os, math, warnings
 from datetime import datetime, date, timedelta
@@ -42,7 +42,7 @@ import pandas as pd
 from tqdm.auto import tqdm as _tqdm
 warnings.filterwarnings("ignore")
 
-# ── Parâmetros via config global ──────────────────────────────────
+# â”€â”€ ParÃ¢metros via config global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _cfg = carregar_config()["orbit"]
 
 HORIZONTE_DIAS      = _cfg["horizonte_dias"]
@@ -59,12 +59,12 @@ VEL_PANICO          = _cfg["vel_panico"]
 VOL_PANICO          = _cfg["vol_panico"]
 CICLOS_NEG_MIN      = _cfg["ciclos_neg_min"]
 
-# SCAN-10: tape_reflect_cycle removido — é chamado pelo EDGE, não pelo ORBIT
-# P2: imports explícitos abaixo (substituem escopo global do notebook)
+# SCAN-10: tape_reflect_cycle removido â€” Ã© chamado pelo EDGE, nÃ£o pelo ORBIT
+# P2: imports explÃ­citos abaixo (substituem escopo global do notebook)
 
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # INDICADORES
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _calc_adx(h, l, c, p=14):
     n=len(c); tr=np.zeros(n); dmp=np.zeros(n); dmm=np.zeros(n)
@@ -110,9 +110,9 @@ def _calc_beta_rolling(ra, rb, p=21):
     return (a.rolling(p).cov(b)/
             b.rolling(p).var().replace(0,1e-10)).values
 
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # CAMADAS
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _calcular_camadas(df, ib, externas_dict=None):
     c=df["close"].values if "close" in df.columns \
@@ -218,9 +218,9 @@ def _calcular_camadas(df, ib, externas_dict=None):
 
     return res
 
-# ════════════════════════════════════════════════════════════════════
-# CALIBRAÇÃO
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# CALIBRAÃ‡ÃƒO
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _pesos_temporais(df_idx):
     if LAMBDA_TEMPORAL <= 0:
@@ -347,9 +347,9 @@ def _score_rolante(cam_df, ret_fut, prior_dict,
 
     return scores, ph
 
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # REGIMES
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _classificar_regime(score_hist, vol_hist, thresh):
     if len(score_hist) < 3:
@@ -406,22 +406,22 @@ def _classificar_sub_regime_neutro(score, score_vel,
 
     return "NEUTRO_BEAR"
 
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # CLASSE ORBIT v3.4
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class ORBIT:
     """
     ORBIT v3.4
-    Dados via TAPE — sem acesso direto ao Drive
+    Dados via TAPE â€” sem acesso direto ao Drive
     Master JSON por ativo via tape_carregar_ativo / tape_salvar_ciclo
-    tape_reflect_cycle removido — responsabilidade do EDGE
+    tape_reflect_cycle removido â€” responsabilidade do EDGE
     """
 
     def __init__(self, universo: dict):
         self.universo = universo
         self.ativos   = list(universo.keys())
-        print(f"  ORBIT v3.4 — {len(self.ativos)} ativos")
+        print(f"  ORBIT v3.4 â€” {len(self.ativos)} ativos")
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
     def rodar(self, df_tape, anos, modo="pipeline"):
@@ -431,7 +431,7 @@ class ORBIT:
 
         ibov_close = tape_ibov(anos)
         if ibov_close.empty:
-            print("  ✗ IBOV indisponível")
+            print("  âœ— IBOV indisponÃ­vel")
             return pd.DataFrame()
 
         ohlcv_ativos = {}
@@ -440,10 +440,10 @@ class ORBIT:
             if not df_ohlcv.empty:
                 ohlcv_ativos[ativo] = df_ohlcv
             else:
-                print(f"  ⚠ {ativo} sem OHLCV — excluído")
+                print(f"  âš  {ativo} sem OHLCV â€” excluÃ­do")
 
         if not ohlcv_ativos:
-            print("  ✗ Nenhum ativo com OHLCV")
+            print("  âœ— Nenhum ativo com OHLCV")
             return pd.DataFrame()
 
         self._externas_cache = {}
@@ -457,12 +457,12 @@ class ORBIT:
                         nome_serie, anos)
                     if serie is not None:
                         self._externas_cache[nome_serie] = serie
-                        print(f"  ✓ Série externa {nome_serie} "
-                              f"pré-carregada: "
+                        print(f"  âœ“ SÃ©rie externa {nome_serie} "
+                              f"prÃ©-carregada: "
                               f"{len(serie):,} dias")
 
         ciclos = self._gerar_ciclos(anos)
-        print(f"  {len(ciclos)} ciclos × "
+        print(f"  {len(ciclos)} ciclos Ã— "
               f"{len(ohlcv_ativos)} ativos")
 
         score_hist = {}
@@ -506,7 +506,7 @@ class ORBIT:
                         continue
 
         if not rows:
-            print("  ✗ ORBIT sem resultados")
+            print("  âœ— ORBIT sem resultados")
             return pd.DataFrame()
 
         df_regimes = pd.DataFrame(rows)
@@ -677,9 +677,9 @@ class ORBIT:
         if not ciclos: return
         ciclo_atual = ciclos[-1]
         ciclo_ant   = ciclos[-2] if len(ciclos)>=2 else None
-        sep = "═"*60
+        sep = "â•"*60
         print(f"\n{sep}")
-        print(f"  ORBIT v3.4 — Relatório {ciclo_atual}")
+        print(f"  ORBIT v3.4 â€” RelatÃ³rio {ciclo_atual}")
         print(sep)
         df_m0 = df_regimes[
             df_regimes["ciclo_id"]==ciclo_atual]
@@ -688,8 +688,8 @@ class ORBIT:
             if ciclo_ant else pd.DataFrame()
 
         print(f"  {'Ativo':8} {'Regime':12} {'IR':>7} "
-              f"{'ΔIR':>7} {'Vel':>7} {'S6':>7} {'Sizing':>7}")
-        print(f"  {'─'*60}")
+              f"{'Î”IR':>7} {'Vel':>7} {'S6':>7} {'Sizing':>7}")
+        print(f"  {'â”€'*60}")
 
         for _, row in df_m0.sort_values(
                 "ir", ascending=False).iterrows():
@@ -708,9 +708,9 @@ class ORBIT:
             else:
                 d_ir = "  n/a"
 
-            if   ir >= IR_OPERAR:    status = "OPERAR   ✓"
+            if   ir >= IR_OPERAR:    status = "OPERAR   âœ“"
             elif ir >= IR_MONITORAR: status = "MONITOR  ~"
-            else:                    status = "EXCLUÍDO ✗"
+            else:                    status = "EXCLUÃDO âœ—"
 
             print(f"  {ativo:8} {row['regime']:12} "
                   f"{ir:>+7.3f} {d_ir:>7} "
@@ -754,12 +754,12 @@ class ORBIT:
 
         df = pd.DataFrame(rows)
         df["ciclo_id"] = df["ciclo_id"].astype(str)
-        print(f"  ✓ Cache v3.4 carregado — "
+        print(f"  âœ“ Cache v3.4 carregado â€” "
               f"{len(df):,} registros")
         return df
 
 if __name__ == "__main__":
-    print("✓ ORBIT v3.4 carregado")
+    print("âœ“ ORBIT v3.4 carregado")
     print("  5 regimes | dados via TAPE | master JSON por ativo")
-    print("  tape_reflect_cycle removido — responsabilidade do EDGE")
+    print("  tape_reflect_cycle removido â€” responsabilidade do EDGE")
     print("  ORBIT(universo).rodar(df_tape, anos, modo)")

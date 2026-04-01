@@ -1,5 +1,5 @@
 import traceback
-from core.event_bus import emit_event
+from .event_bus import emit_event
 from core.audit_logger import log_action
 
 

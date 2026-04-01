@@ -1,27 +1,28 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — EDGE v2.0
-# Alterações em relação à v1.3:
-# MIGRADO (P2): imports explícitos de todos os módulos — sem escopo global
-# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
-# MANTIDO: orquestração backtest/paper/EOD, REFLECT, GATE EOD, BOOK
-# ════════════════════════════════════════════════════════════════════
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+import os
+# DELTA CHAOS â€” EDGE v2.0
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.3:
+# MIGRADO (P2): imports explÃ­citos de todos os mÃ³dulos â€” sem escopo global
+# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
+# MANTIDO: orquestraÃ§Ã£o backtest/paper/EOD, REFLECT, GATE EOD, BOOK
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-from init import (
+from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, BOOK_DIR,
     OPCOES_HOJE_DIR, DRIVE_BASE,
 )
-from tape import (
+from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ativo,
     tape_paper, tape_backtest, tape_reflect_cycle,
     tape_sizing_reflect, tape_process_eod_file,
     _obter_selic,
 )
-from orbit import ORBIT
-from book import BOOK
-from fire import FIRE
-from gate_eod import gate_eod
+from .orbit import ORBIT
+from .book import BOOK
+from .fire import FIRE
+from .gate_eod import gate_eod
 
-# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
+# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -30,15 +31,15 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — EDGE v1.3
-# Alterações em relação à v1.2:
-# ADICIONADO: integração com REFLECT via tape_sizing_reflect()
-# ADICIONADO: verificação reflect_permanent_block_flag antes de abrir
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” EDGE v1.3
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
+# ADICIONADO: integraÃ§Ã£o com REFLECT via tape_sizing_reflect()
+# ADICIONADO: verificaÃ§Ã£o reflect_permanent_block_flag antes de abrir
 # ADICIONADO: tape_reflect_cycle no fechamento de cada ciclo mensal
-# CORRIGIDO (SCAN-11): configs_ativos indefinido no modo paper — NameError
-# CORRIGIDO (SCAN-9): cfg passado ao FIRE no paper — evita dupla leitura JSON
-# ════════════════════════════════════════════════════════════════════
+# CORRIGIDO (SCAN-11): configs_ativos indefinido no modo paper â€” NameError
+# CORRIGIDO (SCAN-9): cfg passado ao FIRE no paper â€” evita dupla leitura JSON
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 import os
 from datetime import datetime, date
@@ -47,8 +48,8 @@ from tqdm.auto import tqdm as _tqdm
 
 class EDGE:
     """
-    Orquestra TAPE → ORBIT → FIRE → BOOK
-    Configuração de ativos via master JSON em ATIVOS_DIR
+    Orquestra TAPE â†’ ORBIT â†’ FIRE â†’ BOOK
+    ConfiguraÃ§Ã£o de ativos via master JSON em ATIVOS_DIR
     """
 
     def __init__(self, capital=10_000,
@@ -72,17 +73,17 @@ class EDGE:
                     BOOK_DIR, f"book_{modo}.{ext}")
                 if os.path.exists(p):
                     os.remove(p)
-                    print(f"  ✓ {os.path.basename(p)} removido")
+                    print(f"  âœ“ {os.path.basename(p)} removido")
 
         self.book  = BOOK(fonte=modo, capital=capital)
         self.fire  = FIRE(book=self.book, modo=modo)
         self.orbit = ORBIT(universo=self.universo)
 
-        print(f"\n  {'═'*55}")
-        print(f"  EDGE v1.3 — modo={modo}")
+        print(f"\n  {'â•'*55}")
+        print(f"  EDGE v1.3 â€” modo={modo}")
         print(f"  Capital:  R${capital:,.0f}")
         print(f"  Ativos:   {self.ativos}")
-        print(f"  {'═'*55}")
+        print(f"  {'â•'*55}")
 
     def executar(self, anos=None, xlsx_dir=None,
                  modo_orbit="pipeline",
@@ -92,7 +93,7 @@ class EDGE:
             self.book._counter     = 0
             self.book._abertas_idx = {}
             self.book._salvar()
-            print("  ✓ BOOK resetado — backtest limpo")
+            print("  âœ“ BOOK resetado â€” backtest limpo")
 
         if self.modo == "backtest":
             if anos is None:
@@ -101,12 +102,12 @@ class EDGE:
         elif self.modo == "paper":
             return self._executar_paper(xlsx_dir)
         elif self.modo == "real":
-            raise NotImplementedError("EDGE.real — Fase 3.")
+            raise NotImplementedError("EDGE.real â€” Fase 3.")
 
     def _executar_backtest(self, anos, modo_orbit):
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.backtest — {anos[0]}→{anos[-1]}")
-      print(f"  {'═'*55}")
+      print(f"\n  {'â•'*55}")
+      print(f"  EDGE.backtest â€” {anos[0]}â†’{anos[-1]}")
+      print(f"  {'â•'*55}")
 
       self.book._ativo_atual = "_".join(self.ativos)
 
@@ -115,9 +116,9 @@ class EDGE:
           p = os.path.join(BOOK_DIR, f"book_backtest.{ext}")
           if os.path.exists(p):
               os.remove(p)
-              print(f"  ✓ {os.path.basename(p)} removido")
+              print(f"  âœ“ {os.path.basename(p)} removido")
 
-      # Limpa histórico REFLECT dos ativos — evita z-score
+      # Limpa histÃ³rico REFLECT dos ativos â€” evita z-score
       # contaminado por backtest anterior
       for ticker in self.ativos:
           cfg = tape_carregar_ativo(ticker)
@@ -128,14 +129,14 @@ class EDGE:
           cfg["reflect_score"]              = 0.0
           cfg["reflect_permanent_block_flag"] = False
           tape_salvar_ativo(ticker, cfg)
-          print(f"  ✓ REFLECT limpo — {ticker}")
+          print(f"  âœ“ REFLECT limpo â€” {ticker}")
 
       # [1/3] TAPE
       print(f"\n  [1/3] TAPE")
       df_tape = tape_backtest(
           ativos=self.ativos, anos=anos, forcar=False)
       if df_tape.empty:
-          print("  ✗ TAPE vazio. Abortando.")
+          print("  âœ— TAPE vazio. Abortando.")
           return pd.DataFrame()
       df_selic = _obter_selic(min(anos), max(anos))
 
@@ -144,7 +145,7 @@ class EDGE:
       df_regimes = self.orbit.rodar(
           df_tape, anos, modo=modo_orbit)
       if df_regimes.empty:
-          print("  ✗ ORBIT vazio. Abortando.")
+          print("  âœ— ORBIT vazio. Abortando.")
           return pd.DataFrame()
 
       df_regimes["ciclo_id"] = \
@@ -165,7 +166,7 @@ class EDGE:
       reflect_ciclos_processados = set()
 
       with _tqdm(total=len(datas), desc="FIRE",
-                unit="pregão", ncols=None) as pbar:
+                unit="pregÃ£o", ncols=None) as pbar:
           for data in datas:
               data_str = str(data)[:10]
               ciclo_id = data_str[:7]
@@ -214,11 +215,11 @@ class EDGE:
                           cfg        = cfg_ativo,
                       )
 
-              # REFLECT de ciclo — uma vez por ciclo mensal
+              # REFLECT de ciclo â€” uma vez por ciclo mensal
               if ciclo_id not in reflect_ciclos_processados:
                   for ativo in self.ativos:
                       tape_reflect_cycle(ativo, ciclo_id)
-                      # Recarrega config após atualização do REFLECT
+                      # Recarrega config apÃ³s atualizaÃ§Ã£o do REFLECT
                       configs_ativos[ativo] = tape_carregar_ativo(ativo)
                   reflect_ciclos_processados.add(ciclo_id)
 
@@ -230,9 +231,9 @@ class EDGE:
                       if op.core.motivo_saida),
               )
 
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.backtest concluído")
-      print(f"  {'═'*55}")
+      print(f"\n  {'â•'*55}")
+      print(f"  EDGE.backtest concluÃ­do")
+      print(f"  {'â•'*55}")
       self.book.dashboard()
       return self.book.df()
 
@@ -240,12 +241,12 @@ class EDGE:
                      xlsx_dir=None,
                      capital=None):
       """
-      Fluxo completo de paper trading diário.
-      Substitui chamada manual à Célula EOD.
+      Fluxo completo de paper trading diÃ¡rio.
+      Substitui chamada manual Ã  CÃ©lula EOD.
 
       Etapas:
         1. Arquiva xlsx do dia em opcoes_historico/
-        2. GATE EOD por ativo — exclui bloqueados
+        2. GATE EOD por ativo â€” exclui bloqueados
         3. _executar_paper() nos aprovados
       """
       import shutil
@@ -257,9 +258,9 @@ class EDGE:
           DRIVE_BASE, "opcoes_historico")
       os.makedirs(hist_dir, exist_ok=True)
 
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.executar_eod — {data_hoje}")
-      print(f"  {'═'*55}")
+      print(f"\n  {'â•'*55}")
+      print(f"  EDGE.executar_eod â€” {data_hoje}")
+      print(f"  {'â•'*55}")
 
       # 1. Arquiva xlsx do dia
       print(f"\n  [1/3] Arquivando snapshots...")
@@ -271,10 +272,10 @@ class EDGE:
               f"{data_hoje} {ativo}.xlsx")
           if os.path.exists(src):
               shutil.copy2(src, dst)
-              print(f"  ✓ {data_hoje} "
-                    f"{ativo}.xlsx → opcoes_historico/")
+              print(f"  âœ“ {data_hoje} "
+                    f"{ativo}.xlsx â†’ opcoes_historico/")
           else:
-              print(f"  ⚠ Não encontrado: "
+              print(f"  âš  NÃ£o encontrado: "
                     f"{ativo}.xlsx")
 
       # 2. GATE EOD por ativo
@@ -284,7 +285,7 @@ class EDGE:
           parecer = gate_eod(ativo, verbose=True)
           if parecer in ("BLOQUEADO",
                           "GATE VENCIDO"):
-              print(f"  → {ativo} excluído "
+              print(f"  â†’ {ativo} excluÃ­do "
                     f"({parecer})\n")
           else:
               aprovados.append(ativo)
@@ -292,12 +293,12 @@ class EDGE:
       if not aprovados:
           print(f"\n  Nenhum ativo aprovado "
                 f"pelo GATE EOD hoje.")
-          print(f"  {'═'*55}\n")
+          print(f"  {'â•'*55}\n")
           return self.book.df()
 
       print(f"\n  Aprovados: {aprovados}")
 
-      # 3. Paper trading — apenas aprovados
+      # 3. Paper trading â€” apenas aprovados
       print(f"\n  [3/3] EDGE paper...")
       self.ativos = aprovados
       return self._executar_paper(xlsx_dir)
@@ -306,7 +307,7 @@ class EDGE:
     def _executar_paper(self, xlsx_dir=None):
         xlsx_dir  = xlsx_dir or OPCOES_HOJE_DIR
         data_hoje = str(date.today())
-        print(f"\n  EDGE.paper — {data_hoje}")
+        print(f"\n  EDGE.paper â€” {data_hoje}")
 
         frames = []
         # SCAN-11 CORRIGIDO: configs_ativos definido antes do loop de ativos
@@ -317,10 +318,10 @@ class EDGE:
 
         for ativo in self.ativos:
 
-            # GATE EOD — verificação leve antes de qualquer operação
+            # GATE EOD â€” verificaÃ§Ã£o leve antes de qualquer operaÃ§Ã£o
             parecer = gate_eod(ativo, verbose=True)
             if parecer in ("BLOQUEADO", "GATE VENCIDO"):
-                print(f"  → {ativo} excluído do EOD ({parecer})\n")
+                print(f"  â†’ {ativo} excluÃ­do do EOD ({parecer})\n")
                 continue
 
             # MONITORAR e OPERAR prosseguem normalmente
@@ -331,20 +332,20 @@ class EDGE:
             if not os.path.exists(xlsx) and os.path.exists(xlsx2):
                 import shutil
                 shutil.copy2(xlsx2, xlsx)
-                print(f"  ✓ {hoje} {ativo}.xlsx → {ativo}.xlsx")
+                print(f"  âœ“ {hoje} {ativo}.xlsx â†’ {ativo}.xlsx")
 
             if not os.path.exists(xlsx):
-                print(f"  ⚠ {ativo}.xlsx não encontrado")
+                print(f"  âš  {ativo}.xlsx nÃ£o encontrado")
                 continue
 
-            # Processa EOD para alimentar o REFLECT diário
+            # Processa EOD para alimentar o REFLECT diÃ¡rio
             tape_process_eod_file(xlsx)
 
             try:
                 preco = float(input(
-                    f"  Preço atual {ativo}: R$ "))
+                    f"  PreÃ§o atual {ativo}: R$ "))
             except Exception:
-                print(f"  ⚠ Preço inválido para {ativo}")
+                print(f"  âš  PreÃ§o invÃ¡lido para {ativo}")
                 continue
             df_p = tape_paper(
                 ativo=ativo, filepath=xlsx,
@@ -353,7 +354,7 @@ class EDGE:
                 frames.append(df_p)
 
         if not frames:
-            print("  ✗ Nenhum XLSX carregado.")
+            print("  âœ— Nenhum XLSX carregado.")
             return pd.DataFrame()
 
         df_hoje  = pd.concat(frames, ignore_index=True)
@@ -396,7 +397,7 @@ class EDGE:
         return self.book.df()
 
 if __name__ == "__main__":
-    print("✓ EDGE v1.3 carregado")
+    print("âœ“ EDGE v1.3 carregado")
     print("  REFLECT: sizing modulado antes do FIRE")
     print("  REFLECT: bloqueio permanente estado E verificado")
     print("  REFLECT: tape_reflect_cycle no fechamento de cada ciclo")

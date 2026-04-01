@@ -1,13 +1,14 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — INIT v2.0
-# Alterações em relação à v1.0:
-# MIGRADO (P1): removida dependência do Google Colab
-#   — DRIVE_BASE lido de atlas_backend/config/paths.json
-#   — Fallback: ~/DeltaChaos se paths.json não encontrado
-# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” INIT v2.0
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.0:
+# MIGRADO (P1): removida dependÃªncia do Google Colab
+#   â€” DRIVE_BASE lido de atlas_backend/config/paths.json
+#   â€” Fallback: ~/DeltaChaos se paths.json nÃ£o encontrado
+# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
 # MANTIDO: todos os caminhos derivados, carregar_config, cfg_global
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+import json
 import os
 import json
 import glob
@@ -15,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-# ── Logging ATLAS (graceful fallback) ────────────────────────────────
+# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -25,11 +26,11 @@ except ImportError:
     _atlas_disponivel = False
 
 
-# ── P1 — Leitura de DRIVE_BASE do paths.json ─────────────────────────
+# â”€â”€ P1 â€” Leitura de DRIVE_BASE do paths.json â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _carregar_paths() -> dict:
     """
-    Lê paths.json do diretório de config do ATLAS.
-    Fallback: ~/DeltaChaos se paths.json não encontrado.
+    LÃª paths.json do diretÃ³rio de config do ATLAS.
+    Fallback: ~/DeltaChaos se paths.json nÃ£o encontrado.
     """
     paths_file = (
         Path(__file__).parent.parent
@@ -47,7 +48,7 @@ DRIVE_BASE = _paths.get(
     str(Path.home() / "DeltaChaos")
 )
 
-# ── Caminhos ─────────────────────────────────────────────────────────
+# â”€â”€ Caminhos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 TAPE_DIR             = os.path.join(DRIVE_BASE, "TAPE")
 COTAHIST_DIR         = os.path.join(TAPE_DIR,   "cotahist")
 GREGAS_DIR           = os.path.join(TAPE_DIR,   "gregas")
@@ -76,20 +77,20 @@ DIRETORIOS = {
     "opcoes_historico": OPCOES_HISTORICO_DIR,
 }
 
-# ── Funções ──────────────────────────────────────────────────────────
+# â”€â”€ FunÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def verificar_diretorios():
-    emit_log("Diretórios:")
+    emit_log("DiretÃ³rios:")
     todos_ok = True
     for nome, path in DIRETORIOS.items():
         if os.path.exists(path):
             n = len(os.listdir(path))
-            emit_log(f"  ✓ {nome:25} ({n} arquivos)")
+            emit_log(f"  âœ“ {nome:25} ({n} arquivos)")
         else:
             try:
                 os.makedirs(path, exist_ok=True)
-                emit_log(f"  + criado    {nome:25} → {path}")
+                emit_log(f"  + criado    {nome:25} â†’ {path}")
             except Exception as e:
-                emit_error(f"  ✗ falhou    {nome:25} → {e}")
+                emit_error(f"  âœ— falhou    {nome:25} â†’ {e}")
                 todos_ok = False
     return todos_ok
 
@@ -105,7 +106,7 @@ def verificar_cache():
             for f in txts:
                 mb = os.path.getsize(
                     os.path.join(COTAHIST_DIR, f)) / 1e6
-                ok = "✓" if mb >= 50 else "⚠"
+                ok = "âœ“" if mb >= 50 else "âš "
                 emit_log(f"    {ok} {f:35} {mb:6.0f} MB")
         else:
             emit_log("    ~ cotahist: nenhum arquivo")
@@ -118,7 +119,7 @@ def verificar_cache():
             for f in parquets:
                 mb = os.path.getsize(
                     os.path.join(GREGAS_DIR, f)) / 1e6
-                ok = "✓" if mb >= 1 else "⚠"
+                ok = "âœ“" if mb >= 1 else "âš "
                 emit_log(f"    {ok} {f:35} {mb:5.1f} MB")
         else:
             emit_log("    ~ gregas: nenhum arquivo")
@@ -131,7 +132,7 @@ def verificar_cache():
             for f in parquets:
                 mb = os.path.getsize(
                     os.path.join(OHLCV_DIR, f)) / 1e6
-                emit_log(f"    ✓ {f:35} {mb:5.1f} MB")
+                emit_log(f"    âœ“ {f:35} {mb:5.1f} MB")
         else:
             emit_log("    ~ ohlcv: nenhum arquivo")
 
@@ -143,7 +144,7 @@ def verificar_cache():
             for f in parquets:
                 mb = os.path.getsize(
                     os.path.join(EXTERNAS_DIR, f)) / 1e6
-                emit_log(f"    ✓ {f:35} {mb:5.1f} MB")
+                emit_log(f"    âœ“ {f:35} {mb:5.1f} MB")
         else:
             emit_log("    ~ externas: nenhum arquivo")
 
@@ -155,16 +156,16 @@ def verificar_cache():
             df_s["data"] = pd.to_datetime(df_s["data"])
             ano_min = df_s["data"].dt.year.min()
             ano_max = df_s["data"].dt.year.max()
-            ok = "✓" if mb >= 0.05 else "⚠"
+            ok = "âœ“" if mb >= 0.05 else "âš "
             emit_log(
                 f"    {ok} {'selic_historica.parquet':35} "
                 f"{mb:5.2f} MB "
-                f"({ano_min}→{ano_max}, {len(df_s):,} dias)"
+                f"({ano_min}â†’{ano_max}, {len(df_s):,} dias)"
             )
         except Exception:
-            emit_log("    ⚠ selic_historica.parquet corrompido")
+            emit_log("    âš  selic_historica.parquet corrompido")
     else:
-        emit_log("    ~ selic_historica.parquet: não encontrado")
+        emit_log("    ~ selic_historica.parquet: nÃ£o encontrado")
 
     # Ativos master JSONs
     if os.path.exists(ATIVOS_DIR):
@@ -179,32 +180,32 @@ def verificar_cache():
                         dados = json.load(fh)
                     n_ciclos = len(dados.get("historico", []))
                     emit_log(
-                        f"    ✓ {f:35} {mb:5.2f} MB "
+                        f"    âœ“ {f:35} {mb:5.2f} MB "
                         f"({n_ciclos} ciclos)"
                     )
                 except Exception:
-                    emit_log(f"    ⚠ {f} corrompido")
+                    emit_log(f"    âš  {f} corrompido")
         else:
             emit_log("    ~ ativos: nenhum master JSON")
 
-    # Parquets SELIC fragmentados — limpa automaticamente
+    # Parquets SELIC fragmentados â€” limpa automaticamente
     fragmentados = [
         f for f in glob.glob(
             os.path.join(TAPE_DIR, "selic_*.parquet"))
         if "historica" not in f
     ]
     if fragmentados:
-        emit_log("  ⚠ Parquets SELIC fragmentados — removendo:")
+        emit_log("  âš  Parquets SELIC fragmentados â€” removendo:")
         for f in fragmentados:
             mb = os.path.getsize(f) / 1e6
             os.remove(f)
             emit_log(
-                f"    ✓ Removido: {os.path.basename(f)} "
+                f"    âœ“ Removido: {os.path.basename(f)} "
                 f"({mb:.2f} MB)"
             )
 
 
-# ── Config global ─────────────────────────────────────────────────────
+# â”€â”€ Config global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CONFIG_PATH = os.path.join(DRIVE_BASE, "delta_chaos_config.json")
 
 
@@ -215,7 +216,7 @@ def carregar_config() -> dict:
             return json.load(f)
     except FileNotFoundError:
         emit_error(
-            "delta_chaos_config.json não encontrado. "
+            "delta_chaos_config.json nÃ£o encontrado. "
             f"Esperado em: {CONFIG_PATH}"
         )
         raise
@@ -223,18 +224,18 @@ def carregar_config() -> dict:
 
 def cfg_global(secao: str, chave: str):
     """
-    Lê valor do config global.
+    LÃª valor do config global.
     Uso: cfg_global("fire", "take_profit")
     """
     config = carregar_config()
     return config[secao][chave]
 
 
-# ── Execução standalone ───────────────────────────────────────────────
+# â”€â”€ ExecuÃ§Ã£o standalone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if __name__ == "__main__":
-    print("═" * 55)
-    print("  DELTA CHAOS — Verificação de ambiente")
-    print("═" * 55)
+    print("â•" * 55)
+    print("  DELTA CHAOS â€” VerificaÃ§Ã£o de ambiente")
+    print("â•" * 55)
     print(f"  DRIVE_BASE: {DRIVE_BASE}")
 
     dir_ok = verificar_diretorios()
@@ -242,15 +243,15 @@ if __name__ == "__main__":
     try:
         verificar_cache()
     except Exception as e:
-        print(f"  ⚠ Erro ao verificar cache: {e}")
+        print(f"  âš  Erro ao verificar cache: {e}")
 
-    print("\n" + "═" * 55)
+    print("\n" + "â•" * 55)
     print(
-        "  ✓ Ambiente OK — pode executar as células TAPE"
+        "  âœ“ Ambiente OK â€” pode executar as cÃ©lulas TAPE"
         if dir_ok else
-        "  ✗ Há problemas — verifique os erros acima"
+        "  âœ— HÃ¡ problemas â€” verifique os erros acima"
     )
-    print("═" * 55)
-    print("✓ INIT v2.0 carregado")
+    print("â•" * 55)
+    print("âœ“ INIT v2.0 carregado")
     print("  DRIVE_BASE lido de paths.json (sem Google Colab)")
-    print("  carregar_config e cfg_global disponíveis")
+    print("  carregar_config e cfg_global disponÃ­veis")

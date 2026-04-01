@@ -1,21 +1,20 @@
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — FIRE v2.0
-# Alterações em relação à v1.2:
-# MIGRADO (P2): imports explícitos de init, tape, book — sem escopo global
-# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
+﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” FIRE v2.0
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
+# MIGRADO (P2): imports explÃ­citos de init, tape, book â€” sem escopo global
+# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
 # MANTIDO: filtros, seletores, gatilhos TP/STOP, contrato com REFLECT
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-from init import carregar_config, ATIVOS_DIR
-from tape import tape_carregar_ativo
-from book import (
+from delta_chaos.init import carregar_config, ATIVOS_DIR
+from .tape import tape_carregar_ativo
+from .book import (
     BOOK, Operacao, Core, Context,
     OrbitData, Leg, SCHEMA_VERSION,
-    REGIMES_SIZING_PADRAO,
 )
 import pandas as pd
 
-# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
+# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -24,18 +23,19 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — FIRE v1.2
-# Alterações em relação à v1.1:
-# ADICIONADO: verificação reflect_permanent_block_flag em abrir()
-# MANTIDO: sizing chega ao FIRE já modulado pelo REFLECT via EDGE
-#          O FIRE não conhece o REFLECT — apenas recebe sizing final
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS â€” FIRE v1.2
+# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.1:
+# ADICIONADO: verificaÃ§Ã£o reflect_permanent_block_flag em abrir()
+# MANTIDO: sizing chega ao FIRE jÃ¡ modulado pelo REFLECT via EDGE
+#          O FIRE nÃ£o conhece o REFLECT â€” apenas recebe sizing final
 # MANTIDO: todos os filtros, seletores, gatilhos e verificar()
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-# ── Parâmetros via config global ──────────────────────────────────
+# â”€â”€ ParÃ¢metros via config global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _cfg_fire = carregar_config()["fire"]
 
+REGIMES_SIZING_PADRAO = _cfg_fire["regimes_sizing_padrao"]
 TAKE_PROFIT      = _cfg_fire["take_profit"]
 STOP_LOSS        = _cfg_fire["stop_loss"]
 ROLL_DIAS        = _cfg_fire["roll_dias"]
@@ -72,11 +72,11 @@ class FIRE:
         assert modo in ("backtest", "paper", "real")
         self.book = book
         self.modo = modo
-        # S4 — cache do config global — uma leitura por sessão
+        # S4 â€” cache do config global â€” uma leitura por sessÃ£o
         self._cfg_global = carregar_config()
         print(f"  FIRE v1.2 ({modo})")
 
-    # ── Filtros ───────────────────────────────────────────────────
+    # â”€â”€ Filtros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _filtrar(self, candidatas, df_selic, data):
         sizing = 1.0
         motivo = None
@@ -103,11 +103,11 @@ class FIRE:
                     motivo = "selic_regime_adverso"
         return candidatas, sizing, motivo
 
-    # ── Seletores ────────────────────────────────────────────────
-    # S6 — espelho intencional de TUNE._melhor_opcao()
-    # Mantidas separadas por diferença de contexto:
-    # FIRE usa iv_rank, TUNE não usa.
-    # Se TUNE._melhor_opcao() for alterada, atualizar aqui também.
+    # â”€â”€ Seletores â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # S6 â€” espelho intencional de TUNE._melhor_opcao()
+    # Mantidas separadas por diferenÃ§a de contexto:
+    # FIRE usa iv_rank, TUNE nÃ£o usa.
+    # Se TUNE._melhor_opcao() for alterada, atualizar aqui tambÃ©m.
     def _melhor(self, df, tipo, delta_alvo):
         cands = df[
             (df["tipo"] == tipo) &
@@ -170,26 +170,26 @@ class FIRE:
                          DELTA_ALVO["BEAR_CALL_SPREAD"]["call_comprada"])
         if c is None: return []
 
-        # Validação correta: strike vendida deve ser MENOR que comprada
+        # ValidaÃ§Ã£o correta: strike vendida deve ser MENOR que comprada
         if float(v["strike"]) > float(c["strike"]):
             return []
         premio_liq = float(v["fechamento"]) - float(c["fechamento"])
         if premio_liq <= 0.05: return []
         return [self._leg(v, "vendida"), self._leg(c, "comprada")]
 
-    # ── Abrir posição ─────────────────────────────────────────────
+    # â”€â”€ Abrir posiÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def abrir(self, ativo, data, df_dia,
               orbit_data, df_selic=None, cfg=None):
         regime       = orbit_data.get("regime", "DESCONHECIDO")
         ciclo        = orbit_data.get("ciclo", "")
-        # sizing já chega modulado pelo REFLECT via EDGE
+        # sizing jÃ¡ chega modulado pelo REFLECT via EDGE
         sizing_orbit = orbit_data.get("sizing", 0.0)
 
         if cfg is None:
             cfg = tape_carregar_ativo(ativo)
 
         # Bloqueio permanente REFLECT estado E
-        # Verificação defensiva — EDGE já deveria ter bloqueado antes
+        # VerificaÃ§Ã£o defensiva â€” EDGE jÃ¡ deveria ter bloqueado antes
         if cfg.get("reflect_permanent_block_flag", False):
             self.book.registrar_nao_entrada(
                 ativo, data,
@@ -199,17 +199,18 @@ class FIRE:
 
         regimes_sizing = cfg.get(
             "regimes_sizing", REGIMES_SIZING_PADRAO)
+        
         sizing_config = float(
             regimes_sizing.get(regime, 0.0))
 
-        # ── TP e STOP — S4: recebe cfg_global cacheado ───────────
+        # â”€â”€ TP e STOP â€” S4: recebe cfg_global cacheado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         _cfg_f = self._cfg_global["fire"]
         _tp    = float(cfg.get("take_profit")
                        or _cfg_f["take_profit"])
         _stop  = float(cfg.get("stop_loss")
                        or _cfg_f["stop_loss"])
 
-        # sizing_orbit já carrega o fator REFLECT aplicado pelo EDGE
+        # sizing_orbit jÃ¡ carrega o fator REFLECT aplicado pelo EDGE
         sizing_final = sizing_orbit * sizing_config
 
         _regime_estrategia_global = carregar_config()["fire"]["regime_estrategia"]
@@ -246,7 +247,7 @@ class FIRE:
 
         # Cooling off
 
-        # Q8 — timezone consistente
+        # Q8 â€” timezone consistente
         data_ts = pd.Timestamp(data).tz_localize(None)
         for op in reversed(self.book._ops):
             if (op.core.ativo == ativo and
@@ -333,7 +334,7 @@ class FIRE:
         )
         return self._executar(op)
 
-    # ── Executar ─────────────────────────────────────────────────
+    # â”€â”€ Executar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _executar(self, op):
         if self.modo == "backtest":
             return self.book.registrar(op)
@@ -344,20 +345,20 @@ class FIRE:
             for leg in op.legs:
                 print(f"    {leg.posicao:8} {leg.tipo:4} "
                       f"K={leg.strike:.2f} "
-                      f"δ={leg.delta} "
-                      f"prêmio={leg.premio_entrada:.4f}")
+                      f"Î´={leg.delta} "
+                      f"prÃªmio={leg.premio_entrada:.4f}")
             return self.book.registrar(op)
         else:
             raise NotImplementedError("FIRE.real: Fase 3.")
 
-    # ── Verificar gatilhos ───────────────────────────────────────
+    # â”€â”€ Verificar gatilhos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def verificar(self, df_dia, data, df_selic=None,
                   cfg_global=None, configs_ativos=None):
         acoes   = []
-        # Q8 — timezone consistente
+        # Q8 â€” timezone consistente
         data_ts = pd.Timestamp(data).tz_localize(None)
 
-        # S4 — cache em memória, não relê disco a cada pregão
+        # S4 â€” cache em memÃ³ria, nÃ£o relÃª disco a cada pregÃ£o
         if cfg_global is None:
             cfg_global = carregar_config()
         _cfg_fire    = cfg_global["fire"]
@@ -368,7 +369,7 @@ class FIRE:
             ativo = op.core.ativo
             if not op.legs: continue
 
-            # Q8 — timezone consistente
+            # Q8 â€” timezone consistente
             venc      = pd.Timestamp(
                 op.legs[0].vencimento).tz_localize(None)
             dias_rest = (venc - data_ts).days
@@ -429,7 +430,7 @@ class FIRE:
             premio_ref = max(premio_liq, 0.01)
             pnl_pct    = pnl_atual / premio_ref
 
-            # S5 — usa configs_ativos cacheado se disponível
+            # S5 â€” usa configs_ativos cacheado se disponÃ­vel
             cfg_ativo = (configs_ativos or {}).get(ativo) \
                         or tape_carregar_ativo(ativo)
             _tp   = float(cfg_ativo.get("take_profit")
@@ -468,6 +469,6 @@ class FIRE:
         return float(s.iloc[0]) if not s.empty else 0.0
 
 if __name__ == "__main__":
-    print("✓ FIRE v1.2 — .abrir() | .verificar()")
-    print("  Sizing recebido já modulado pelo REFLECT via EDGE")
+    print("âœ“ FIRE v1.2 â€” .abrir() | .verificar()")
+    print("  Sizing recebido jÃ¡ modulado pelo REFLECT via EDGE")
     print("  reflect_permanent_block_flag verificado em abrir()")
