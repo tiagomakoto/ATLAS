@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from core.config_manager import load_config, update_config
+from atlas_backend.core.config_manager import load_config, update_config
 
 router = APIRouter()
 

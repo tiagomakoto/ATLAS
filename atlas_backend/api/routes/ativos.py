@@ -1,12 +1,12 @@
 # atlas_backend/api/routes/ativos.py
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
-from core.paths import get_paths
-from core.delta_chaos_reader import list_ativos, get_ativo, get_book, update_ativo
-from core.analytics_engine import compute_walk_forward, compute_distribution, compute_acf, compute_tail_metrics
-from core.schema_validator import ATLASEditableFields
-from core.cache import analytics_cache
-from core.book_manager import get_book_greeks, get_cobertura_seguro, get_risco_consolidado, validar_limites_risco
+from atlas_backend.core.paths import get_paths
+from atlas_backend.core.delta_chaos_reader import list_ativos, get_ativo, get_book, update_ativo
+from atlas_backend.core.analytics_engine import compute_walk_forward, compute_distribution, compute_acf, compute_tail_metrics
+from atlas_backend.core.schema_validator import ATLASEditableFields
+from atlas_backend.core.cache import analytics_cache
+from atlas_backend.core.book_manager import get_book_greeks, get_cobertura_seguro, get_risco_consolidado, validar_limites_risco
 import pandas as pd
 from pathlib import Path
 

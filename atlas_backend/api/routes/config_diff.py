@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from core.config_manager import load_config
-from core.config_diff import compute_diff
+from atlas_backend.core.config_manager import load_config
+from atlas_backend.core.config_diff import compute_diff
 
 router = APIRouter()
 

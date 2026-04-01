@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from core.runtime_mode import set_mode, get_mode
-from core.audit_logger import log_action
+from atlas_backend.core.runtime_mode import set_mode, get_mode
+from atlas_backend.core.audit_logger import log_action
 
 router = APIRouter()
 

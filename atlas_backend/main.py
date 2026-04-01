@@ -4,16 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
 import asyncio
-from api.routes import config, modules, mode, ativos, cycle, config_diff
-from api.websocket.stream import manager
-from core.event_bus import event_dispatcher
-from core.runtime_mode import get_mode
-from api.routes import delta_chaos
+from atlas_backend.api.routes import config, modules, mode, ativos, cycle, config_diff
+from atlas_backend.api.websocket.stream import manager
+from atlas_backend.core.event_bus import event_dispatcher
+from atlas_backend.core.runtime_mode import get_mode
+from atlas_backend.api.routes import delta_chaos
 from atlas_backend.api.routes.delta_chaos import router as dc_router
-
-
-
-
 
 _started_at = datetime.utcnow()
 

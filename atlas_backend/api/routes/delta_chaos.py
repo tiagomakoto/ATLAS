@@ -32,7 +32,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from core.terminal_stream import emit_log, emit_error
+from atlas_backend.core.terminal_stream import emit_log, emit_error
 
 router = APIRouter(prefix="/delta-chaos", tags=["delta-chaos"])
 

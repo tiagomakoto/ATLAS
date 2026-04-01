@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 import tempfile
 import os
-from core.schema_validator import validate_config
-from core.versioning import save_version
-from core.audit_logger import log_action
+from atlas_backend.core.schema_validator import validate_config
+from atlas_backend.core.versioning import save_version
+from atlas_backend.core.audit_logger import log_action
 
 CONFIG_PATH = Path("storage/configs/delta_chaos_config.json")
 

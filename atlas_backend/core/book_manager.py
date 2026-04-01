@@ -8,7 +8,7 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from core.paths import get_paths
+from atlas_backend.core.paths import get_paths
 
 
 def get_book_greeks(fonte: str = "paper") -> Dict[str, Any]:

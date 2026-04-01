@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any
-from core.paths import get_paths
+from atlas_backend.core.paths import get_paths
 
 
 def sanitize_nan(value):

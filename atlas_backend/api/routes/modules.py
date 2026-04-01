@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from core.module_registry import get_all_modules
+from atlas_backend.core.module_registry import get_all_modules
 
 router = APIRouter()
 
