@@ -11,6 +11,9 @@ import os
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 from delta_chaos.init import (
+    CONFIG_PATH,
+    CONFIG_PATH,
+    CONFIG_PATH,
     carregar_config, ATIVOS_DIR, DRIVE_BASE, CONFIG_PATH,
 )
 from delta_chaos.tape import (
@@ -39,6 +42,8 @@ def executar_tune(ticker: str) -> dict:
     """
     TICKER = ticker.strip().upper()
 
+    emit_log(f"TUNE PING — {TICKER} | conexão WebSocket ativa", level="debug")
+
     import json, os
     import pandas as pd
     import numpy as np
@@ -66,6 +71,9 @@ def executar_tune(ticker: str) -> dict:
     # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     # ETAPA 1 â€” carrega tudo uma vez
     # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    
+    emit_log(f"TUNE [{TICKER}] Etapa 1/4: carregando TAPE/SELIC/ORBIT", level="info")
+    
     print("=" * 60)
     print(f"  TUNE v1.1 â€” {TICKER}")
     print(f"  OpÃ§Ã£o B SCAN: proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo")
@@ -151,6 +159,8 @@ def executar_tune(ticker: str) -> dict:
     #     (na prÃ¡tica o dia ruim bate STOP antes do TP)
     # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
+    emit_log(f"TUNE [{TICKER}] Etapa 2/4: simulando {len(COMBINACOES)} combinações...", level="info")
     print(f"\n{'=' * 60}")
     print(f"  Etapa 2 â€” SimulaÃ§Ã£o intradiÃ¡ria: {len(COMBINACOES)} combinaÃ§Ãµes")
     print(f"{'=' * 60}")
