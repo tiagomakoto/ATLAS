@@ -1,9 +1,10 @@
-# atlas_backend/main.py — WebSocket Handler CORIGIDO
+# atlas_backend/main.py
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
 import asyncio
+
 from atlas_backend.api.routes import config, modules, mode, ativos, cycle, config_diff, delta_chaos
 from atlas_backend.api.websocket.stream import manager
 from atlas_backend.core.event_bus import event_dispatcher
@@ -23,45 +24,37 @@ async def lifespan(app: FastAPI):
 # ── App ───────────────────────────────────────────────────────────
 app = FastAPI(title="ATLAS Backend", lifespan=lifespan)
 
-# ── WebSocket /ws/logs (SEM heartbeat customizado!) ───────────────
+# ── WebSocket /ws/logs (SEM heartbeat customizado) ────────────────
 @app.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
     await websocket.accept()
     _ws_connections.append(websocket)
-    client_id = id(websocket)
-    print(f"[WS] Client {client_id} conectado. Total: {len(_ws_connections)}")
     
+    # Log via broadcast (chega no cliente WebSocket)
     emit_log(f"WebSocket client conectado — total: {len(_ws_connections)}")
     
     try:
-        # ⚠️ SEM heartbeat — biblioteca websockets gerencia ping/pong nativamente
-        # Apenas mantém conexão aberta aguardando desconexão do cliente
+        # Mantém conexão aberta; biblioteca websockets gerencia ping/pong nativamente
         while True:
-            await asyncio.sleep(60)  # Stay alive, SEM send_json
+            await asyncio.sleep(60)
     except WebSocketDisconnect:
-        print(f"[WS] Client {client_id} desconectou")
-    except Exception as e:
-        print(f"[WS] Client {client_id} erro: {type(e).__name__}: {e}")
+        pass
+    except Exception:
+        pass
     finally:
-        # Cleanup garantido
         if websocket in _ws_connections:
             _ws_connections.remove(websocket)
-        print(f"[WS] Client {client_id} removido. Total: {len(_ws_connections)}")
 
 async def broadcast_to_logs(message: str, level: str = "info"):
-    print(f"[WS BROADCAST] {level}: {message[:60]}...")  # ← DEBUG
-    print(f"[WS BROADCAST] Conexões ativas: {len(_ws_connections)}")  # ← DEBUG
-    
+    """Broadcast seguro para todos os clientes conectados."""
     for ws in _ws_connections[:]:
         try:
             await ws.send_json({"type": "terminal_log", "level": level, "message": message})
-            print(f"[WS BROADCAST] ✓ Enviado")  # ← DEBUG
-        except Exception as e:
-            print(f"[WS BROADCAST] ✗ Falha: {type(e).__name__}: {e}")  # ← DEBUG
+        except Exception:
             if ws in _ws_connections:
                 _ws_connections.remove(ws)
 
-# ── REGISTRA broadcast (APÓS a definição de broadcast_to_logs!) ───
+# ── REGISTRA broadcast ───────────────────────────────────────────
 set_ws_broadcast(broadcast_to_logs)
 
 # ── Routers ───────────────────────────────────────────────────────

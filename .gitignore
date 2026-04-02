@@ -32,6 +32,9 @@ opcoes_historico/*.xlsx
 atlas/arquivos/
 atlas/tree_structure.py
 atlas/atlas_structure.txt
+arquivos/
+atlas/tree_structure.py
+atlas/atlas_structure.txt
 
 # ── Logs (NÃO versionar) ──────────────────────────────────────
 storage/logs/
@@ -60,3 +63,10 @@ Thumbs.db
 # ── Git ───────────────────────────────────────────────────────
 .git/
 !.gitignore
+
+
+# ── ai-pipeline/ ───────────────────────────────────────────────────────
+.env
+ai-pipeline/
+
+

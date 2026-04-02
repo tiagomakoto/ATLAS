@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "dotenv": "^17.4.0",
+    "node-fetch": "^3.3.2"
+  },
+  "name": "atlas",
+  "version": "1.0.0",
+  "description": "Sistema de trading quantitativo com modulos GATE, TUNE, ORBIT e streaming de logs via WebSocket.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ai": "node ai-pipeline/executor.js && node ai-pipeline/applyPatch.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tiagomakoto/ATLAS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/tiagomakoto/ATLAS/issues"
+  },
+  "homepage": "https://github.com/tiagomakoto/ATLAS#readme"
+ 
+}

@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import os
 # DELTA CHAOS â€” EDGE v2.0
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.3:
@@ -396,9 +396,96 @@ class EDGE:
         self.book.dashboard()
         return self.book.df()
 
+# ── Entrypoint CLI — chamado pelo ATLAS via subprocess ───────────
 if __name__ == "__main__":
-    print("âœ“ EDGE v1.3 carregado")
-    print("  REFLECT: sizing modulado antes do FIRE")
-    print("  REFLECT: bloqueio permanente estado E verificado")
-    print("  REFLECT: tape_reflect_cycle no fechamento de cada ciclo")
-    print("  SCAN-11 corrigido: configs_ativos no paper mode")
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Delta Chaos — entrypoint CLI para ATLAS")
+
+    parser.add_argument(
+        "--modo",
+        choices=["eod", "eod_preview", "orbit", "tune", "gate"],
+        required=True,
+        help="Rotina a executar"
+    )
+    parser.add_argument(
+        "--ticker",
+        type=str,
+        default=None,
+        help="Ticker do ativo (obrigatório para orbit, tune, gate)"
+    )
+    parser.add_argument(
+        "--xlsx_dir",
+        type=str,
+        default=None,
+        help="Diretório com arquivos xlsx EOD (obrigatório para eod)"
+    )
+    parser.add_argument(
+        "--anos",
+        type=str,
+        default=None,
+        help="Anos separados por vírgula (opcional para orbit)"
+    )
+
+    args = parser.parse_args()
+
+    # Validações
+    if args.modo in ("orbit", "tune", "gate") and not args.ticker:
+        print(f"ERRO: --ticker obrigatório para modo {args.modo}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if args.modo in ("eod", "eod_preview") and not args.xlsx_dir:
+        print("ERRO: --xlsx_dir obrigatório para modo eod",
+              file=sys.stderr)
+        sys.exit(1)
+
+    # Execução
+    try:
+        universo = carregar_config().get("universo", [])
+
+        if args.modo == "eod_preview":
+            # Apenas gate_eod por ativo — sem executar
+            print(f"[PREVIEW] Verificando {len(universo)} ativos...")
+            for ticker in universo:
+                parecer = gate_eod(ticker, verbose=True)
+                print(f"[PREVIEW] {ticker}: {parecer}")
+
+        elif args.modo == "eod":
+            edge = EDGE(
+                capital=carregar_config()["book"]["capital"],
+                modo="paper",
+                universo=universo
+            )
+            edge.executar_eod(xlsx_dir=args.xlsx_dir)
+
+        elif args.modo == "orbit":
+            anos = (list(map(int, args.anos.split(",")))
+                    if args.anos
+                    else list(range(2002, 2026)))
+            edge = EDGE(
+                capital=carregar_config()["book"]["capital"],
+                modo="backtest",
+                universo=[args.ticker]
+            )
+            df_tape = tape_backtest(
+                ativos=[args.ticker], anos=anos, forcar=False)
+            orbit = ORBIT(universo={args.ticker: tape_carregar_ativo(args.ticker)})
+            orbit.rodar(df_tape, anos, modo="mensal")
+
+        elif args.modo == "tune":
+            from delta_chaos.tune import executar_tune
+            executar_tune(args.ticker)
+
+        elif args.modo == "gate":
+            from delta_chaos.gate import executar_gate
+            resultado = executar_gate(args.ticker)
+            print(f"[GATE] {args.ticker}: {resultado}")
+
+    except Exception as e:
+        import traceback
+        print(f"ERRO: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
