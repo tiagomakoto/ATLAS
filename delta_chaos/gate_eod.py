@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # DELTA CHAOS â€” GATE EOD v2.0
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.0:
 # MIGRADO (P2): imports explÃ­citos de init e tape â€” sem escopo global
@@ -123,6 +123,8 @@ def gate_eod(ticker: str, verbose: bool = True) -> str:
         ir_atual     = 0.0
         ciclo_atual  = "N/A"
         est_hoje     = "N/A"
+        mes_corrente = date.today().strftime("%Y-%m")
+        defasagem    = 99
     else:
         uc           = sorted(
             historico, key=lambda x: x["ciclo_id"])[-1]
@@ -135,6 +137,7 @@ def gate_eod(ticker: str, verbose: bool = True) -> str:
 
         # Defasagem ORBIT
         mes_corrente = date.today().strftime("%Y-%m")
+        defasagem    = 0
         if ciclo_atual != "N/A":
             ano_c, mes_c = int(ciclo_atual[:4]), int(ciclo_atual[5:])
             ano_m, mes_m = int(mes_corrente[:4]), int(mes_corrente[5:])

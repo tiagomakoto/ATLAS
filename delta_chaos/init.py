@@ -208,27 +208,30 @@ def verificar_cache():
 # â”€â”€ Config global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CONFIG_PATH = os.path.join(DRIVE_BASE, "delta_chaos_config.json")
 
+CAPITAL_PADRAO = 10000.0
+
 
 def carregar_config() -> dict:
-    """Carrega delta_chaos_config.json do DRIVE_BASE."""
     try:
         with open(CONFIG_PATH) as f:
-            return json.load(f)
+            config = json.load(f)
+        
+        if "backtest" not in config:
+            config["backtest"] = {}
+        if "capital" not in config.get("backtest", {}):
+            config["backtest"]["capital"] = CAPITAL_PADRAO
+        
+        return config
     except FileNotFoundError:
-        emit_error(
-            "delta_chaos_config.json nÃ£o encontrado. "
-            f"Esperado em: {CONFIG_PATH}"
-        )
+        emit_error(f"delta_chaos_config.json nao encontrado: {CONFIG_PATH}")
         raise
 
 
 def cfg_global(secao: str, chave: str):
-    """
-    LÃª valor do config global.
-    Uso: cfg_global("fire", "take_profit")
-    """
     config = carregar_config()
-    return config[secao][chave]
+    if secao in config:
+        return config[secao].get(chave)
+    return None
 
 
 # â”€â”€ ExecuÃ§Ã£o standalone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

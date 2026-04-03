@@ -91,7 +91,17 @@ async def _stream_subprocess(
         returncode = await asyncio.wait_for(asyncio.to_thread(_sync_runner), timeout=1800)
 
         output_str = "\n".join(full_output)
-        status = "OK" if returncode == 0 else "ERRO"
+        
+        # Verificar se há erros no output
+        tem_erro = any(
+            line.startswith("ERRO") or "Error" in line or "Traceback" in line
+            for line in full_output
+        )
+        
+        status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
+        
+        if tem_erro and returncode == 0:
+            emit_log("[ORQUESTRADOR] ⚠ Processo completou mas com warnings", level="warning")
 
         log_action(
             action=action_name,
@@ -178,5 +188,15 @@ async def run_gate(ticker: str) -> dict:
         args=["-m", "delta_chaos.edge", "--modo", "gate", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_gate",
+        action_payload={"ticker": ticker}
+    )
+
+async def run_reflect(ticker: str) -> dict:
+    """Executa o módulo Reflect para atualização de dados."""
+    script = _get_dc_script()
+    return await _stream_subprocess(
+        args=["-m", "delta_chaos.edge", "--modo", "reflect", "--ticker", ticker],
+        cwd=script.parent,
+        action_name="dc_reflect",
         action_payload={"ticker": ticker}
     )

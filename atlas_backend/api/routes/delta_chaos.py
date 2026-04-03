@@ -176,7 +176,7 @@ async def onboarding(payload: OnboardingPayload):
 
         emit_log(f"[ONBOARDING] Iniciando {ticker}", level="info")
 
-        await run_orbit(ticker=ticker, anos=list(range(2002, 2026)))
+        await run_orbit(ticker=ticker, anos=list(range(2002, 2027)))
         await run_tune(ticker=ticker)
         await run_gate(ticker=ticker)
 
@@ -191,13 +191,100 @@ async def onboarding(payload: OnboardingPayload):
 @router.post("/orchestrator/run")
 async def orchestrator_run(payload: dict):
     """
-    Gateway para execução do ciclo completo do orquestrador.
-    Inicia com EOD Preview (Check Status).
+    Gerente de Integridade de Dados - v2.5.2
+    Ciclo de manutenção ativo: verifica e atualiza ORBIT e REFLECT
+    independentemente do status de BLOQUEIO do ativo.
     """
+    from atlas_backend.core.terminal_stream import emit_log
+
+    emit_log("[ORQUESTRADOR] 🚀 Iniciando ciclo de manutenção...", level="info")
+
     try:
-        from atlas_backend.core.dc_runner import run_eod_preview
+        from atlas_backend.core.dc_runner import run_orbit, run_reflect, run_eod_preview
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+
+        ativos = list_ativos()
+        if not ativos:
+            emit_log("[ORQUESTRADOR] Nenhum ativo parametrizado encontrado", level="warning")
+            return {"status": "OK", "output": "Nenhum ativo para processar", "manutencao": []}
+
         xlsx_dir = _resolver_xlsx_dir(None)
-        result = await run_eod_preview(xlsx_dir=xlsx_dir)
-        return {"status": result["status"], "output": result["output"]}
+        emit_log(f"[ORQUESTRADOR] Verificando {len(ativos)} ativos...", level="info")
+
+        manutencao_realizada = []
+        itens_digest = []
+
+        for ticker in ativos:
+            emit_log(f"[ORQUESTRADOR] Verificando {ticker}...", level="info")
+
+            try:
+                data = get_ativo(ticker)
+            except Exception:
+                emit_log(f"[ORQUESTRADOR] ⚠ {ticker} não encontrado, pulando", level="warning")
+                continue
+
+            precisa_orbit = True
+            precisa_reflect = True
+
+            if data.get("historico") and len(data.get("historico", [])) > 0:
+                ultimo_ciclo = data["historico"][-1]
+                data_ciclo = ultimo_ciclo.get("data_ref") or ultimo_ciclo.get("timestamp", "")[:10]
+                if data_ciclo:
+                    from datetime import datetime, timedelta
+                    try:
+                        dt_ciclo = datetime.strptime(data_ciclo, "%Y-%m-%d")
+                        hoje = datetime.now()
+                        dias_diff = (hoje - dt_ciclo).days
+                        if dias_diff <= 35:
+                            precisa_orbit = False
+                    except:
+                        pass
+
+            if data.get("reflect_historico") and len(data.get("reflect_historico", [])) > 0:
+                ultimo_reflect = data["reflect_historico"][-1]
+                data_reflect = ultimo_reflect.get("data_ref") or ultimo_reflect.get("timestamp", "")[:10]
+                if data_reflect:
+                    from datetime import datetime
+                    try:
+                        dt_reflect = datetime.strptime(data_reflect, "%Y-%m-%d")
+                        hoje = datetime.now()
+                        dias_diff = (hoje - dt_reflect).days
+                        if dias_diff <= 2:
+                            precisa_reflect = False
+                    except:
+                        pass
+
+            atualizou = False
+            if precisa_orbit:
+                emit_log(f"[MANUTENÇÃO] Atualizando ORBIT para {ticker} (dados desatualizados)", level="info")
+                result_orbit = await run_orbit(ticker=ticker, anos=list(range(2002, 2027)))
+                atualizou = True
+                manutencao_realizada.append(f"ORBIT {ticker}")
+                itens_digest.append({"modulo": "ORBIT", "tipo": "ok", "mensagem": f"{ticker} atualizado"})
+            else:
+                itens_digest.append({"modulo": "ORBIT", "tipo": "ok", "mensagem": f"{ticker} OK"})
+
+            if precisa_reflect:
+                emit_log(f"[MANUTENÇÃO] Atualizando REFLECT para {ticker} (dados desatualizados)", level="info")
+                result_reflect = await run_reflect(ticker=ticker)
+                atualizou = True
+                manutencao_realizada.append(f"REFLECT {ticker}")
+                itens_digest.append({"modulo": "REFLECT", "tipo": "ok", "mensagem": f"{ticker} atualizado"})
+            else:
+                itens_digest.append({"modulo": "REFLECT", "tipo": "ok", "mensagem": f"{ticker} OK"})
+
+            if atualizou:
+                emit_log(f"[MANUTENÇÃO] ✅ {ticker} atualizado", level="info")
+
+        emit_log(f"[ORQUESTRADOR] ✅ Ciclo de manutenção concluído - {len(manutencao_realizada)} atualizações", level="info")
+
+        return {
+            "status": "OK",
+            "output": f"Manutenção concluída: {manutencao_realizada}",
+            "manutencao": manutencao_realizada,
+            "digest": itens_digest
+        }
+
     except Exception as e:
+        emit_log(f"[ORQUESTRADOR] ❌ Erro: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail=str(e))

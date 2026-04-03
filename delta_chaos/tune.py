@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import json
 import os
 # DELTA CHAOS â€” TUNE v2.0
@@ -57,7 +57,7 @@ def executar_tune(ticker: str) -> dict:
     # TICKER recebido como argumento de executar_tune()
     ANO_WARMUP    = 2004
     ANO_TESTE_INI = 2019
-    ANOS          = list(range(2002, 2026))
+    ANOS          = list(range(2002, 2027))
 
     COMBINACOES = [
         {"tp": 0.50, "stop": 2.0, "label": "baseline"},
@@ -78,7 +78,7 @@ def executar_tune(ticker: str) -> dict:
     print(f"  TUNE v1.1 â€” {TICKER}")
     print(f"  OpÃ§Ã£o B SCAN: proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo")
     print(f"  Warmup:       descartar ciclos < {ANO_WARMUP}")
-    print(f"  PerÃ­odo teste: {ANO_TESTE_INI}â€“2025 (7 anos)")
+    print(f"  PerÃ­odo teste: {ANO_TESTE_INI}â€“2026 (7 anos)")
     print("=" * 60)
 
     # TAPE â€” uma vez
@@ -488,7 +488,7 @@ def executar_tune(ticker: str) -> dict:
     # =====================================
     print(f"\n{'â•' * 88}")
     print(f"  {TICKER} â€” TUNE v1.1 â€” TP e STOP screening (proxy intradiÃ¡rio)")
-    print(f"  Warmup: < {ANO_WARMUP} | Teste: {ANO_TESTE_INI}â€“2025 (7 anos)")
+    print(f"  Warmup: < {ANO_WARMUP} | Teste: {ANO_TESTE_INI}â€“2026 (7 anos)")
     print(f"{'â•' * 88}")
 
     colunas = list(resultados.keys())
@@ -516,7 +516,7 @@ def executar_tune(ticker: str) -> dict:
         ("n STOP",                "n_stops",           "{:.0f}"),
         ("Perda mÃ©dia",           "perda_media",       "R${:,.0f}"),
         ("â”€" * 26,               None,                None),
-        (f"â”€â”€ TESTE {ANO_TESTE_INI}â€“2025",None,        None),
+        (f"â”€â”€ TESTE {ANO_TESTE_INI}â€“2026",None,        None),
         ("Trades vÃ¡lidos",        "trades_valido",     "{:.0f}"),
         ("P&L vÃ¡lido",            "pnl_valido",        "R${:,.0f}"),
         ("Acerto vÃ¡lido %",       "acerto_valido",     "{:.1f}%"),
@@ -554,7 +554,7 @@ def executar_tune(ticker: str) -> dict:
     print(f"  Melhor P&L total:   {melhor_pnl[0]:24} R${melhor_pnl[1]['pnl']:,.0f}")
     print(f"  Melhor P&L vÃ¡lido:  {melhor_pnl_v[0]:24} R${melhor_pnl_v[1]['pnl_valido']:,.0f}")
     print(f"\n  âš  MÃ©trica de decisÃ£o: IR vÃ¡lido e P&L vÃ¡lido")
-    print(f"    (perÃ­odo {ANO_TESTE_INI}â€“2025 â€” proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo)")
+    print(f"    (perÃ­odo {ANO_TESTE_INI}â€“2026 â€” proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo)")
     print(f"\n{'â•' * 88}")
 
     # ==========================================
@@ -581,7 +581,7 @@ def executar_tune(ticker: str) -> dict:
                          f"proxy=intraday_min_max"),
         "combinacao":    melhor[0],
         "warmup":        ANO_WARMUP,
-        "periodo_teste": f"{ANO_TESTE_INI}-2025",
+        "periodo_teste": f"{ANO_TESTE_INI}-2026",
         "metodo":        "proxy_intraday_min_max",
     })
     dados["atualizado_em"] = str(datetime.now())[:19]

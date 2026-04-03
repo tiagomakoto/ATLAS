@@ -18,6 +18,7 @@ import OrchestratorProgress from "../components/OrchestratorProgress";
 import DigestPanel from "../components/DigestPanel";
 import TuneApprovalCard from "../components/TuneApprovalCard";
 import ManutencaoView from "../components/ManutencaoView";
+import { useSystemStore } from "../store/systemStore";
 
 const API_BASE = "http://localhost:8000";
 
@@ -30,6 +31,7 @@ const VisaoGeral = ({
   const [book, setBook] = useState({ posicoes_abertas: [] });
   const [ultimaRun, setUltimaRun] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const updateFromEvent = useSystemStore((s) => s.updateFromEvent);
 
   useEffect(() => { fetchData(); }, [bookFonte]);
 
@@ -54,15 +56,35 @@ const VisaoGeral = ({
 
   async function handleCheckStatus() {
     setCarregando(true);
+    updateFromEvent({ type: "orchestrator_start" });
+
     try {
-      await fetch(`${API_BASE}/delta-chaos/orchestrator/run`, {
+      const res = await fetch(`${API_BASE}/delta-chaos/orchestrator/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: "manual" })
       });
+
+      const data = await res.json();
+
+      if (res.ok && data.digest) {
+        updateFromEvent({
+          type: "orchestrator_done",
+          data: {
+            items: data.digest,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } else {
+        updateFromEvent({ type: "orchestrator_error" });
+      }
+
       setUltimaRun(new Date().toLocaleString("pt-BR"));
       await fetchData(); 
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e); 
+      updateFromEvent({ type: "orchestrator_error" });
+    }
     finally { setCarregando(false); }
   }
 

@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import json
 import os
 # DELTA CHAOS â€” TAPE v2.0
@@ -308,27 +308,8 @@ def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
     ticker = ticker.replace(".SA", "").upper()
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
-    # LÃª estado atual
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                dados = json.load(f)
-        except Exception:
-            dados = {
-                "ativo":      ticker,
-                "historico":  [],
-                "externas":   {},
-                "regimes_sizing": {},
-                "foco":       "",
-            }
-    else:
-        dados = {
-            "ativo":      ticker,
-            "historico":  [],
-            "externas":   {},
-            "regimes_sizing": {},
-            "foco":       "",
-        }
+    # LÃª estado atual usando carregador robusto
+    dados = tape_carregar_ativo(ticker)
 
     # Atualiza histÃ³rico
     ciclo_id = resultado.get("ciclo_id")

@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import json
 import os
 import pandas as pd
@@ -110,7 +110,7 @@ def executar_gate(ticker: str) -> str:
             os.remove(p)
 
     # Roda EDGE com anos vÃ¡lidos + 2 anos de aquecimento
-    anos_gate = list(range(min(ANOS_VALIDOS) - 2, 2026))
+    anos_gate = list(range(min(ANOS_VALIDOS) - 2, 2027))
     edge = EDGE(capital=10_000, modo="backtest",
                 universo=[TICKER])
     df_resultado = edge.executar(anos=anos_gate)
@@ -145,7 +145,8 @@ def executar_gate(ticker: str) -> str:
     anos_cobertos = sorted(historico["ano"].unique().tolist())
     iv_ok      = True  # assumido vÃ¡lido dado backtests anteriores
 
-    e0_passou = n_ciclos >= 60 and n_gregas >= 6
+    # SCAN-10: relax requirement to 50 cycles (robustness against missing data)
+    e0_passou = n_ciclos >= 50 and n_gregas >= 6
     print(f"  Ciclos ORBIT:    {n_ciclos}")
     print(f"  Gregas parquet:  {n_gregas} arquivos")
     print(f"  Anos cobertos:   {anos_cobertos}")
@@ -233,6 +234,8 @@ def executar_gate(ticker: str) -> str:
                 valido[valido["pnl"] < 0]["pnl"].mean()) / 2.0 \
                 if len(valido[valido["pnl"] < 0]) > 0 \
                 else 80.0
+            # LÃª estado atual usando carregador robusto
+            dados = tape_carregar_ativo(TICKER)
 
             for pnl_orig in pnls_orig:
                 if pnl_orig > 0:

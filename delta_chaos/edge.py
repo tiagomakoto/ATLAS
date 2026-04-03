@@ -97,7 +97,7 @@ class EDGE:
 
         if self.modo == "backtest":
             if anos is None:
-                anos = [2020,2021,2022,2023,2024,2025]
+                anos = [2020,2021,2022,2023,2024,2025,2026]
             return self._executar_backtest(anos, modo_orbit)
         elif self.modo == "paper":
             return self._executar_paper(xlsx_dir)
@@ -406,7 +406,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--modo",
-        choices=["eod", "eod_preview", "orbit", "tune", "gate"],
+        choices=["eod", "eod_preview", "orbit", "tune", "gate", "reflect"],
         required=True,
         help="Rotina a executar"
     )
@@ -464,9 +464,9 @@ if __name__ == "__main__":
         elif args.modo == "orbit":
             anos = (list(map(int, args.anos.split(",")))
                     if args.anos
-                    else list(range(2002, 2026)))
+                    else list(range(2002, 2027)))
             edge = EDGE(
-                capital=carregar_config()["book"]["capital"],
+                capital=carregar_config().get("backtest", {}).get("capital", 10000.0),
                 modo="backtest",
                 universo=[args.ticker]
             )
@@ -483,6 +483,12 @@ if __name__ == "__main__":
             from delta_chaos.gate import executar_gate
             resultado = executar_gate(args.ticker)
             print(f"[GATE] {args.ticker}: {resultado}")
+
+        elif args.modo == "reflect":
+            # Reflect = executar_gate (atualiza historico e reflect_state)
+            from delta_chaos.gate import executar_gate
+            resultado = executar_gate(args.ticker)
+            print(f"[REFLECT] {args.ticker}: {resultado}")
 
     except Exception as e:
         import traceback
