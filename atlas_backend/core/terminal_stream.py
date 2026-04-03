@@ -1,6 +1,6 @@
 import traceback
 from .event_bus import emit_event
-from core.audit_logger import log_action
+from atlas_backend.core.audit_logger import log_action
 
 # broadcast_to_logs será registrado por main.py via set_ws_broadcast()
 _ws_broadcast_func = None

@@ -14,8 +14,82 @@ import PosicoesTable from "../components/PosicoesTable";
 import AtivoView from "../components/AtivoView";
 import Tooltip from "../components/Tooltip";
 import Header from "../components/Header";
+import LogPanel from "../components/LogPanel";
 
 const API_BASE = "http://localhost:8000";
+
+const btnStyle = {
+  background: "var(--atlas-bg)",
+  color: "var(--atlas-text-primary)",
+  border: "1px solid var(--atlas-border)",
+  padding: "8px 16px",
+  fontFamily: "monospace",
+  fontSize: 12,
+  cursor: "pointer",
+  borderRadius: 4
+};
+
+const OrquestradorView = ({ activeTicker }) => {
+  const [loading, setLoading] = useState(false);
+
+  const runSubprocess = async (endpoint, tickerNeeded = true) => {
+    if (tickerNeeded && !activeTicker) {
+      alert("Selecione um ativo na Visão Geral primeiro!");
+      return;
+    }
+    setLoading(true);
+    try {
+      const body = { ticker: activeTicker, confirm: true, description: `Orquestrado via UI (${endpoint})` };
+      const res = await fetch(`${API_BASE}/delta-chaos/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) alert(`ERRO: ${data.detail || JSON.stringify(data)}`);
+    } catch (err) {
+      alert(err.message);
+    }
+    setLoading(false);
+  };
+
+  const runEOD = async () => {
+    setLoading(true);
+    try {
+      const path = prompt("Caminho do diretório de EOD (xlsx_dir):", "G:\\Meu Drive\\Delta Chaos\\ATIVOS");
+      if (!path) {
+        setLoading(false);
+        return;
+      }
+      
+      const body = { xlsx_dir: path, confirm: true, description: "EOD Manual via UI" };
+      const res = await fetch(`${API_BASE}/delta-chaos/eod`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) alert(`ERRO: ${data.detail || JSON.stringify(data)}`);
+    } catch (err) {
+      alert(err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: 15, border: "1px solid var(--atlas-border)", background: "var(--atlas-surface)", borderRadius: 4 }}>
+        <h4 style={{ width: "100%", margin: "0 0 10px 0", fontSize: 14 }}>Orquestrador do Delta Chaos</h4>
+        <button disabled={loading} onClick={() => runSubprocess("gate")} style={btnStyle}>▶ RUN GATE ({activeTicker || "selecione..."})</button>
+        <button disabled={loading} onClick={() => runSubprocess("tune")} style={btnStyle}>▶ RUN TUNE ({activeTicker || "selecione..."})</button>
+        <button disabled={loading} onClick={() => runSubprocess("orbit")} style={{...btnStyle, borderLeft: "4px solid var(--atlas-blue)"}}>▶ RUN ORBIT ({activeTicker || "selecione..."})</button>
+        <button disabled={loading} onClick={runEOD} style={{...btnStyle, borderLeft: "4px solid var(--atlas-green)"}}>▶ RUN EOD</button>
+      </div>
+
+      <LogPanel />
+    </div>
+  );
+};
 
 // === VIEWS INTERNAS ===
 const VisaoGeral = ({ state, analytics, activeTicker, onTickerSelect, bookFonte, setBookFonte }) => {
@@ -140,6 +214,7 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
   const internalTabs = [
     { id: "visao_geral", label: "Visão Geral" },
     { id: "ativo", label: "Ativo" },
+    { id: "orquestrador", label: "Orquestrador" }
   ];
 
   return (
@@ -271,6 +346,10 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                   analytics={analytics}
                   onTickerChange={onTickerChange}
                 />
+              )}
+
+              {internalTab === "orquestrador" && (
+                <OrquestradorView activeTicker={activeTicker} />
               )}
             </>
           )}

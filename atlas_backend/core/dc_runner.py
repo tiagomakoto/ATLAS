@@ -46,62 +46,77 @@ async def _stream_subprocess(
     _dc_running = True
     full_output = []
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            *args,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=None
+    main_loop = asyncio.get_running_loop()
+
+    def _sync_runner():
+        import subprocess
+        import os
+
+        env = os.environ.copy()
+        # Garante que o python vai enxergar a raiz do ATLAS como import root pra rodar o module 'delta_chaos'
+        env["PYTHONPATH"] = str(cwd.parent)
+        # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+
+        proc = subprocess.Popen(
+            [sys.executable] + args,
+            cwd=str(cwd.parent),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env
         )
 
-        async def _read_stream():
-            async for raw_line in proc.stdout:
-                line = raw_line.decode("utf-8", errors="replace").strip()
-                if not line:
-                    continue
-                full_output.append(line)
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            full_output.append(line)
 
-                if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
-                    emit_log(line, level="error")
-                elif line.startswith("⚠") or line.startswith("~"):
-                    emit_log(line, level="warning")
-                else:
-                    emit_log(line, level="info")
+            lvl = "info"
+            if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
+                lvl = "error"
+            elif line.startswith("⚠") or line.startswith("~"):
+                lvl = "warning"
+            
+            main_loop.call_soon_threadsafe(emit_log, line, lvl)
 
-        try:
-            await asyncio.wait_for(asyncio.gather(_read_stream(), proc.wait()), timeout=1800)
-        except asyncio.TimeoutError:
-            proc.kill()
-            emit_log("TIMEOUT CRÍTICO: Processo morto compulsoriamente após 30 minutos.", level="error")
-            raise RuntimeError("TIMEOUT")
+        proc.wait()
+        return proc.returncode
+
+    try:
+        returncode = await asyncio.wait_for(asyncio.to_thread(_sync_runner), timeout=1800)
 
         output_str = "\n".join(full_output)
-        status = "OK" if proc.returncode == 0 else "ERRO"
+        status = "OK" if returncode == 0 else "ERRO"
 
         log_action(
             action=action_name,
             payload=action_payload,
             response={
                 "status": status,
-                "returncode": proc.returncode,
+                "returncode": returncode,
                 "linhas": len(full_output)
             }
         )
 
         return {
             "status": status,
-            "returncode": proc.returncode,
+            "returncode": returncode,
             "output": output_str
         }
 
     except Exception as e:
-        emit_error(e)
+        import traceback
+        traceback.print_exc()
+        emit_error(repr(e))
         log_action(
             action=action_name,
             payload=action_payload,
-            response={"status": "ERRO", "error": str(e)}
+            response={"status": "ERRO", "error": repr(e)}
         )
         raise
     finally:
@@ -120,7 +135,7 @@ async def run_eod_preview(xlsx_dir: str) -> dict:
     _validar_caminho(xlsx_dir)
     script = _get_dc_script()
     return await _stream_subprocess(
-        args=[str(script), "--modo", "eod_preview", "--xlsx_dir", xlsx_dir],
+        args=["-m", "delta_chaos.edge", "--modo", "eod_preview", "--xlsx_dir", xlsx_dir],
         cwd=script.parent,
         action_name="dc_eod_preview",
         action_payload={"xlsx_dir": xlsx_dir}
@@ -130,7 +145,7 @@ async def run_eod(xlsx_dir: str) -> dict:
     _validar_caminho(xlsx_dir)
     script = _get_dc_script()
     return await _stream_subprocess(
-        args=[str(script), "--modo", "eod", "--xlsx_dir", xlsx_dir],
+        args=["-m", "delta_chaos.edge", "--modo", "eod", "--xlsx_dir", xlsx_dir],
         cwd=script.parent,
         action_name="dc_eod_executar",
         action_payload={"xlsx_dir": xlsx_dir}
@@ -138,7 +153,7 @@ async def run_eod(xlsx_dir: str) -> dict:
 
 async def run_orbit(ticker: str, anos: Optional[list] = None) -> dict:
     script = _get_dc_script()
-    args = [str(script), "--modo", "orbit", "--ticker", ticker]
+    args = ["-m", "delta_chaos.edge", "--modo", "orbit", "--ticker", ticker]
     if anos:
         args += ["--anos", ",".join(str(a) for a in anos)]
     return await _stream_subprocess(
@@ -151,7 +166,7 @@ async def run_orbit(ticker: str, anos: Optional[list] = None) -> dict:
 async def run_tune(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
-        args=[str(script), "--modo", "tune", "--ticker", ticker],
+        args=["-m", "delta_chaos.edge", "--modo", "tune", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_tune",
         action_payload={"ticker": ticker}
@@ -160,7 +175,7 @@ async def run_tune(ticker: str) -> dict:
 async def run_gate(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
-        args=[str(script), "--modo", "gate", "--ticker", ticker],
+        args=["-m", "delta_chaos.edge", "--modo", "gate", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_gate",
         action_payload={"ticker": ticker}

@@ -1,4 +1,11 @@
 # atlas_backend/main.py
+import sys, os
+import asyncio
+sys.path.insert(0, os.path.dirname(__file__))
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
