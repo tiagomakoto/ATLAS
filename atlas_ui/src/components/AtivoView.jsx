@@ -4,7 +4,6 @@ import DistributionChart from "../components/DistributionChart";
 import ACFChart from "../components/ACFChart";
 import TailMetrics from "../components/TailMetrics";
 import Tooltip from "../components/Tooltip";
-import Configuracao from "../components/Configuracao";
 
 const API_BASE = "http://localhost:8000";
 
@@ -1105,7 +1104,7 @@ export default function AtivoView({ activeTicker, analytics, onTickerChange }) {
 
         {/* Tabs — SEM linha azul */}
         <div style={{ display: "flex", gap: 8 }}>
-          {["orbit", "reflect", "ciclos", "analytics", "manutencao"].map((tab) => (
+          {["orbit", "reflect", "ciclos", "analytics"].map((tab) => (
             <button
               key={tab}
               onClick={() => setSubTab(tab)}
@@ -1121,7 +1120,7 @@ export default function AtivoView({ activeTicker, analytics, onTickerChange }) {
                 textTransform: "uppercase"
               }}
             >
-              {tab === "manutencao" ? "Manutenção" : tab}
+              {tab}
             </button>
           ))}
         </div>
@@ -1133,70 +1132,7 @@ export default function AtivoView({ activeTicker, analytics, onTickerChange }) {
         {subTab === "reflect" && <ReflectTab ticker={activeTicker} data={data} />}
         {subTab === "ciclos" && <CiclosTab ticker={activeTicker} data={data} />}
         {subTab === "analytics" && <AnalyticsTab ticker={activeTicker} data={data} analytics={analytics} />}
-        {subTab === "manutencao" && <ManutencaoView activeTicker={activeTicker} />}
       </div>
     </div>
   );
 }
-
-// === SUB-ABA: MANUTENÇÃO ===
-const ManutencaoView = ({ activeTicker }) => {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Quadro 1: Parâmetros de Saída — 50% width */}
-      <div style={{ maxWidth: "50%" }}>
-        <div style={{ border: "1px solid var(--atlas-border)", borderRadius: 4, padding: 16, background: "var(--atlas-bg)" }}>
-          <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>
-            Parâmetros de Saída
-          </div>
-          <Configuracao ticker={activeTicker} />
-        </div>
-      </div>
-
-      {/* Quadro 2: Exportação — 50% width */}
-      <div style={{ maxWidth: "50%" }}>
-        <div style={{ border: "1px solid var(--atlas-border)", borderRadius: 4, padding: 16, background: "var(--atlas-bg)" }}>
-          <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>
-            Exportação
-          </div>
-          <button
-            onClick={async () => {
-              try {
-                const res = await fetch(`${API_BASE}/ativos/${activeTicker}`);
-                const data = await res.json();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${activeTicker}_config.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              } catch (err) {
-                console.error("Erro ao exportar:", err);
-              }
-            }}
-            style={{ padding: "8px 16px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-primary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer", textTransform: "uppercase" }}
-          >
-            📥 Exportar Config ({activeTicker}.json)
-          </button>
-          <div style={{ marginTop: 8, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
-            Exporta o arquivo JSON completo do ativo com todos os parâmetros e histórico.
-          </div>
-        </div>
-      </div>
-
-      {/* Quadro 3: Upload EOD — 50% width */}
-      <div style={{ maxWidth: "50%" }}>
-        <div style={{ border: "1px solid var(--atlas-border)", borderRadius: 4, padding: 16, background: "var(--atlas-bg)" }}>
-          <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>
-            Upload EOD
-          </div>
-          <div style={{ padding: 40, border: "2px dashed var(--atlas-border)", borderRadius: 4, textAlign: "center" }}>
-            <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--atlas-text-secondary)", marginBottom: 12 }}>Formatos aceitos: .csv, .parquet</div>
-            <input type="file" accept=".csv,.parquet" style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)" }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};

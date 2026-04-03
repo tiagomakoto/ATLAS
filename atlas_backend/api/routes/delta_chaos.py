@@ -26,6 +26,11 @@ class TickerPayload(BaseModel):
     description: str = ""
     anos: Optional[List[int]] = None
 
+class OnboardingPayload(BaseModel):
+    ticker: str
+    confirm: bool = False
+    description: str = ""
+
 # ── Validações comuns ─────────────────────────────────────────────
 
 def _validar_confirm(confirm: bool, description: str):
@@ -145,5 +150,54 @@ async def gate(payload: TickerPayload):
         }
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/onboarding")
+async def onboarding(payload: OnboardingPayload):
+    """
+    Inicia onboarding completo de novo ativo.
+    Sequência: TAPE → ORBIT → TUNE → GATE
+    Cada etapa roda em sequência via dc_runner.
+    """
+    _validar_confirm(payload.confirm, payload.description)
+    ticker = payload.ticker.strip().upper()
+
+    import re
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ticker inválido: {ticker}"
+        )
+
+    try:
+        from atlas_backend.core.dc_runner import run_orbit, run_tune, run_gate
+        from atlas_backend.core.terminal_stream import emit_log
+
+        emit_log(f"[ONBOARDING] Iniciando {ticker}", level="info")
+
+        await run_orbit(ticker=ticker, anos=list(range(2002, 2026)))
+        await run_tune(ticker=ticker)
+        await run_gate(ticker=ticker)
+
+        emit_log(f"[ONBOARDING] {ticker} concluído", level="info")
+        return {"status": "OK", "ticker": ticker}
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/orchestrator/run")
+async def orchestrator_run(payload: dict):
+    """
+    Gateway para execução do ciclo completo do orquestrador.
+    Inicia com EOD Preview (Check Status).
+    """
+    try:
+        from atlas_backend.core.dc_runner import run_eod_preview
+        xlsx_dir = _resolver_xlsx_dir(None)
+        result = await run_eod_preview(xlsx_dir=xlsx_dir)
+        return {"status": result["status"], "output": result["output"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

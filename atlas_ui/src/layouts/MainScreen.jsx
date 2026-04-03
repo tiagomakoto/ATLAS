@@ -14,184 +14,177 @@ import PosicoesTable from "../components/PosicoesTable";
 import AtivoView from "../components/AtivoView";
 import Tooltip from "../components/Tooltip";
 import Header from "../components/Header";
-import LogPanel from "../components/LogPanel";
+import OrchestratorProgress from "../components/OrchestratorProgress";
+import DigestPanel from "../components/DigestPanel";
+import TuneApprovalCard from "../components/TuneApprovalCard";
+import ManutencaoView from "../components/ManutencaoView";
 
 const API_BASE = "http://localhost:8000";
 
-const btnStyle = {
-  background: "var(--atlas-bg)",
-  color: "var(--atlas-text-primary)",
-  border: "1px solid var(--atlas-border)",
-  padding: "8px 16px",
-  fontFamily: "monospace",
-  fontSize: 12,
-  cursor: "pointer",
-  borderRadius: 4
-};
+// === VIEWS INTERNAS ===
+// === COMPONENTE VISÃO GERAL (v2.5.2) ===
+const VisaoGeral = ({ 
+  state, activeTicker, onTickerSelect, bookFonte, setBookFonte 
+}) => {
+  const [listaAtivos, setListaAtivos] = useState([]);
+  const [book, setBook] = useState({ posicoes_abertas: [] });
+  const [ultimaRun, setUltimaRun] = useState(null);
+  const [carregando, setCarregando] = useState(false);
 
-const OrquestradorView = ({ activeTicker }) => {
-  const [loading, setLoading] = useState(false);
+  useEffect(() => { fetchData(); }, [bookFonte]);
 
-  const runSubprocess = async (endpoint, tickerNeeded = true) => {
-    if (tickerNeeded && !activeTicker) {
-      alert("Selecione um ativo na Visão Geral primeiro!");
-      return;
-    }
-    setLoading(true);
+  async function fetchData() {
     try {
-      const body = { ticker: activeTicker, confirm: true, description: `Orquestrado via UI (${endpoint})` };
-      const res = await fetch(`${API_BASE}/delta-chaos/${endpoint}`, {
+      const resAtivos = await fetch(`${API_BASE}/ativos`);
+      const dataAtivos = await resAtivos.json();
+      const tickers = dataAtivos.ativos || [];
+
+      const detalhes = await Promise.all(
+        tickers.map(async (t) => {
+          const r = await fetch(`${API_BASE}/ativos/${t}`);
+          return r.ok ? { ticker: t, ...(await r.json()) } : null;
+        })
+      );
+      setListaAtivos(detalhes.filter(Boolean));
+
+      const resBook = await fetch(`${API_BASE}/ativos/book?fonte=${bookFonte}`);
+      if (resBook.ok) setBook(await resBook.json());
+    } catch (e) { console.error(e); }
+  }
+
+  async function handleCheckStatus() {
+    setCarregando(true);
+    try {
+      await fetch(`${API_BASE}/delta-chaos/orchestrator/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ source: "manual" })
       });
-      const data = await res.json();
-      if (!res.ok) alert(`ERRO: ${data.detail || JSON.stringify(data)}`);
-    } catch (err) {
-      alert(err.message);
-    }
-    setLoading(false);
-  };
+      setUltimaRun(new Date().toLocaleString("pt-BR"));
+      await fetchData(); 
+    } catch (e) { console.error(e); }
+    finally { setCarregando(false); }
+  }
 
-  const runEOD = async () => {
-    setLoading(true);
-    try {
-      const path = prompt("Caminho do diretório de EOD (xlsx_dir):", "G:\\Meu Drive\\Delta Chaos\\ATIVOS");
-      if (!path) {
-        setLoading(false);
-        return;
-      }
-      
-      const body = { xlsx_dir: path, confirm: true, description: "EOD Manual via UI" };
-      const res = await fetch(`${API_BASE}/delta-chaos/eod`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok) alert(`ERRO: ${data.detail || JSON.stringify(data)}`);
-    } catch (err) {
-      alert(err.message);
-    }
-    setLoading(false);
+  async function handleAplicarTune(ticker, tp, stop) {
+    await fetch(`${API_BASE}/ativos/${ticker}/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: { take_profit: tp, stop_loss: stop },
+        description: `TUNE aplicado — TP=${tp} STOP=${stop}`,
+        confirm: true
+      })
+    });
+    await fetchData();
+  }
+
+  const rodando = carregando || state.orchestratorAtivo;
+
+  const tunesPendentes = (state.digestItems || [])
+    .filter(i => i.tipo === "aprovacao_pendente" && i.modulo === "TUNE")
+    .map(i => i.ticker)
+    .filter(Boolean);
+
+  const sectionLabel = {
+    fontFamily: "monospace", fontSize: 9,
+    color: "var(--atlas-text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em", marginBottom: 8
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: 15, border: "1px solid var(--atlas-border)", background: "var(--atlas-surface)", borderRadius: 4 }}>
-        <h4 style={{ width: "100%", margin: "0 0 10px 0", fontSize: 14 }}>Orquestrador do Delta Chaos</h4>
-        <button disabled={loading} onClick={() => runSubprocess("gate")} style={btnStyle}>▶ RUN GATE ({activeTicker || "selecione..."})</button>
-        <button disabled={loading} onClick={() => runSubprocess("tune")} style={btnStyle}>▶ RUN TUNE ({activeTicker || "selecione..."})</button>
-        <button disabled={loading} onClick={() => runSubprocess("orbit")} style={{...btnStyle, borderLeft: "4px solid var(--atlas-blue)"}}>▶ RUN ORBIT ({activeTicker || "selecione..."})</button>
-        <button disabled={loading} onClick={runEOD} style={{...btnStyle, borderLeft: "4px solid var(--atlas-green)"}}>▶ RUN EOD</button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* BLOCO 1 — Check Status */}
+      <div style={{
+        display: "flex", alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        background: "var(--atlas-surface)",
+        border: "1px solid var(--atlas-border)",
+        borderRadius: 2
+      }}>
+        <button
+          onClick={handleCheckStatus}
+          disabled={rodando}
+          style={{
+            padding: "8px 20px",
+            background: rodando ? "var(--atlas-border)" : "var(--atlas-blue)",
+            border: "none",
+            color: rodando ? "var(--atlas-text-secondary)" : "#fff",
+            fontFamily: "monospace", fontSize: 11,
+            borderRadius: 2,
+            cursor: rodando ? "not-allowed" : "pointer",
+            letterSpacing: 1, textTransform: "uppercase"
+          }}
+        >
+          {rodando ? "● Verificando..." : "Check Status"}
+        </button>
+
+        {ultimaRun && (
+          <span style={{
+            fontFamily: "monospace", fontSize: 9,
+            color: "var(--atlas-text-secondary)"
+          }}>
+            última verificação: {ultimaRun}
+          </span>
+        )}
       </div>
 
-      <LogPanel />
-    </div>
-  );
-};
+      {/* BLOCO 2 — Progress (só quando rodando) */}
+      {state.orchestratorAtivo && state.progresso && (
+        <OrchestratorProgress progresso={state.progresso} />
+      )}
 
-// === VIEWS INTERNAS ===
-const VisaoGeral = ({ state, analytics, activeTicker, onTickerSelect, bookFonte, setBookFonte }) => {
-  const [timeRange, setTimeRange] = useState("all");
-  const [listaAtivos, setListaAtivos] = useState([]);
-  const [book, setBook] = useState({ posicoes_abertas: [], pnl: 0, fonte: "paper" });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+      {/* BLOCO 3 — Digest (após run) */}
+      {(state.digestItems?.length > 0) && (
+        <DigestPanel
+          items={state.digestItems}
+          timestamp={state.digestTimestamp}
+        />
+      )}
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const resAtivos = await fetch(`${API_BASE}/ativos`);
-        if (!resAtivos.ok) throw new Error(`Erro HTTP: ${resAtivos.status}`);
-        
-        const dataAtivos = await resAtivos.json();
-        const tickers = dataAtivos.ativos || [];
-        
-        if (tickers.length === 0) {
-          setListaAtivos([]);
-          setLoading(false);
-          return;
-        }
-        
-        const detalhes = await Promise.all(
-          tickers.map(async (ticker) => {
-            try {
-              const res = await fetch(`${API_BASE}/ativos/${ticker}`);
-              if (!res.ok) return null;
-              const data = await res.json();
-              return { ticker, ...data };
-            } catch (err) {
-              return null;
-            }
-          })
-        );
+      {/* BLOCO 4 — Cards de aprovação TUNE */}
+      {tunesPendentes.map(ticker => (
+        <TuneApprovalCard
+          key={ticker}
+          ticker={ticker}
+          onAplicar={handleAplicarTune}
+        />
+      ))}
 
-        const ativosValidos = detalhes.filter(Boolean);
-        setListaAtivos(ativosValidos);
-
-        const resBook = await fetch(`${API_BASE}/ativos/book?fonte=${bookFonte}`);
-        const dataBook = await resBook.json();
-        setBook({ ...dataBook, fonte: bookFonte });
-        
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [bookFonte]);
-
-  const consolidado = useMemo(() => {
-    const pnlTotal = book.pnl_total || 0;
-    const deltaLiquido = book.delta_liquido || 0;
-    const cobertura = book.cobertura_put_itm || 0;
-    return { pnlTotal, deltaLiquido, cobertura };
-  }, [book]);
-
-  if (loading) return <div style={{ padding: 20, fontFamily: "monospace" }}>Carregando painéis...</div>;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <h4 style={{ fontFamily: "monospace", fontSize: 12, marginBottom: 8, color: "var(--atlas-text-primary)" }}>
-        Ativos Parametrizados
-      </h4>
-      <AtivosTable ativos={listaAtivos} onSelect={onTickerSelect} />
-
+      {/* BLOCO 5 — Ativos Parametrizados */}
       <section>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h4 style={{ fontFamily: "monospace", fontSize: 12, margin: 0, color: "var(--atlas-text-primary)" }}>
-            Posições Abertas
-          </h4>
-          <select 
-            value={bookFonte} 
-            onChange={(e) => setBookFonte(e.target.value)}
+        <div style={sectionLabel}>Ativos Parametrizados</div>
+        <AtivosTable ativos={listaAtivos} onSelect={onTickerSelect} />
+      </section>
+
+      {/* BLOCO 6 — Posições Abertas */}
+      <section>
+        <div style={{
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", marginBottom: 8
+        }}>
+          <div style={sectionLabel}>Posições Abertas</div>
+          <select
+            value={bookFonte}
+            onChange={e => setBookFonte(e.target.value)}
             style={{
               background: "var(--atlas-surface)",
               border: "1px solid var(--atlas-border)",
               color: "var(--atlas-text-primary)",
-              fontFamily: "monospace",
-              fontSize: 10,
-              padding: "4px 8px"
+              fontFamily: "monospace", fontSize: 10,
+              padding: "3px 8px"
             }}
           >
             <option value="paper">🟡 PAPER</option>
-            <option value="backtest">🔵 BACKTEST</option>
             <option value="live">🔴 LIVE</option>
           </select>
         </div>
-        <PosicoesTable posicoes={book.posicoes_abertas} fonte={bookFonte} />
-        <div style={{ marginTop: 8, padding: 8, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", fontFamily: "monospace", fontSize: 11 }}>
-          <strong>Portfólio:</strong> Delta líquido: {consolidado.deltaLiquido.toFixed(2)} | Cobertura PUT ITM: {consolidado.cobertura}% | P&L total: <span style={{ color: consolidado.pnlTotal >= 0 ? "var(--atlas-green)" : "var(--atlas-red)" }}>{consolidado.pnlTotal.toFixed(2)}</span>
-        </div>
-      </section>
-
-      <section>
-        <h4 style={{ fontFamily: "monospace", fontSize: 12, marginBottom: 8 }}>Eventos Recentes</h4>
-        <EventFeed events={state.events?.slice(0, 10) || []} />
+        <PosicoesTable
+          posicoes={book.posicoes_abertas}
+          fonte={bookFonte}
+        />
       </section>
     </div>
   );
@@ -213,8 +206,8 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
   // ✅ REMOVIDO "manutencao" — agora está dentro do AtivoView
   const internalTabs = [
     { id: "visao_geral", label: "Visão Geral" },
-    { id: "ativo", label: "Ativo" },
-    { id: "orquestrador", label: "Orquestrador" }
+    { id: "ativo",       label: "Ativo" },
+    { id: "manutencao",  label: "Manutenção" },
   ];
 
   return (
@@ -348,8 +341,8 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                 />
               )}
 
-              {internalTab === "orquestrador" && (
-                <OrquestradorView activeTicker={activeTicker} />
+              {internalTab === "manutencao" && (
+                <ManutencaoView />
               )}
             </>
           )}
