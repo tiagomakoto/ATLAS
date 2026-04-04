@@ -14,6 +14,10 @@ export const useSystemStore = create((set) => ({
   progresso: null,
   digestItems: [],
   digestTimestamp: null,
+  // v2.6 — digest por ativo + transições de status
+  digestPorAtivo: {},
+  cicloNovo: false,
+  statusTransitions: [],
 
   updateFromEvent: (event) => set((state) => {
     switch (event.type) {
@@ -41,7 +45,13 @@ export const useSystemStore = create((set) => ({
         return { alert: event };
       // v2.5.2 — eventos do Orquestrador
       case "orchestrator_start":
-        return { orchestratorAtivo: true, progresso: null };
+        return {
+          orchestratorAtivo: true,
+          progresso: null,
+          digestPorAtivo: {},
+          cicloNovo: false,
+          statusTransitions: []
+        };
       case "orchestrator_progress":
         return { progresso: event.data || null };
       case "orchestrator_done":
@@ -53,6 +63,19 @@ export const useSystemStore = create((set) => ({
         };
       case "orchestrator_error":
         return { orchestratorAtivo: false, progresso: null };
+      // v2.6 — eventos estruturados por ativo
+      case "orchestrator_ativo_result":
+        return {
+          digestPorAtivo: {
+            ...state.digestPorAtivo,
+            [event.ticker]: event
+          },
+          cicloNovo: state.cicloNovo || event.ciclo_novo
+        };
+      case "status_transition":
+        return {
+          statusTransitions: [...state.statusTransitions, event]
+        };
       default:
         return state;
     }

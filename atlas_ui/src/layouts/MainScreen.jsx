@@ -18,6 +18,7 @@ import OrchestratorProgress from "../components/OrchestratorProgress";
 import OrchestratorLogDrawer from "../components/OrchestratorLogDrawer";
 import DigestPanel from "../components/DigestPanel";
 import TuneApprovalCard from "../components/TuneApprovalCard";
+import StatusTransitionCard from "../components/StatusTransitionCard";
 import ManutencaoView from "../components/ManutencaoView";
 import { useSystemStore } from "../store/systemStore";
 
@@ -68,14 +69,33 @@ const VisaoGeral = ({
 
       const data = await res.json();
 
-      if (res.ok && data.digest) {
-        updateFromEvent({
-          type: "orchestrator_done",
-          data: {
-            items: data.digest,
-            timestamp: new Date().toISOString()
+      if (res.ok) {
+        // v2.6 — processar eventos estruturados por ativo
+        if (data.eventos && Array.isArray(data.eventos)) {
+          for (const ev of data.eventos) {
+            updateFromEvent(ev);
+            // Emitir status_transition se houver
+            if (ev.bloco_mensal && ev.bloco_mensal.status_anterior !== ev.bloco_mensal.status_novo) {
+              updateFromEvent({
+                type: "status_transition",
+                ticker: ev.ticker,
+                status_anterior: ev.bloco_mensal.status_anterior,
+                status_novo: ev.bloco_mensal.status_novo,
+                ciclo: ev.bloco_mensal.ciclo || ""
+              });
+            }
           }
-        });
+        }
+        // Fallback para formato antigo (v2.5.2)
+        if (data.digest) {
+          updateFromEvent({
+            type: "orchestrator_done",
+            data: {
+              items: data.digest,
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
       } else {
         updateFromEvent({ type: "orchestrator_error" });
       }
@@ -158,17 +178,32 @@ const VisaoGeral = ({
       <OrchestratorLogDrawer isRunning={carregando} />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
-      {state.orchestratorAtivo && state.progresso && (
-        <OrchestratorProgress progresso={state.progresso} />
+      {state.orchestratorAtivo && (
+        <OrchestratorProgress
+          cicloNovo={state.cicloNovo}
+          ativoAtual={Object.keys(state.digestPorAtivo || {}).pop() || ""}
+          progresso={state.progresso}
+        />
       )}
 
-      {/* BLOCO 3 — Digest (após run) */}
-      {(state.digestItems?.length > 0) && (
+      {/* BLOCO 3 — Digest por ativo (após run) */}
+      {(Object.keys(state.digestPorAtivo || {}).length > 0) && (
         <DigestPanel
-          items={state.digestItems}
+          digestPorAtivo={state.digestPorAtivo}
           timestamp={state.digestTimestamp}
         />
       )}
+
+      {/* BLOCO 3.5 — Status Transition Cards */}
+      {(state.statusTransitions || []).map((tr, i) => (
+        <StatusTransitionCard
+          key={`${tr.ticker}-${i}`}
+          ticker={tr.ticker}
+          status_anterior={tr.status_anterior}
+          status_novo={tr.status_novo}
+          ciclo={tr.ciclo}
+        />
+      ))}
 
       {/* BLOCO 4 — Cards de aprovação TUNE */}
       {tunesPendentes.map(ticker => (

@@ -16,6 +16,7 @@ from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ativo,
     tape_paper, tape_backtest, tape_reflect_cycle,
     tape_sizing_reflect, tape_process_eod_file,
+    tape_ohlcv, tape_ibov,
     _obter_selic,
 )
 from .orbit import ORBIT
@@ -208,7 +209,7 @@ class EDGE:
                   sizing_orbit = float(raw.get("sizing", 0.0))
 
                   # Modula sizing do ORBIT pelo REFLECT
-                  reflect_mult, _ = tape_sizing_reflect(ativo)
+                  reflect_mult = tape_sizing_reflect(ativo)
                   sizing_modulado  = sizing_orbit * reflect_mult
 
                   orbit_data = {
@@ -387,7 +388,7 @@ class EDGE:
             sizing_orbit = float(orbit_data.get("sizing", 0.0))
 
             # Modula sizing pelo REFLECT
-            reflect_mult, _ = tape_sizing_reflect(ativo)
+            reflect_mult = tape_sizing_reflect(ativo)
             orbit_data["sizing"] = sizing_orbit * reflect_mult
 
             if not self.book.posicoes_por_ativo(ativo):
@@ -413,7 +414,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--modo",
-        choices=["eod", "eod_preview", "orbit", "tune", "gate", "reflect"],
+        choices=["backtest_dados", "backtest_gate", "eod", "eod_preview", "tune", "orbit", "reflect_daily", "gate_eod"],
         required=True,
         help="Rotina a executar"
     )
@@ -421,7 +422,7 @@ if __name__ == "__main__":
         "--ticker",
         type=str,
         default=None,
-        help="Ticker do ativo (obrigatório para orbit, tune, gate)"
+        help="Ticker do ativo (obrigatório para orbit, tune, backtest_gate, backtest_dados, reflect_daily, gate_eod)"
     )
     parser.add_argument(
         "--xlsx_dir",
@@ -430,16 +431,22 @@ if __name__ == "__main__":
         help="Diretório com arquivos xlsx EOD (obrigatório para eod)"
     )
     parser.add_argument(
+        "--xlsx_path",
+        type=str,
+        default=None,
+        help="Caminho do arquivo xlsx (obrigatório para reflect_daily)"
+    )
+    parser.add_argument(
         "--anos",
         type=str,
         default=None,
-        help="Anos separados por vírgula (opcional para orbit)"
+        help="Anos separados por vírgula (opcional para orbit, backtest_dados)"
     )
 
     args = parser.parse_args()
 
     # Validações
-    if args.modo in ("orbit", "tune", "gate") and not args.ticker:
+    if args.modo in ("orbit", "tune", "backtest_gate", "backtest_dados", "reflect_daily", "gate_eod") and not args.ticker:
         print(f"ERRO: --ticker obrigatório para modo {args.modo}",
               file=sys.stderr)
         sys.exit(1)
@@ -468,7 +475,8 @@ if __name__ == "__main__":
             )
             edge.executar_eod(xlsx_dir=args.xlsx_dir)
 
-        elif args.modo == "orbit":
+        elif args.modo == "backtest_dados":
+            # Mantém comportamento atual do orbit (instancia EDGE completo, apaga books)
             anos = (list(map(int, args.anos.split(",")))
                     if args.anos
                     else list(range(2002, datetime.now().year + 1)))
@@ -482,20 +490,36 @@ if __name__ == "__main__":
             orbit = ORBIT(universo={args.ticker: tape_carregar_ativo(args.ticker)})
             orbit.rodar(df_tape, anos, modo="mensal")
 
+        elif args.modo == "orbit":
+            # Modo leve mensal — não instancia EDGE, não apaga books
+            anos = (list(map(int, args.anos.split(",")))
+                    if args.anos
+                    else list(range(2002, datetime.now().year + 1)))
+            cfg_ativo = tape_carregar_ativo(args.ticker)
+            df_ohlcv = tape_ohlcv(args.ticker, anos)
+            df_ibov = tape_ibov(anos)
+            orbit = ORBIT(universo={args.ticker: cfg_ativo})
+            orbit.rodar(df_ohlcv, anos, modo="mensal")
+            tape_reflect_cycle(args.ticker, datetime.now().strftime("%Y-%m"))
+
         elif args.modo == "tune":
             from delta_chaos.tune import executar_tune
             executar_tune(args.ticker)
 
-        elif args.modo == "gate":
+        elif args.modo == "backtest_gate":
             from delta_chaos.gate import executar_gate
             resultado = executar_gate(args.ticker)
             print(f"[GATE] {args.ticker}: {resultado}")
 
-        elif args.modo == "reflect":
-            # Reflect = executar_gate (atualiza historico e reflect_state)
-            from delta_chaos.gate import executar_gate
-            resultado = executar_gate(args.ticker)
-            print(f"[REFLECT] {args.ticker}: {resultado}")
+        elif args.modo == "reflect_daily":
+            if not args.ticker or not args.xlsx_path:
+                print("ERRO: --ticker e --xlsx_path obrigatorios para reflect_daily", file=sys.stderr)
+                sys.exit(1)
+            tape_process_eod_file(args.xlsx_path)
+
+        elif args.modo == "gate_eod":
+            resultado = gate_eod(args.ticker, verbose=True)
+            print(f"[GATE_EOD] {args.ticker}: {resultado}")
 
     except Exception as e:
         import traceback

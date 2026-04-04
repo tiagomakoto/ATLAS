@@ -16,7 +16,7 @@ from datetime import datetime
 from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, BOOK_DIR, GREGAS_DIR, CONFIG_PATH
 )
-from delta_chaos.tape import tape_carregar_ativo, tape_inicializar_ativo
+from delta_chaos.tape import tape_carregar_ativo, tape_inicializar_ativo, tape_salvar_ativo
 from delta_chaos.edge import EDGE
 
 # â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -97,8 +97,20 @@ def executar_gate(ticker: str) -> str:
     print(f"  {gate(e0_estrategia, 'pelo menos uma estratÃ©gia nÃ£o-null')}")
 
     if not e0_estrategia:
-        emit_log(f"âœ— GATE 0 FALHOU â€” configure estrategias no master JSON", level='error')
-        raise ValueError(f"GATE bloqueado em {TICKER}: estrategias nÃ£o configuradas no master JSON")
+        emit_log(f"✗ GATE 0 FALHOU — configure estrategias no master JSON", level='error')
+        msg_erro = f"GATE bloqueado em {TICKER}: estrategias nÃ£o configuradas no master JSON"
+        dados = tape_carregar_ativo(TICKER)
+        if "historico_config" not in dados:
+            dados["historico_config"] = []
+        dados["historico_config"].append({
+            "data":      str(datetime.now())[:10],
+            "modulo":    "GATE v1.0",
+            "parametro": "gate_decisao",
+            "valor_novo": "FALHA",
+            "motivo":    msg_erro,
+        })
+        tape_salvar_ativo(TICKER, dados)
+        raise ValueError(msg_erro)
 
     historico = pd.DataFrame(dados["historico"])
     if historico.empty or "ciclo_id" not in historico.columns:
@@ -160,8 +172,20 @@ def executar_gate(ticker: str) -> str:
     print(f"  {gate(e0_passou, 'cobertura mÃ­nima OK')}")
 
     if not e0_passou:
-        emit_log(f"âœ— GATE 0 FALHOU â€” corrigir antes de avanÃ§ar", level='error')
-        raise ValueError(f"GATE bloqueado em {TICKER}: cobertura mÃ­nima insuficiente (E0)")
+        emit_log(f"✗ GATE 0 FALHOU — corrigir antes de avançar", level='error')
+        msg_erro = f"GATE bloqueado em {TICKER}: cobertura mínima insuficiente (E0)"
+        dados = tape_carregar_ativo(TICKER)
+        if "historico_config" not in dados:
+            dados["historico_config"] = []
+        dados["historico_config"].append({
+            "data":      str(datetime.now())[:10],
+            "modulo":    "GATE v1.0",
+            "parametro": "gate_decisao",
+            "valor_novo": "FALHA",
+            "motivo":    msg_erro,
+        })
+        tape_salvar_ativo(TICKER, dados)
+        raise ValueError(msg_erro)
 
     # â”€â”€ ETAPA 1 â€” DiagnÃ³stico de regime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     print(f"\n  ETAPA 1 â€” DiagnÃ³stico de regime")

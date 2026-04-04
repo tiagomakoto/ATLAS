@@ -4,12 +4,16 @@ Executor de subprocessos do Delta Chaos.
 Único ponto de integração entre ATLAS e Delta Chaos.
 
 EVENTOS ESTRUTURADOS:
-  Cada função run_* emite eventos dc_module_start e dc_module_complete/error
-  via event_bus. O frontend processa esses eventos para mostrar status em
-  tempo real (verde/vermelho) sem precisar parsear texto dos logs.
+  O dc_runner parseia o stdout do subprocesso para detectar transições de
+  módulo (TAPE → ORBIT → FIRE) e emite eventos dc_module_start/complete
+  a partir do processo uvicorn (onde a event_queue realmente existe).
+
+  Sem isso, os emit_dc_event() chamados dentro do subprocesso vão para o nada,
+  pois cada processo Python tem sua própria cópia do event_bus.
 """
 
 import asyncio
+import re
 import sys
 from pathlib import Path
 from typing import AsyncIterator, Optional
@@ -21,6 +25,19 @@ from atlas_backend.core.event_bus import emit_dc_event
 
 # Controle de concorrência global
 _dc_running: bool = False
+
+# ── Marcadores de módulo no stdout do subprocesso ──
+_MODULE_START_MARKERS = {
+    "TAPE":  re.compile(r"\[\s*1\s*/\s*3\s*\]\s*TAPE"),
+    "ORBIT": re.compile(r"\[\s*2\s*/\s*3\s*\]\s*ORBIT"),
+    "FIRE":  re.compile(r"\[\s*3\s*/\s*3\s*\]\s*FIRE"),
+}
+
+_MODULE_COMPLETE_MARKERS = {
+    "TAPE":  re.compile(r"Conclu.*do:.*registros|\[\s*2\s*/\s*3\s*\]\s*ORBIT"),
+    "ORBIT": re.compile(r"\[\s*3\s*/\s*3\s*\]\s*FIRE"),
+    "FIRE":  re.compile(r"EDGE\.backtest conclu.*do"),
+}
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -47,7 +64,10 @@ async def _stream_subprocess(
     modulo: Optional[str] = None
 ) -> dict:
     """
-    Executa subprocess do Delta Chaos e emite eventos estruturados.
+    Executa subprocesso do Delta Chaos e emite eventos estruturados.
+
+    O dc_runner parseia o stdout para detectar transições de módulo
+    (TAPE → ORBIT → FIRE) e emite eventos a partir do processo uvicorn.
 
     Args:
         modulo: Nome do módulo para eventos ("TAPE", "ORBIT", "FIRE", etc.)
@@ -65,6 +85,27 @@ async def _stream_subprocess(
         emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
+
+    # Estado para rastrear módulos detectados no stdout
+    detected_modules = {}  # modulo -> {"started": bool, "completed": bool}
+
+    def _check_module_transitions(line: str):
+        """Verifica se a linha indica início ou conclusão de um módulo."""
+        for mod_name, pattern in _MODULE_START_MARKERS.items():
+            if pattern.search(line):
+                if mod_name not in detected_modules:
+                    detected_modules[mod_name] = {"started": True, "completed": False}
+                    emit_log(f"[DC-DEBUG] START detectado: {mod_name} | line={line[:80]}", level="info")
+                    emit_dc_event("dc_module_start", mod_name, "running", **action_payload)
+
+        for mod_name, pattern in _MODULE_COMPLETE_MARKERS.items():
+            if pattern.search(line):
+                if mod_name not in detected_modules:
+                    detected_modules[mod_name] = {"started": True, "completed": True}
+                else:
+                    detected_modules[mod_name]["completed"] = True
+                emit_log(f"[DC-DEBUG] COMPLETE detectado: {mod_name} | line={line[:80]}", level="info")
+                emit_dc_event("dc_module_complete", mod_name, "ok", **action_payload)
 
     def _sync_runner():
         import subprocess
@@ -94,6 +135,9 @@ async def _stream_subprocess(
                 continue
             full_output.append(line)
 
+            # ── Detectar transições de módulo no stdout ──
+            _check_module_transitions(line)
+
             lvl = "info"
             if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
                 lvl = "error"
@@ -118,10 +162,21 @@ async def _stream_subprocess(
         
         status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
         
-        # ── Emitir evento de conclusão do módulo ──
+        # ── Debug: estado final dos módulos detectados ──
+        emit_log(f"[DC-DEBUG] Estado final: detected_modules={detected_modules} | status={status}", level="info")
+        
+        # ── Emitir evento de conclusão do módulo principal ──
         if modulo:
             dc_status = "ok" if status == "OK" else "error"
+            emit_log(f"[DC-DEBUG] Emitindo complete para módulo principal: {modulo} | status={dc_status}", level="info")
             emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
+        
+        # ── Marcar módulos detectados mas não concluídos como erro ──
+        if status == "ERRO":
+            for mod_name, mod_state in detected_modules.items():
+                if not mod_state.get("completed", False):
+                    emit_log(f"[DC-DEBUG] Marcando {mod_name} como error (não completou)", level="info")
+                    emit_dc_event("dc_module_complete", mod_name, "error", **action_payload)
         
         if tem_erro and returncode == 0:
             emit_log("[ORQUESTRADOR] ⚠ Processo completou mas com warnings", level="warning")
@@ -187,8 +242,9 @@ async def run_eod(xlsx_dir: str) -> dict:
     )
 
 async def run_orbit(ticker: str, anos: Optional[list] = None) -> dict:
+    """Onboarding: modo pesado — COTAHIST + ORBIT completo (backtest_dados)."""
     script = _get_dc_script()
-    args = ["-m", "delta_chaos.edge", "--modo", "orbit", "--ticker", ticker]
+    args = ["-m", "delta_chaos.edge", "--modo", "backtest_dados", "--ticker", ticker]
     if anos:
         args += ["--anos", ",".join(str(a) for a in anos)]
     return await _stream_subprocess(
@@ -212,9 +268,20 @@ async def run_tune(ticker: str) -> dict:
 async def run_gate(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "gate", "--ticker", ticker],
+        args=["-m", "delta_chaos.edge", "--modo", "backtest_gate", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_gate",
+        action_payload={"ticker": ticker},
+        modulo="GATE"
+    )
+
+async def run_backtest_gate(ticker: str) -> dict:
+    """Executa GATE via backtest completo (8 etapas) para atualização mensal."""
+    script = _get_dc_script()
+    return await _stream_subprocess(
+        args=["-m", "delta_chaos.edge", "--modo", "backtest_gate", "--ticker", ticker],
+        cwd=script.parent,
+        action_name="dc_backtest_gate",
         action_payload={"ticker": ticker},
         modulo="GATE"
     )
@@ -228,4 +295,35 @@ async def run_reflect(ticker: str) -> dict:
         action_name="dc_reflect",
         action_payload={"ticker": ticker},
         modulo="REFLECT"
+    )
+
+async def run_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
+    script = _get_dc_script()
+    args = ["-m", "delta_chaos.edge", "--modo", "orbit", "--ticker", ticker]
+    if anos:
+        args += ["--anos", ",".join(str(a) for a in anos)]
+    return await _stream_subprocess(
+        args=args,
+        cwd=script.parent,
+        action_name="dc_orbit_update",
+        action_payload={"ticker": ticker, "anos": anos}
+    )
+
+async def run_reflect_daily(ticker: str, xlsx_path: str) -> dict:
+    script = _get_dc_script()
+    return await _stream_subprocess(
+        args=["-m", "delta_chaos.edge", "--modo", "reflect_daily",
+              "--ticker", ticker, "--xlsx_path", xlsx_path],
+        cwd=script.parent,
+        action_name="dc_reflect_daily",
+        action_payload={"ticker": ticker, "xlsx_path": xlsx_path}
+    )
+
+async def run_gate_eod(ticker: str) -> dict:
+    script = _get_dc_script()
+    return await _stream_subprocess(
+        args=["-m", "delta_chaos.edge", "--modo", "gate_eod", "--ticker", ticker],
+        cwd=script.parent,
+        action_name="dc_gate_eod",
+        action_payload={"ticker": ticker}
     )
