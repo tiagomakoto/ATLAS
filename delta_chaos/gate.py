@@ -33,14 +33,25 @@ except ImportError:
 def executar_gate(ticker: str) -> str:
     """
     Executa GATE completo para o ticker informado.
-    Retorna: "OPERAR" | "MONITORAR" | "EXCLUÃDO"
-    LanÃ§a ValueError se GATE 0 ou E0 falharem (nÃ£o mata o servidor FastAPI).
+    Retorna: "OPERAR" | "MONITORAR" | "EXCLUÍDO"
+    Lança ValueError se GATE 0 ou E0 falharem (não mata o servidor FastAPI).
     """
     TICKER = ticker.strip().upper()
-
-    IR_GATE_E1     = 0.10
-    IR_GATE_E4     = 0.20
-    DD_GATE_E7     = 3.0   # drawdown mÃ¡ximo = 3x esperado
+    
+    # Ano atual dinâmico
+    ano_atual = datetime.now().year
+    
+    # Lê config dinamicamente
+    cfg = carregar_config()
+    anos_passados = cfg.get("gate", {}).get("anos_passados", 3)
+    threshold_meses = cfg.get("gate", {}).get("threshold_meses", 60)
+    
+    # Calcula ANOS_VALIDOS dinamicamente
+    ANOS_VALIDOS = list(range(ano_atual - anos_passados, ano_atual + 1))
+    
+    IR_GATE_E1 = 0.10
+    IR_GATE_E4 = 0.20
+    DD_GATE_E7 = 3.0
     # TICKER recebido como argumento de executar_gate()
 
     sep  = "â•" * 60
@@ -53,11 +64,7 @@ def executar_gate(ticker: str) -> str:
         _cfg_ativo = json.load(f)
 
     # LÃª do master JSON â€” especÃ­fico por ativo
-    anos_validos = _cfg_ativo.get(
-        "anos_validos",
-        carregar_config()["gate"]["anos_validos"]
-    )
-    ANOS_VALIDOS = anos_validos
+    # ANOS_VALIDOS já calculado dinamicamente no início da função
 
     TAKE_PROFIT = float(_cfg_ativo.get("take_profit") or carregar_config()["fire"]["take_profit"])
     STOP_LOSS   = float(_cfg_ativo.get("stop_loss")   or carregar_config()["fire"]["stop_loss"])
@@ -110,7 +117,7 @@ def executar_gate(ticker: str) -> str:
             os.remove(p)
 
     # Roda EDGE com anos vÃ¡lidos + 2 anos de aquecimento
-    anos_gate = list(range(min(ANOS_VALIDOS) - 2, 2027))
+    anos_gate = list(range(min(ANOS_VALIDOS) - 2, ano_atual + 1))
     edge = EDGE(capital=10_000, modo="backtest",
                 universo=[TICKER])
     df_resultado = edge.executar(anos=anos_gate)

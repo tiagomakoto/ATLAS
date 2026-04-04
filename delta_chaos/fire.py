@@ -211,7 +211,7 @@ class FIRE:
                        or _cfg_f["stop_loss"])
 
         # sizing_orbit jÃ¡ carrega o fator REFLECT aplicado pelo EDGE
-        sizing_final = sizing_orbit * sizing_config
+        sizing_final = sizing_orbit
 
         _regime_estrategia_global = carregar_config()["fire"]["regime_estrategia"]
         estrategia = (

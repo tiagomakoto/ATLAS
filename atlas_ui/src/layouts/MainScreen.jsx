@@ -15,6 +15,7 @@ import AtivoView from "../components/AtivoView";
 import Tooltip from "../components/Tooltip";
 import Header from "../components/Header";
 import OrchestratorProgress from "../components/OrchestratorProgress";
+import OrchestratorLogDrawer from "../components/OrchestratorLogDrawer";
 import DigestPanel from "../components/DigestPanel";
 import TuneApprovalCard from "../components/TuneApprovalCard";
 import ManutencaoView from "../components/ManutencaoView";
@@ -152,6 +153,9 @@ const VisaoGeral = ({
           </span>
         )}
       </div>
+
+      {/* BLOCO 1.5 — Log Drawer do Orquestrador */}
+      <OrchestratorLogDrawer isRunning={carregando} />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
       {state.orchestratorAtivo && state.progresso && (

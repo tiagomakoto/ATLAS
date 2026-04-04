@@ -52,12 +52,14 @@ def executar_tune(ticker: str) -> dict:
     # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     # CONFIGURAÃ‡ÃƒO
     # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 
     # TICKER recebido como argumento de executar_tune()
     ANO_WARMUP    = 2004
     ANO_TESTE_INI = 2019
-    ANOS          = list(range(2002, 2027))
+    ano_atual     = datetime.now().year
+    ANOS          = list(range(2002, ano_atual + 1))
 
     COMBINACOES = [
         {"tp": 0.50, "stop": 2.0, "label": "baseline"},
@@ -68,9 +70,9 @@ def executar_tune(ticker: str) -> dict:
         {"tp": 0.90, "stop": 2.0, "label": "TP=0.90 STOP=2.0"},
     ]
 
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
     # ETAPA 1 â€” carrega tudo uma vez
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
     
     emit_log(f"TUNE [{TICKER}] Etapa 1/4: carregando TAPE/SELIC/ORBIT", level="info")
     
@@ -78,7 +80,7 @@ def executar_tune(ticker: str) -> dict:
     print(f"  TUNE v1.1 â€” {TICKER}")
     print(f"  OpÃ§Ã£o B SCAN: proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo")
     print(f"  Warmup:       descartar ciclos < {ANO_WARMUP}")
-    print(f"  PerÃ­odo teste: {ANO_TESTE_INI}â€“2026 (7 anos)")
+    print(f"  PerÃ­odo teste: {ANO_TESTE_INI}â€“{ano_atual} (7 anos)")
     print("=" * 60)
 
     # TAPE â€” uma vez
@@ -146,9 +148,9 @@ def executar_tune(ticker: str) -> dict:
 
     print(f"\n  âœ“ Etapa 1 concluÃ­da â€” tudo em memÃ³ria")
 
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
     # ETAPA 2 â€” simulaÃ§Ã£o intradiÃ¡ria com mÃ­nimo/mÃ¡ximo
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
     # LÃ³gica OpÃ§Ã£o B (SCAN â€” Sarah Hamilton):
     #   â€” Para cada posiÃ§Ã£o aberta, em cada pregÃ£o:
     #     â€” Usa mÃ­nimo da opÃ§Ã£o vendida como proxy do menor prÃªmio do dia
@@ -157,7 +159,7 @@ def executar_tune(ticker: str) -> dict:
     #     â€” Se maximo >= premio_entrada * (1 + STOP) â†’ STOP atingido intraday
     #   â€” Ordem de verificaÃ§Ã£o: STOP primeiro (conservador), depois TP
     #     (na prÃ¡tica o dia ruim bate STOP antes do TP)
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 
     emit_log(f"TUNE [{TICKER}] Etapa 2/4: simulando {len(COMBINACOES)} combinações...", level="info")
@@ -171,11 +173,11 @@ def executar_tune(ticker: str) -> dict:
     ].copy()
     df_ops_idx["data_str"] = df_ops_idx["data"].astype(str).str[:10]
 
-    # Ãndice: (data_str, ticker) â†’ row
+    # Ã ndice: (data_str, ticker) â†’ row
     tape_lookup = df_ops_idx.groupby(
         ["data_str", "ticker"])[["fechamento", "minimo", "maximo"]].first()
 
-    # Ãndice de regime por ciclo
+    # Ã ndice de regime por ciclo
     def _get_regime(ciclo_id):
         raw = regime_idx_c.get(ciclo_id, {})
         return {
@@ -342,7 +344,7 @@ def executar_tune(ticker: str) -> dict:
                             posicao_aberta = None
                             fechou = True
 
-                # â”€â”€ Tenta abrir posiÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                # â”€â”€ Tenta abrir posiÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 if posicao_aberta is None:
                     orbit = _get_regime(ciclo_id)
                     regime = orbit["regime"]
@@ -486,10 +488,10 @@ def executar_tune(ticker: str) -> dict:
     # =====================================
     # ETAPA 3 â€” tabela comparativa
     # =====================================
-    print(f"\n{'â•' * 88}")
+    print(f"\n{'â• ' * 88}")
     print(f"  {TICKER} â€” TUNE v1.1 â€” TP e STOP screening (proxy intradiÃ¡rio)")
-    print(f"  Warmup: < {ANO_WARMUP} | Teste: {ANO_TESTE_INI}â€“2026 (7 anos)")
-    print(f"{'â•' * 88}")
+    print(f"  Warmup: < {ANO_WARMUP} | Teste: {ANO_TESTE_INI}â€“{ano_atual} (7 anos)")
+    print(f"{'â• ' * 88}")
 
     colunas = list(resultados.keys())
     col_w   = 17
@@ -516,7 +518,7 @@ def executar_tune(ticker: str) -> dict:
         ("n STOP",                "n_stops",           "{:.0f}"),
         ("Perda mÃ©dia",           "perda_media",       "R${:,.0f}"),
         ("â”€" * 26,               None,                None),
-        (f"â”€â”€ TESTE {ANO_TESTE_INI}â€“2026",None,        None),
+        (f"â”€â”€ TESTE {ANO_TESTE_INI}â€“{ano_atual}",None,        None),
         ("Trades vÃ¡lidos",        "trades_valido",     "{:.0f}"),
         ("P&L vÃ¡lido",            "pnl_valido",        "R${:,.0f}"),
         ("Acerto vÃ¡lido %",       "acerto_valido",     "{:.1f}%"),
@@ -554,8 +556,8 @@ def executar_tune(ticker: str) -> dict:
     print(f"  Melhor P&L total:   {melhor_pnl[0]:24} R${melhor_pnl[1]['pnl']:,.0f}")
     print(f"  Melhor P&L vÃ¡lido:  {melhor_pnl_v[0]:24} R${melhor_pnl_v[1]['pnl_valido']:,.0f}")
     print(f"\n  âš  MÃ©trica de decisÃ£o: IR vÃ¡lido e P&L vÃ¡lido")
-    print(f"    (perÃ­odo {ANO_TESTE_INI}â€“2026 â€” proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo)")
-    print(f"\n{'â•' * 88}")
+    print(f"    (perÃ­odo {ANO_TESTE_INI}â€“{ano_atual} â€” proxy intradiÃ¡rio via mÃ­nimo/mÃ¡ximo)")
+    print(f"\n{'â• ' * 88}")
 
     # ==========================================
     # ETAPA 4 registro no historico_config
@@ -574,14 +576,14 @@ def executar_tune(ticker: str) -> dict:
         "parametro":     "take_profit / stop_loss",
         "valor_ant":     f"TP={tp_baseline_ant} STOP={stop_baseline_ant}",
         "valor_novo":    f"TP={melhor[1]['tp']} STOP={melhor[1]['stop']}",
-        "motivo":        (f"TUNE v1.1 â€” IR vÃ¡lido ({ANO_TESTE_INI}â€“2025) "
+        "motivo":        (f"TUNE v1.1 â€” IR vÃ¡lido ({ANO_TESTE_INI}â€“{ano_atual}) "
                          f"IR={melhor[1]['ir_valido']:+.3f} "
                          f"P&L=R${melhor[1]['pnl_valido']:,.0f} "
                          f"trades={melhor[1]['trades_valido']} "
                          f"proxy=intraday_min_max"),
         "combinacao":    melhor[0],
         "warmup":        ANO_WARMUP,
-        "periodo_teste": f"{ANO_TESTE_INI}-2026",
+        "periodo_teste": f"{ANO_TESTE_INI}-{ano_atual}",
         "metodo":        "proxy_intraday_min_max",
     })
     dados["atualizado_em"] = str(datetime.now())[:19]

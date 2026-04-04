@@ -176,7 +176,10 @@ async def onboarding(payload: OnboardingPayload):
 
         emit_log(f"[ONBOARDING] Iniciando {ticker}", level="info")
 
-        await run_orbit(ticker=ticker, anos=list(range(2002, 2027)))
+        # Ano dinÃ¢mico para ORBIT
+        ano_atual = datetime.now().year
+        anos_orbit = list(range(2002, ano_atual + 1))
+        await run_orbit(ticker=ticker, anos=anos_orbit)
         await run_tune(ticker=ticker)
         await run_gate(ticker=ticker)
 
@@ -257,7 +260,10 @@ async def orchestrator_run(payload: dict):
             atualizou = False
             if precisa_orbit:
                 emit_log(f"[MANUTENÇÃO] Atualizando ORBIT para {ticker} (dados desatualizados)", level="info")
-                result_orbit = await run_orbit(ticker=ticker, anos=list(range(2002, 2027)))
+                # Ano dinÃ¢mico para ORBIT
+                ano_atual = datetime.now().year
+                anos_orbit = list(range(2002, ano_atual + 1))
+                result_orbit = await run_orbit(ticker=ticker, anos=anos_orbit)
                 atualizou = True
                 manutencao_realizada.append(f"ORBIT {ticker}")
                 itens_digest.append({"modulo": "ORBIT", "tipo": "ok", "mensagem": f"{ticker} atualizado"})

@@ -1,5 +1,6 @@
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import os
+from datetime import datetime
 # DELTA CHAOS â€” EDGE v2.0
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.3:
 # MIGRADO (P2): imports explÃ­citos de todos os mÃ³dulos â€” sem escopo global
@@ -42,6 +43,7 @@ except ImportError:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 import os
+from datetime import datetime
 from datetime import datetime, date
 import pandas as pd
 from tqdm.auto import tqdm as _tqdm
@@ -464,7 +466,7 @@ if __name__ == "__main__":
         elif args.modo == "orbit":
             anos = (list(map(int, args.anos.split(",")))
                     if args.anos
-                    else list(range(2002, 2027)))
+                    else list(range(2002, datetime.now().year + 1)))
             edge = EDGE(
                 capital=carregar_config().get("backtest", {}).get("capital", 10000.0),
                 modo="backtest",
