@@ -327,7 +327,9 @@ async def orchestrator_run(payload: dict):
                 erros_ativo.append(f"gate_eod: {str(e)}")
 
             if evento_ativo["posicao"].get("aberta") or evento_ativo["gate_eod"] in ["MONITORAR", "BLOQUEADO"]:
+                evento_ativo["erros"] = erros_ativo
                 eventos_ativos.append(evento_ativo)
+                emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
                 emit_log(f"[ORQUESTRADOR] {ticker}: fim do fluxo diário", level="info")
                 # PAUSE
                 emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
@@ -435,6 +437,7 @@ async def orchestrator_run(payload: dict):
             evento_ativo["bloco_mensal"] = bloco_mensal
             evento_ativo["erros"] = erros_ativo
             eventos_ativos.append(evento_ativo)
+            emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
 
             # PAUSE
             emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
