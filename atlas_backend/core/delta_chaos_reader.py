@@ -9,6 +9,39 @@ from typing import List, Dict, Any
 from atlas_backend.core.paths import get_paths
 
 
+# =====================================================================
+# [ATLAS-STATUS-LOGIC] — DO NOT DELETE — Lógica de Status do Sistema
+# ---------------------------------------------------------------------
+# Status válidos: SEM_EDGE | OPERAR | MONITORAR | SUSPENSO
+#
+#   SEM_EDGE   — Backtest com dados suficientes mas sem IR capturável
+#                em nenhum regime. Sem estratégia viável.
+#                Ex: ITUB4
+#
+#   MONITORAR  — Edge identificado em backtest mas GATE incompleto,
+#                parcial (5-7/8) ou condições atuais inadequadas.
+#                Ex: BBAS3 (GATE 7/8, E5 bloqueado)
+#
+#   OPERAR     — GATE 8/8 aprovado, ORBIT atual autoriza.
+#                Elegível para paper trading ou capital real.
+#                Ex: VALE3, PETR4, BOVA11
+#
+#   SUSPENSO   — Estava em OPERAR. Duas quedas consecutivas de Edge
+#                de um mês para o outro (ex: A→C ou B→D).
+#                Edge histórico existe — condições atuais impedem.
+#                Retoma quando REFLECT recuperar por 2-3 ciclos.
+#
+# Regras de determinação (ver bloco "Determinar status" em get_ativo):
+#   1. Sem histórico OU lock ativo → SUSPENSO
+#   2. Quedas REFLECT consecutivas >= 2 (D ou E) → SUSPENSO
+#   3. GATE 8/8 + IR > 0 + REFLECT em A/B → OPERAR
+#   4. GATE com resultado válido (não 8/8) → MONITORAR
+#   5. Sem IR capturável em nenhum regime → SEM_EDGE
+# ---------------------------------------------------------------------
+# [ATLAS-STATUS-LOGIC-END] — DO NOT DELETE
+# =====================================================================
+
+
 def sanitize_nan(value):
     """Converte NaN Python para None (JSON válido)."""
     if isinstance(value, float) and math.isnan(value):
@@ -48,9 +81,6 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
     # ✅ A05: Extrair e sanitizar reflect_historico (de reflect_all_cycles_history)
     reflect_historico_raw = raw_data.get("reflect_all_cycles_history", [])
     reflect_historico = [sanitize_record(r) for r in reflect_historico_raw]
-    
-    # ✅ Extrair reflect_permanent_block
-    reflect_permanent_block = raw_data.get("reflect_permanent_block_flag", False)
 
     # ✅ Extrair core
     core = raw_data.get("core", {})
@@ -72,15 +102,49 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
     if estrategia:
         core["estrategia"] = estrategia
 
-    # ✅ Determinar status
+    core["estrategias"] = raw_data.get("estrategias", {})
+
+    # ✅ Determinar status (SEM_EDGE / OPERAR / MONITORAR / SUSPENSO)
     ultimo_ciclo = historico[-1] if historico else {}
 
-    if not historico:
-        status = "dormente"
-    elif ultimo_ciclo.get("lock"):
-        status = "impedido"
+    if not historico or ultimo_ciclo.get("lock"):
+        status = "SUSPENSO"
     else:
-        status = "parametrizado"
+        historico_config = raw_data.get("historico_config", [])
+        reflect_state = raw_data.get("reflect_state", "B")
+        reflect_history = raw_data.get("reflect_history", [])
+
+        # Quedas consecutivas REFLECT (D ou E)
+        quedas_consecutivas = 0
+        for r in reversed(reflect_history[-5:]):
+            if r.get("state", "?") in ("D", "E"):
+                quedas_consecutivas += 1
+            else:
+                break
+
+        # Último GATE completo
+        ultimo_gate = None
+        for cfg in reversed(historico_config):
+            if "GATE" in cfg.get("modulo", ""):
+                resultado = (
+                    cfg.get("resultado")
+                    or cfg.get("gate_decisao")
+                    or cfg.get("valor_novo")
+                )
+                if resultado in ("OPERAR", "MONITORAR"):
+                    ultimo_gate = resultado
+                    break
+
+        ir_atual = ultimo_ciclo.get("ir", 0) or 0
+
+        if quedas_consecutivas >= 2:
+            status = "SUSPENSO"
+        elif ultimo_gate == "OPERAR" and ir_atual > 0 and reflect_state in ("A", "B"):
+            status = "OPERAR"
+        elif ultimo_gate in ("OPERAR", "MONITORAR"):
+            status = "MONITORAR"
+        else:
+            status = "SEM_EDGE"
 
     # ✅ Calcular staleness_days
     last_updated = raw_data.get("last_updated")
@@ -110,7 +174,6 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         "core": core,
         "historico": historico,
         "reflect_historico": reflect_historico,
-        "reflect_permanent_block": reflect_permanent_block,
         "staleness_days": staleness_days,
         "ultimo_ciclo": ultimo_ciclo,
         "version": raw_data.get("version", 0),

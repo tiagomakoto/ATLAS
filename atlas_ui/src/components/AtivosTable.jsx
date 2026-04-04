@@ -3,10 +3,10 @@ import React from "react";
 import Tooltip from "./Tooltip";
 
 const statusColors = {
-  parametrizado: "var(--atlas-green)",
-  impedido: "var(--atlas-amber)",
-  dormente: "var(--atlas-text-secondary)",
-  desconhecido: "var(--atlas-text-secondary)",
+  OPERAR: "var(--atlas-green)",
+  MONITORAR: "var(--atlas-amber)",
+  SUSPENSO: "var(--atlas-red)",
+  SEM_EDGE: "var(--atlas-text-secondary)",
 };
 
 // ✅ Função para cor do regime
@@ -30,7 +30,7 @@ const getRegimeColor = (regime) => {
   return "var(--atlas-text-secondary)";
 };
 
-export default function AtivosTable({ ativos, onSelect }) {
+export default function AtivosTable({ ativos }) {
   if (!ativos || ativos.length === 0) {
     return (
       <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--atlas-text-secondary)", padding: 8 }}>
@@ -117,10 +117,10 @@ export default function AtivosTable({ ativos, onSelect }) {
           const ir = lastCycle.ir ?? 0;
           const irColor = ir > 0 ? "var(--atlas-green)" : ir < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)";
           
-          // SEM FALLBACK "Short Vol" — pode ser "Indefinida"
-          const estrategia = lastCycle.estrategia || ativo.core?.estrategia || "Indefinida";
-          
+          // Estratégia do regime atual (de estrategias[regime])
           const regime = lastCycle.regime || "—";
+          const estrategias = ativo.core?.estrategias || {};
+          const estrategia = estrategias[regime] || "Indefinida";
           const regimeColor = getRegimeColor(regime); // ✅ COR DO REGIME
           
           const score = lastCycle.score ?? lastCycle.regime_confianca ?? 0;
@@ -145,11 +145,9 @@ export default function AtivosTable({ ativos, onSelect }) {
           return (
             <tr
               key={ticker}
-              onClick={() => onSelect?.(ticker)}
               style={{
                 borderBottom: "1px solid var(--atlas-border)",
-                cursor: "pointer",
-                opacity: status === "dormente" ? 0.6 : 1,
+                opacity: status === "SEM_EDGE" ? 0.6 : 1,
               }}
             >
               <td style={{ padding: 8, fontWeight: "bold" }}>{ticker}</td>

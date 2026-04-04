@@ -188,15 +188,6 @@ class FIRE:
         if cfg is None:
             cfg = tape_carregar_ativo(ativo)
 
-        # Bloqueio permanente REFLECT estado E
-        # VerificaÃ§Ã£o defensiva â€” EDGE jÃ¡ deveria ter bloqueado antes
-        if cfg.get("reflect_permanent_block_flag", False):
-            self.book.registrar_nao_entrada(
-                ativo, data,
-                "permanently_blocked_reflect_E",
-                regime, ciclo)
-            return None
-
         regimes_sizing = cfg.get(
             "regimes_sizing", REGIMES_SIZING_PADRAO)
         
@@ -469,6 +460,5 @@ class FIRE:
         return float(s.iloc[0]) if not s.empty else 0.0
 
 if __name__ == "__main__":
-    print("âœ“ FIRE v1.2 â€” .abrir() | .verificar()")
+    print("âœ" FIRE v1.2 â€" .abrir() | .verificar()")
     print("  Sizing recebido jÃ¡ modulado pelo REFLECT via EDGE")
-    print("  reflect_permanent_block_flag verificado em abrir()")

@@ -142,7 +142,6 @@ def tape_carregar_ativo(ticker: str) -> dict:
         "reflect_history":              [],
         "reflect_daily_history":        {},
         "reflect_all_cycles_history":   [],
-        "reflect_permanent_block_flag": False,
         "estrategias":                  _estrategias_padrao.copy(),
         "criado_em":                    str(datetime.now())[:19],
         "atualizado_em":                str(datetime.now())[:19],
@@ -254,7 +253,6 @@ def tape_inicializar_ativo(ticker: str) -> dict:
         # REFLECT
         "reflect_state":                "B",
         "reflect_score":                0.0,
-        "reflect_permanent_block_flag": False,
         "reflect_history":              [],
         "reflect_all_cycles_history":   [],
         "reflect_daily_history":        {},
@@ -290,7 +288,7 @@ def tape_salvar_ativo(ticker: str, cfg_data: dict) -> None:
     Salva master JSON de forma atÃ´mica.
     Escreve em .tmp e faz os.replace() â€” evita JSON truncado
     se a sessÃ£o for interrompida durante a escrita.
-    SCAN-8: criticidade alta com reflect_permanent_block_flag.
+    SCAN-8: criticidade alta com reflect_state.
     """
     ticker = ticker.replace(".SA","").upper()
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
@@ -311,12 +309,19 @@ def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
     # LÃª estado atual usando carregador robusto
     dados = tape_carregar_ativo(ticker)
 
-    # Atualiza histÃ³rico
+    # Atualiza histórico
     ciclo_id = resultado.get("ciclo_id")
-    dados["historico"] = [
-        c for c in dados["historico"]
-        if c.get("ciclo_id") != ciclo_id
-    ]
+    registro_existente = next(
+        (c for c in dados["historico"] if c.get("ciclo_id") == ciclo_id),
+        {}
+    )
+    if registro_existente.get("definitivo", True):
+        pass
+    else:
+        dados["historico"] = [
+            c for c in dados["historico"]
+            if c.get("ciclo_id") != ciclo_id
+        ]
     dados["historico"].append(resultado)
     dados["historico"].sort(key=lambda x: x["ciclo_id"])
     dados["atualizado_em"] = str(datetime.now())[:19]
@@ -372,33 +377,29 @@ def tape_regime_para_data(ticker: str, data: str) -> dict:
 
 def tape_sizing_reflect(ticker: str) -> tuple:
     """
-    Retorna (multiplicador_sizing, permanent_block_flag).
+    Retorna multiplicador_sizing.
     EDGE multiplica sizing do ORBIT por este valor antes de passar ao FIRE.
-    FIRE nÃ£o conhece o REFLECT â€” recebe apenas o sizing final modulado.
+    FIRE nÃ£o conhece o REFLECT â€" recebe apenas o sizing final modulado.
     """
     ticker = ticker.replace(".SA","").upper()
     cfg    = tape_carregar_ativo(ticker)
 
-    permanent_block = cfg.get("reflect_permanent_block_flag", False)
-    if permanent_block:
-        return 0.0, True
-
     reflect_state = cfg.get("reflect_state", "B")
+    if reflect_state == "E":
+        return 0.0
+
     _cfg_reflect  = carregar_config()["reflect"]
     _cfg_orbit    = carregar_config()["orbit"]
     ir_operar     = _cfg_orbit["ir_operar"]
 
     if reflect_state == "A":
-        # Alpha baseado no score do REFLECT â€” nÃ£o no IR do ORBIT
-        # DecisÃ£o board 2026-03-22: acoplamento ao IR causava alpha=0
-        # em todos os ciclos A observados no backtest retroativo
         reflect_score = cfg.get("reflect_score", 0.0)
         threshold_A   = _cfg_reflect["thresholds"]["A"]
         alpha_factor  = _cfg_reflect["sizing_A_alpha_factor"]
         max_cap_alpha = _cfg_reflect["sizing_A_max_cap_alpha"]
         alpha = (reflect_score - threshold_A) * alpha_factor
         alpha = float(np.clip(alpha, 0.0, max_cap_alpha))
-        return 1.0 + alpha, False
+        return 1.0 + alpha
 
     sizing_map = {
         "B": 1.0,
@@ -406,7 +407,7 @@ def tape_sizing_reflect(ticker: str) -> tuple:
         "D": _cfg_reflect["reflect_sizing_D"],
         "E": _cfg_reflect["reflect_sizing_E"],
     }
-    return sizing_map.get(reflect_state, 1.0), False
+    return sizing_map.get(reflect_state, 1.0)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1326,6 +1327,16 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     div_iv_window         = _cfg_reflect["divergence_iv_prem_rolling_window"]
     div_rv_window         = _cfg_reflect["divergence_ret_vol_rolling_window"]
 
+    # ── Verificação de causas para definitivo/diagnostico ──
+    historico_orbit = cfg.get("historico", [])
+    ciclo_existe_orbit = any(
+        c.get("ciclo_id") == ciclo_id for c in historico_orbit
+    )
+
+    causa_provisorio = None
+    if not ciclo_existe_orbit:
+        causa_provisorio = "ORBIT desatualizado — ciclo atual ausente no master JSON"
+
     # â”€â”€ 1. AceleraÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     historico_df = pd.DataFrame(cfg.get("historico", []))
     aceleracao   = np.nan
@@ -1359,6 +1370,15 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
                     df_ciclo["ret_vol_ratio"].mean())
         except Exception as e:
             print(f"  âš  REFLECT divergÃªncia {ativo} {ciclo_id}: {e}")
+
+    # ── Verificação Causa 2: EOD não processado (componente 2 zerado) ──
+    if causa_provisorio is None:
+        eod_processado = (
+            not np.isnan(iv_prem_avg)
+            and iv_prem_avg != 0.0
+        )
+        if not eod_processado:
+            causa_provisorio = "EOD não processado — componente 2 zerado"
 
     # â”€â”€ 3. Delta_IR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     delta_ir = np.nan
@@ -1440,20 +1460,22 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     else:
         state = "E"
 
-    permanent_block = (state == "E")
+    permanente_block = (state == "E")
 
-    # â”€â”€ Persiste â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    cfg["reflect_state"]               = state
-    cfg["reflect_score"]               = float(reflect_score)
-    cfg["reflect_permanent_block_flag"] = permanent_block
+    # â"""€â€ Persiste â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€
+    cfg["reflect_state"] = state
+    cfg["reflect_score"] = float(reflect_score)
 
     # HistÃ³rico de estados para dashboard (N mais recentes)
     hist_entry = {
-        "ciclo_id": ciclo_id,
-        "date":     str(datetime.now())[:10],
-        "state":    state,
-        "score":    float(reflect_score),
+        "ciclo_id":   ciclo_id,
+        "date":       str(datetime.now())[:10],
+        "state":      state,
+        "score":      float(reflect_score),
+        "definitivo": definitivo,
     }
+    if causa_provisorio:
+        hist_entry["diagnostico"] = causa_provisorio
     reflect_hist = [h for h in cfg.get("reflect_history", [])
                     if h.get("ciclo_id") != ciclo_id]
     reflect_hist.append(hist_entry)
@@ -1468,8 +1490,10 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         "norm_delta_ir":   norm_delta_ir,
         "reflect_score":   float(reflect_score),
         "reflect_state":   state,
-        "permanent_block": permanent_block,
+        "definitivo":      definitivo,
     }
+    if causa_provisorio:
+        entrada_completa["diagnostico"] = causa_provisorio
     all_hist_limpo_final = [e for e in all_hist
                              if e.get("ciclo_id") != ciclo_id]
     all_hist_limpo_final.append(entrada_completa)
@@ -1487,9 +1511,8 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         print(f"  âš  REFLECT limpeza daily_history {ativo}: {e}")
 
     tape_salvar_ativo(ativo, cfg)
-    print(f"  âœ“ REFLECT ciclo {ativo} {ciclo_id}: "
-          f"Edge {state}  Score={reflect_score:+.4f}  "
-          f"Bloqueio={permanent_block}")
+    print(f"  OK REFLECT ciclo {ativo} {ciclo_id}: "
+          f"Edge {state}  Score={reflect_score:+.4f}")
 
 
     # PendÃªncia crÃ­tica â€” protocolo de retomada apÃ³s estado E

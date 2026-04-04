@@ -57,23 +57,6 @@ export default function App() {
             cycle: ultimo.ciclo_id || "N/A",
           },
         });
-
-        const analyticsRes = await fetch(`${BACKEND_BASE}/ativos/${activeTicker}/analytics`);
-        if (analyticsRes.ok) {
-          const analyticsData = await analyticsRes.json();
-          
-          // ✅ Conversão snake_case → camelCase
-          const formattedAnalytics = {
-            ticker: analyticsData.ticker,
-            ohlcv_disponivel: analyticsData.ohlcv_disponivel,
-            walkForward: analyticsData.walk_forward,
-            fatTails: analyticsData.fat_tails,
-            distribution: analyticsData.distribution,
-            acf: analyticsData.acf,
-          };
-          
-          analytics.setAnalytics(formattedAnalytics);
-        }
       } catch (err) {
         console.warn("Erro ao carregar dados:", err.message);
       } finally {

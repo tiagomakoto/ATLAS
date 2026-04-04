@@ -362,7 +362,6 @@ class BOOK:
                 state = cfg.get("reflect_state", "?")
                 hist  = cfg.get("reflect_history", [])
                 score = cfg.get("reflect_score", 0.0)
-                block = cfg.get("reflect_permanent_block_flag", False)
                 # Ãšltimos N estados para o dashboard
                 hist_str = " ".join(
                     h.get("state","?")
@@ -371,12 +370,11 @@ class BOOK:
                     "state":   state,
                     "score":   score,
                     "history": hist_str,
-                    "blocked": block,
                 }
             except Exception:
                 reflect_info[ativo] = {
                     "state": "?", "score": 0.0,
-                    "history": "", "blocked": False}
+                    "history": ""}
 
         # â”€â”€ ImpressÃ£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         sep = "â•" * 55

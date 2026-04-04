@@ -182,7 +182,7 @@ const VisaoGeral = ({
       {/* BLOCO 5 — Ativos Parametrizados */}
       <section>
         <div style={sectionLabel}>Ativos Parametrizados</div>
-        <AtivosTable ativos={listaAtivos} onSelect={onTickerSelect} />
+        <AtivosTable ativos={listaAtivos} />
       </section>
 
       {/* BLOCO 6 — Posições Abertas */}

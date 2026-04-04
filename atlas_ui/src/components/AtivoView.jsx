@@ -248,11 +248,6 @@ const OrbitTab = ({ ticker, data }) => {
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--atlas-amber)" }} />
           <span>TRANSIÇÃO</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ color: "var(--atlas-green)" }}>● ON</span>
-          <span style={{ color: "var(--atlas-text-secondary)" }}>|</span>
-          <span style={{ color: "var(--atlas-text-secondary)" }}>○ OFF</span>
-        </div>
       </div>
     </div>
   );
@@ -631,10 +626,36 @@ const CiclosTab = ({ ticker, data }) => {
 
 // === SUB-ABA: ANALYTICS (COM TOOLTIPS B04) ===
 const AnalyticsTab = ({ ticker, data, analytics }) => {
-  const [threshold, setThreshold] = useState(analytics?.gateThreshold || 0.18);
+  const [localAnalytics, setLocalAnalytics] = useState(null);
   const [timeRange, setTimeRange] = useState("all");
   const historico = data?.historico || [];
-  
+
+  useEffect(() => {
+    if (localAnalytics) return;
+    async function fetchAnalytics() {
+      try {
+        const res = await fetch(`${API_BASE}/ativos/${ticker}/analytics`);
+        if (res.ok) {
+          const analyticsData = await res.json();
+          setLocalAnalytics({
+            ticker: analyticsData.ticker,
+            ohlcv_disponivel: analyticsData.ohlcv_disponivel,
+            walkForward: analyticsData.walk_forward,
+            fatTails: analyticsData.fat_tails,
+            distribution: analyticsData.distribution,
+            acf: analyticsData.acf,
+            gateThreshold: analyticsData.gate_threshold || 0.18,
+          });
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar analytics:", err.message);
+      }
+    }
+    fetchAnalytics();
+  }, [ticker]);
+
+  const effectiveAnalytics = localAnalytics || analytics;
+  const [threshold, setThreshold] = useState(effectiveAnalytics?.gateThreshold || 0.18);
   const irValues = historico.map(h => h.ir || 0).filter(v => v !== 0);
   const irSorted = [...irValues].sort((a, b) => a - b);
   const estatisticasIR = {
@@ -925,8 +946,8 @@ const AnalyticsTab = ({ ticker, data, analytics }) => {
           </h4>
         </Tooltip>
         {fonteHistorico}
-        {analytics?.walkForward ? (
-          <WalkForwardChart data={analytics.walkForward} />
+        {effectiveAnalytics?.walkForward ? (
+          <WalkForwardChart data={effectiveAnalytics.walkForward} />
         ) : (
           <div style={{ padding: 40, textAlign: "center", color: "var(--atlas-text-secondary)", border: "1px dashed var(--atlas-border)", borderRadius: 4 }}>
             Dados de walk-forward não disponíveis
@@ -963,8 +984,8 @@ const AnalyticsTab = ({ ticker, data, analytics }) => {
               </h4>
             </Tooltip>
             {fonteOhlcv}
-            {analytics?.distribution ? (
-              <DistributionChart data={analytics.distribution} />
+            {effectiveAnalytics?.distribution ? (
+              <DistributionChart data={effectiveAnalytics.distribution} />
             ) : (
               <div style={{ padding: 40, textAlign: "center", color: "var(--atlas-text-secondary)", border: "1px dashed var(--atlas-border)", borderRadius: 4 }}>
                 Dados de distribuição não disponíveis
@@ -975,8 +996,8 @@ const AnalyticsTab = ({ ticker, data, analytics }) => {
           <div>
             <h4 style={{ marginBottom: 4, color: "var(--atlas-text-primary)" }}>Autocorrelação (ACF)</h4>
             {fonteOhlcv}
-            {analytics?.acf ? (
-              <ACFChart data={analytics.acf} />
+            {effectiveAnalytics?.acf ? (
+              <ACFChart data={effectiveAnalytics.acf} />
             ) : (
               <div style={{ padding: 40, textAlign: "center", color: "var(--atlas-text-secondary)", border: "1px dashed var(--atlas-border)", borderRadius: 4 }}>
                 Dados de ACF não disponíveis
@@ -987,8 +1008,8 @@ const AnalyticsTab = ({ ticker, data, analytics }) => {
           <div>
             <h4 style={{ marginBottom: 4, color: "var(--atlas-text-primary)" }}>Caudas Pesadas (Fat Tails)</h4>
             {fonteOhlcv}
-            {analytics?.fatTails ? (
-              <TailMetrics data={analytics.fatTails} />
+            {effectiveAnalytics?.fatTails ? (
+              <TailMetrics data={effectiveAnalytics.fatTails} />
             ) : (
               <div style={{ padding: 40, textAlign: "center", color: "var(--atlas-text-secondary)", border: "1px dashed var(--atlas-border)", borderRadius: 4 }}>
                 Dados de fat tails não disponíveis

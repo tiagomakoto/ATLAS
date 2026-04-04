@@ -420,11 +420,7 @@ def executar_gate(ticker: str) -> str:
         print(f"     {8-n_passou} gates falharam")
 
     # â”€â”€ Retorno da funÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    decisao_final = (
-        "OPERAR"    if todos_passaram
-        else "MONITORAR" if n_passou >= 6
-        else "EXCLUÃDO"
-    )
+    decisao_final = "OPERAR" if todos_passaram else "MONITORAR"
     return decisao_final
 
     print(f"\n  {sep}")

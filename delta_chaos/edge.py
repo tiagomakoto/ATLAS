@@ -129,7 +129,6 @@ class EDGE:
           cfg["reflect_daily_history"]      = {}
           cfg["reflect_state"]              = "B"
           cfg["reflect_score"]              = 0.0
-          cfg["reflect_permanent_block_flag"] = False
           tape_salvar_ativo(ticker, cfg)
           print(f"  âœ“ REFLECT limpo â€” {ticker}")
 
@@ -183,15 +182,6 @@ class EDGE:
 
               for ativo in self.ativos:
                   cfg_ativo = configs_ativos[ativo]
-
-                  # Bloqueio permanente REFLECT estado E
-                  if cfg_ativo.get(
-                          "reflect_permanent_block_flag", False):
-                      self.book.registrar_nao_entrada(
-                          ativo, data_str,
-                          "permanently_blocked_reflect_E",
-                          "N/A", ciclo_id)
-                      continue
 
                   raw = regime_idx.get((ciclo_id, ativo), {})
                   sizing_orbit = float(raw.get("sizing", 0.0))
@@ -369,14 +359,6 @@ class EDGE:
 
         for ativo in self.ativos:
             cfg_ativo = configs_ativos[ativo]
-
-            # Bloqueio permanente REFLECT estado E
-            if cfg_ativo.get("reflect_permanent_block_flag", False):
-                self.book.registrar_nao_entrada(
-                    ativo, data_hoje,
-                    "permanently_blocked_reflect_E",
-                    "N/A", data_hoje[:7])
-                continue
 
             orbit_data   = self.orbit.regime_para_data(ativo, data_hoje)
             sizing_orbit = float(orbit_data.get("sizing", 0.0))
