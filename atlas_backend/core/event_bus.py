@@ -2,9 +2,74 @@
 import asyncio
 from asyncio import Queue
 from datetime import datetime
+from typing import Optional
 import os
 
 event_queue: Queue = Queue()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIPOS DE EVENTOS DO DELTA CHAOS
+# ─────────────────────────────────────────────────────────────────────────────
+# Estes eventos são emitidos pelos módulos do Delta Chaos (TAPE, ORBIT, FIRE,
+# GATE, REFLECT) e processados pelo frontend para mostrar status em tempo real.
+#
+# Formato do evento:
+#   {
+#     "type": "dc_module_start" | "dc_module_complete" | "dc_module_progress" | "dc_module_error" | "dc_workflow_complete",
+#     "data": {
+#       "modulo": "TAPE" | "ORBIT" | "FIRE" | "GATE" | "REFLECT",
+#       "status": "running" | "ok" | "error",
+#       "progress": 0-100,  # opcional
+#       "timestamp": ISO8601,
+#       ...metadata adicional
+#     }
+#   }
+#
+# COMENTÁRIO CRÍTICO — NÃO REMOVER. Essa estrutura é a base para comunicação
+# entre backend e frontend, substituindo o parsing frágil de texto dos logs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+DC_MODULE_NAMES = {"TAPE", "ORBIT", "FIRE", "GATE", "REFLECT"}
+
+DC_EVENT_TYPES = {
+    "dc_module_start": "Início de execução de um módulo",
+    "dc_module_complete": "Conclusão de módulo com status (ok/error)",
+    "dc_module_progress": "Progresso percentual de módulo (0-100)",
+    "dc_module_error": "Erro fatal em módulo",
+    "dc_workflow_complete": "Workflow completo (todas as etapas finalizadas)",
+}
+
+
+def emit_dc_event(event_type: str, modulo: str, status: Optional[str] = None, **metadata) -> None:
+    """
+    Emite evento estruturado do Delta Chaos para o sistema de eventos.
+
+    Args:
+        event_type: Um dos DC_EVENT_TYPES (dc_module_start, dc_module_complete, etc.)
+        modulo: Nome do módulo ("TAPE", "ORBIT", "FIRE", "GATE", "REFLECT")
+        status: Status do módulo ("running", "ok", "error")
+        **metadata: Campos adicionais (progress, ticker, anos, etc.)
+
+    Exemplo:
+        emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker="PETR4")
+    """
+    data = {
+        "modulo": modulo,
+        "status": status,
+        "timestamp": datetime.utcnow().isoformat(),
+        **metadata
+    }
+
+    # Adiciona progress padrão se não fornecido
+    if "progress" not in metadata and event_type == "dc_module_progress":
+        data["progress"] = 0
+
+    event = {
+        "type": event_type,
+        "data": data
+    }
+
+    emit_event(event)
 
 async def publish_event(event: dict):
     await event_queue.put(event)

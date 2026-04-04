@@ -46,7 +46,6 @@ export default function AtivosTable({ ativos }) {
           <th style={{ padding: 8 }}>Ativo</th>
           <th style={{ padding: 8 }}>Status</th>
           <th style={{ padding: 8 }}>Último ciclo</th>
-          <th style={{ padding: 8 }}>Staleness TUNE</th>
           
           {/* Coluna IR com tooltip */}
           <th style={{ padding: 8 }}>
@@ -99,7 +98,7 @@ export default function AtivosTable({ ativos }) {
           
           <th style={{ padding: 8 }}>Regime</th>
           <th style={{ padding: 8 }}>Confiança</th>
-          <th style={{ padding: 8 }}>Dias sem operação</th>
+          <th style={{ padding: 8 }}>REFLECT</th>
         </tr>
       </thead>
       <tbody>
@@ -111,7 +110,6 @@ export default function AtivosTable({ ativos }) {
           const lastCycle = historicoArray.slice(-1)[0] || ativo.core || {};
           
           const cicloId = lastCycle.ciclo_id || `${ativo.historico?.length || 0} ciclos`;
-          const stalenessDays = ativo.staleness_days ?? 0;
           
           // ✅ EXTRAIR IR DO ÚLTIMO CICLO
           const ir = lastCycle.ir ?? 0;
@@ -121,19 +119,17 @@ export default function AtivosTable({ ativos }) {
           const regime = lastCycle.regime || "—";
           const estrategias = ativo.core?.estrategias || {};
           const estrategia = estrategias[regime] || "Indefinida";
-          const regimeColor = getRegimeColor(regime); // ✅ COR DO REGIME
-          
+          const regimeColor = getRegimeColor(regime);
           const score = lastCycle.score ?? lastCycle.regime_confianca ?? 0;
           
-          const lastTimestamp = lastCycle.timestamp;
-          const daysSinceOp = lastCycle.sizing === 1 
-            ? 0 
-            : lastTimestamp 
-              ? Math.floor((Date.now() - new Date(lastTimestamp).getTime()) / (1000 * 60 * 60 * 24))
-              : 0;
+          const reflectState = ativo.reflect_state || "?";
+          const reflectColor = reflectState === "A" ? "var(--atlas-green)" :
+                               reflectState === "B" ? "var(--atlas-blue)" :
+                               reflectState === "C" ? "var(--atlas-amber)" :
+                               reflectState === "D" ? "var(--atlas-red)" :
+                               "var(--atlas-text-secondary)";
           
           const statusColor = statusColors[status] || "var(--atlas-text-secondary)";
-          const staleColor = stalenessDays < 30 ? "var(--atlas-green)" : stalenessDays < 90 ? "var(--atlas-amber)" : "var(--atlas-red)";
           
           // Cores por estratégia
           const estrategiaColor = 
@@ -153,9 +149,6 @@ export default function AtivosTable({ ativos }) {
               <td style={{ padding: 8, fontWeight: "bold" }}>{ticker}</td>
               <td style={{ padding: 8, color: statusColor }}>● {status}</td>
               <td style={{ padding: 8 }}>{cicloId}</td>
-              <td style={{ padding: 8, color: staleColor }}>{stalenessDays}d</td>
-              
-              {/* Coluna IR */}
               <td style={{ padding: 8, fontWeight: "bold", color: irColor }}>
                 {ir.toFixed(3)}
               </td>
@@ -197,9 +190,13 @@ export default function AtivosTable({ ativos }) {
               </td>
               
               <td style={{ padding: 8 }}>
-                {score ? `${(score * 100).toFixed(1)}%` : "—"}
+                {score ? `${Math.abs(score * 100).toFixed(1)}%` : "—"}
               </td>
-              <td style={{ padding: 8 }}>{daysSinceOp}</td>
+              <td style={{ padding: 8, textAlign: "center" }}>
+                <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 9, background: reflectColor, color: "#fff", fontWeight: "bold" }}>
+                  {reflectState}
+                </span>
+              </td>
             </tr>
           );
         })}

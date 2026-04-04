@@ -8,6 +8,79 @@ const MODULOS = [
   { id: "GATE",  label: "GATE",  icon: "●", iconOk: "✓", iconErr: "✗" },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCESSADOR DE EVENTOS ESTRUTURADOS DO DELTA CHAOS
+// ─────────────────────────────────────────────────────────────────────────────
+// Esta função substitui o parsing frágil de texto para determinar o status
+// dos módulos. Ela processa eventos JSON estruturados emitidos pelo backend
+// via event_bus.py -> dc_runner.py -> WebSocket -> frontend.
+//
+// Formato esperado:
+//   { type: "dc_module_start" | "dc_module_complete" | "dc_module_error" | "dc_workflow_complete",
+//     data: { modulo: "ORBIT", status: "ok", ... } }
+//
+// COMENTÁRIO CRÍTICO — NÃO REMOVER. Essa função é a base para comunicação
+// confiável entre backend e frontend, eliminando dependência de texto dos logs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function processDCEvent(data, setModuloAtual, setModuloStatus, setProgresso, setMensagem) {
+  const { type, data: eventData } = data;
+  const { modulo, status, timestamp } = eventData || {};
+  
+  if (!modulo || !MODULOS.find(m => m.id === modulo)) {
+    return false; // Não é evento de módulo conhecido
+  }
+
+  const idx = MODULOS.findIndex(m => m.id === modulo);
+
+  switch (type) {
+    case "dc_module_start":
+      // Marcar módulo anterior como ok se estava rodando
+      setModuloAtual(prev => {
+        if (prev && prev !== modulo) {
+          setModuloStatus(ps => ({ ...ps, [prev]: ps[prev] === "erro" ? "erro" : "ok" }));
+        }
+        return modulo;
+      });
+      setModuloStatus(prev => ({ ...prev, [modulo]: "rodando" }));
+      setProgresso(((idx + 1) / MODULOS.length) * 100);
+      setMensagem(`${modulo} iniciado`);
+      break;
+
+    case "dc_module_complete":
+      setModuloStatus(prev => ({ 
+        ...prev, 
+        [modulo]: status === "ok" ? "ok" : "erro" 
+      }));
+      if (status === "ok" && moduloAtual === modulo) {
+        setModuloAtual(null);
+      }
+      setProgresso(((idx + 1) / MODULOS.length) * 100);
+      setMensagem(`${modulo} ${status === "ok" ? "concluído" : "falhou"}`);
+      break;
+
+    case "dc_module_error":
+      setModuloStatus(prev => ({ ...prev, [modulo]: "erro" }));
+      setMensagem(`${modulo} erro`);
+      break;
+
+    case "dc_workflow_complete":
+      setModuloStatus(prev => {
+        const final = { ...prev };
+        if (moduloAtual) final[moduloAtual] = final[moduloAtual] || "ok";
+        return final;
+      });
+      setProgresso(100);
+      setMensagem("Workflow concluído");
+      break;
+
+    default:
+      return false;
+  }
+
+  return true;
+}
+
 function parseMessage(msg) {
   const upper = msg.toUpperCase();
   
@@ -66,6 +139,22 @@ export default function OrchestratorLogDrawer({ isRunning }) {
             msg = data.message || data.msg || msg;
           } catch {}
           
+          // ── Tentar processar como evento estruturado do Delta Chaos ──
+          if (data && data.type && data.type.startsWith("dc_")) {
+            const handled = processDCEvent(
+              data, 
+              setModuloAtual, 
+              setModuloStatus, 
+              setProgresso, 
+              setMensagem
+            );
+            if (handled) {
+              // Evento processado com sucesso — não fazer fallback para texto
+              return;
+            }
+          }
+          
+          // ── Fallback: parsing de texto legado ──
           const { modulo, erro } = parseMessage(msg);
           
           if (erro) {

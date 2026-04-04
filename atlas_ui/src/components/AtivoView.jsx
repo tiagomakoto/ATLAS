@@ -96,15 +96,12 @@ const OrbitTab = ({ ticker, data }) => {
           <div style={{ color: "var(--atlas-text-secondary)", marginBottom: 4 }}>Regime Atual</div>
           <div style={{ fontSize: 14, fontWeight: "bold", color: getRegimeColor(regimeAtual) }}>
             {regimeAtual}
-            <span style={{ marginLeft: 8, fontSize: 10 }}>
-              {sizingAtual === 1 ? "🟢 ON" : "⚪ OFF"}
-            </span>
           </div>
         </div>
         <div style={{ padding: 12, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)" }}>
           <div style={{ color: "var(--atlas-text-secondary)", marginBottom: 4 }}>Confiança</div>
           <div style={{ fontSize: 14, fontWeight: "bold", color: regimeConfidence > 0.7 ? "var(--atlas-green)" : "var(--atlas-amber)" }}>
-            {(regimeConfidence * 100).toFixed(1)}%
+            {Math.abs(regimeConfidence * 100).toFixed(1)}%
           </div>
         </div>
         <div style={{ padding: 12, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)" }}>
@@ -116,6 +113,17 @@ const OrbitTab = ({ ticker, data }) => {
       {/* Timeline Visual */}
       <div>
         <h4 style={{ marginBottom: 8, color: "var(--atlas-text-primary)" }}>Timeline de Regimes (Últimos 12 Ciclos)</h4>
+        {/* Rótulos YYYY-MM (linha superior, cinza neutro) */}
+        <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 4 }}>
+          {timeline.map((t, i) => (
+            <div key={i} style={{ minWidth: 70, textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: "bold", color: "var(--atlas-text-secondary)" }}>
+                {t.ciclo || "—"}
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Boxes coloridos (linha inferior) */}
         <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8 }}>
           {timeline.map((t, i) => (
             <div 
@@ -130,8 +138,7 @@ const OrbitTab = ({ ticker, data }) => {
                 opacity: t.sizing === 1 ? 1 : 0.7
               }}
             >
-              <div style={{ fontSize: 8, color: t.regime === regimeAtual ? "#fff" : "var(--atlas-text-secondary)" }}>{t.data}</div>
-              <div style={{ fontSize: 9, fontWeight: "bold", color: t.regime === regimeAtual ? "#fff" : "var(--atlas-text-primary)", marginTop: 2 }}>{t.regime?.slice(0, 10)}</div>
+              <div style={{ fontSize: 9, fontWeight: "bold", color: t.regime === regimeAtual ? "#fff" : "var(--atlas-text-primary)" }}>{t.regime?.slice(0, 10)}</div>
               <div style={{ fontSize: 8, marginTop: 2, color: t.sizing === 1 ? "var(--atlas-green)" : "var(--atlas-text-secondary)" }}>{t.sizing === 1 ? "● ON" : "○ OFF"}</div>
               <div style={{ fontSize: 8, marginTop: 1, color: t.ir > 0 ? "var(--atlas-green)" : t.ir < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)" }}>IR: {t.ir?.toFixed(2)}</div>
             </div>

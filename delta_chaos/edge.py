@@ -32,6 +32,22 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
+# Eventos estruturados do Delta Chaos (graceful fallback)
+# Emite eventos dc_module_start/complete para o frontend processar status.
+# Se rodando fora do contexto ATLAS, fallback silencioso.
+try:
+    from atlas_backend.core.event_bus import emit_dc_event
+except ImportError:
+    def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
+
+# Eventos estruturados do Delta Chaos (graceful fallback)
+# Emite eventos dc_module_start/complete para o frontend processar status.
+# Se rodando fora do contexto ATLAS, fallback silencioso.
+try:
+    from atlas_backend.core.event_bus import emit_dc_event
+except ImportError:
+    def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
+
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # DELTA CHAOS â€” EDGE v1.3
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
@@ -138,7 +154,9 @@ class EDGE:
           ativos=self.ativos, anos=anos, forcar=False)
       if df_tape.empty:
           print("  âœ— TAPE vazio. Abortando.")
+          emit_dc_event("dc_module_complete", "TAPE", "error")
           return pd.DataFrame()
+      emit_dc_event("dc_module_complete", "TAPE", "ok")
       df_selic = _obter_selic(min(anos), max(anos))
 
       # [2/3] ORBIT
@@ -147,7 +165,10 @@ class EDGE:
           df_tape, anos, modo=modo_orbit)
       if df_regimes.empty:
           print("  âœ— ORBIT vazio. Abortando.")
+          emit_dc_event("dc_module_complete", "ORBIT", "error")
           return pd.DataFrame()
+
+      emit_dc_event("dc_module_complete", "ORBIT", "ok")
 
       df_regimes["ciclo_id"] = \
           df_regimes["ciclo_id"].astype(str)
@@ -224,6 +245,8 @@ class EDGE:
               )
 
       print(f"\n  {'â•'*55}")
+      emit_dc_event("dc_module_complete", "FIRE", "ok")
+      emit_dc_event("dc_workflow_complete", "FIRE", "ok")
       print(f"  EDGE.backtest concluÃ­do")
       print(f"  {'â•'*55}")
       self.book.dashboard()

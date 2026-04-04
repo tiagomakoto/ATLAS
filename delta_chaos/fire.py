@@ -1,4 +1,4 @@
-﻿# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # DELTA CHAOS â€” FIRE v2.0
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
 # MIGRADO (P2): imports explÃ­citos de init, tape, book â€” sem escopo global
@@ -460,5 +460,5 @@ class FIRE:
         return float(s.iloc[0]) if not s.empty else 0.0
 
 if __name__ == "__main__":
-    print("âœ" FIRE v1.2 â€" .abrir() | .verificar()")
-    print("  Sizing recebido jÃ¡ modulado pelo REFLECT via EDGE")
+    print("FIRE v1.2 - .abrir() | .verificar()")
+    print("  Sizing recebido ja modulado pelo REFLECT via EDGE")

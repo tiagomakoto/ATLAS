@@ -375,7 +375,7 @@ def tape_regime_para_data(ticker: str, data: str) -> dict:
     }
 
 
-def tape_sizing_reflect(ticker: str) -> tuple:
+def tape_sizing_reflect(ticker: str) -> float:
     """
     Retorna multiplicador_sizing.
     EDGE multiplica sizing do ORBIT por este valor antes de passar ao FIRE.
@@ -1344,7 +1344,10 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         historico_df = historico_df.set_index("ciclo_id")
         if ciclo_id in historico_df.index:
             idx = historico_df.index.get_loc(ciclo_id)
-            # SCAN-4 corrigido: basta idx >= 1 para calcular aceleraÃ§Ã£o
+            # get_loc pode retornar slice se houver duplicatas no índice
+            if isinstance(idx, slice):
+                idx = idx.start
+            # SCAN-4 corrigido: basta idx >= 1 para calcular aceleração
             if idx >= 1:
                 sv_atual  = float(historico_df.iloc[idx].get(
                     "score_vel", 0.0))
@@ -1462,7 +1465,17 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
 
     permanente_block = (state == "E")
 
-    # â"""€â€ Persiste â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€â€â"""€
+    # ── Definitivo vs Provisório ──
+    # Quando dados estão incompletos (COTAHIST não baixado, EOD não processado,
+    # OHLCV ausente), o cálculo REFLECT pode estar incorreto. O REFLECT é
+    # append-only mensal, mas registros não-definitivos podem ser sobrescritos
+    # quando os dados faltantes forem disponibilizados.
+    # Quando todos os dados necessários estão disponíveis, definitivo=True e o
+    # registro fica bloqueado para edição futura.
+    # COMENTÁRIO CRÍTICO — NÃO REMOVER EM ATUALIZAÇÕES FUTURAS
+    definitivo = causa_provisorio is None
+
+    # ── Persiste ──
     cfg["reflect_state"] = state
     cfg["reflect_score"] = float(reflect_score)
 
