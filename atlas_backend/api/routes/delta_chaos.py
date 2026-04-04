@@ -308,6 +308,7 @@ async def orchestrator_run(payload: dict):
                 evento_ativo["posicao"] = {"aberta": False, "acao": "sem_posicao"}
 
             # 3. gate_eod
+            gate_bloqueado_sem_gate = False
             try:
                 gate_eod_result = await run_gate_eod(ticker)
                 resultado = gate_eod_result.get("output", "")
@@ -319,18 +320,37 @@ async def orchestrator_run(payload: dict):
                     emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = MONITORAR", level="info")
                 elif "BLOQUEADO" in resultado:
                     evento_ativo["gate_eod"] = "BLOQUEADO"
-                    emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = BLOQUEADO", level="info")
+                    # Verifica se o bloqueio é porque GATE nunca foi executado
+                    if "GATE completo nunca executado" in resultado:
+                        gate_bloqueado_sem_gate = True
+                        emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — GATE nunca executado, rodando bloco mensal para resolver", level="info")
+                    else:
+                        emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = BLOQUEADO", level="info")
                 else:
                     evento_ativo["gate_eod"] = resultado
             except Exception as e:
                 evento_ativo["gate_eod"] = f"erro: {str(e)}"
                 erros_ativo.append(f"gate_eod: {str(e)}")
 
-            if evento_ativo["posicao"].get("aberta") or evento_ativo["gate_eod"] in ["MONITORAR", "BLOQUEADO"]:
+            # Se posição aberta ou MONITORAR → fim do fluxo diário
+            # Se BLOQUEADO mas é "GATE nunca executado" → vai para bloco mensal
+            # Se BLOQUEADO por outros motivos → fim do fluxo diário
+            if evento_ativo["posicao"].get("aberta") or evento_ativo["gate_eod"] == "MONITORAR":
                 evento_ativo["erros"] = erros_ativo
                 eventos_ativos.append(evento_ativo)
                 emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
                 emit_log(f"[ORQUESTRADOR] {ticker}: fim do fluxo diário", level="info")
+                # PAUSE
+                emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
+                await asyncio.sleep(30)
+                continue
+
+            # BLOQUEADO por outros motivos (não "GATE nunca executado") → pula bloco mensal
+            if evento_ativo["gate_eod"] == "BLOQUEADO" and not gate_bloqueado_sem_gate:
+                evento_ativo["erros"] = erros_ativo
+                eventos_ativos.append(evento_ativo)
+                emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
+                emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO (outros motivos) — bloco mensal pulado", level="info")
                 # PAUSE
                 emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
                 await asyncio.sleep(30)
