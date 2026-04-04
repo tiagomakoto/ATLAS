@@ -425,8 +425,10 @@ class ORBIT:
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
     def rodar(self, df_tape, anos, modo="pipeline"):
-        df_cache = self._carregar_cache(anos)
-        if df_cache is not None:
+        df_cache, ciclos_faltantes = self._carregar_cache(anos)
+
+        # Cache completo — retorna sem processar
+        if not ciclos_faltantes:
             return df_cache
 
         ibov_close = tape_ibov(anos)
@@ -440,7 +442,7 @@ class ORBIT:
             if not df_ohlcv.empty:
                 ohlcv_ativos[ativo] = df_ohlcv
             else:
-                print(f"  âš  {ativo} sem OHLCV â€” excluÃ­do")
+                print(f"  ⚠ {ativo} sem OHLCV — excluído")
 
         if not ohlcv_ativos:
             print("  âœ— Nenhum ativo com OHLCV")
@@ -457,19 +459,29 @@ class ORBIT:
                         nome_serie, anos)
                     if serie is not None:
                         self._externas_cache[nome_serie] = serie
-                        print(f"  âœ“ SÃ©rie externa {nome_serie} "
-                              f"prÃ©-carregada: "
+                        print(f"  ✓ Série externa {nome_serie} "
+                              f"pré-carregada: "
                               f"{len(serie):,} dias")
 
-        ciclos = self._gerar_ciclos(anos)
+        # ← MUDANÇA: usar ciclos_faltantes em vez de _gerar_ciclos(anos)
+        ciclos = ciclos_faltantes
         print(f"  {len(ciclos)} ciclos Ã— "
-              f"{len(ohlcv_ativos)} ativos")
+              f"{len(ohlcv_ativos)} ativos (apenas ausentes)")
 
+        # ← MUDANÇA: inicializar score_hist e vol_hist do cache existente
         score_hist = {}
         vol_hist   = {}
+        if not df_cache.empty:
+            for ativo in self.ativos:
+                df_ativo_cache = df_cache[df_cache["ativo"] == ativo].sort_values("ciclo_id")
+                if not df_ativo_cache.empty:
+                    # Usar últimos 6 ciclos para contexto histórico (Ridge calibration)
+                    score_hist[ativo] = df_ativo_cache["score"].tolist()[-6:]
+                    vol_hist[ativo] = df_ativo_cache["vol_21d"].tolist()[-6:]
+
         rows       = []
 
-        with _tqdm(ciclos, desc="ORBIT v3.4",
+        with _tqdm(ciclos, desc="ORBIT v4.0",
                    unit="ciclo", ncols=None) as pbar:
             for ciclo_id in ciclos:
                 pbar.set_description(f"ORBIT {ciclo_id}")
@@ -740,23 +752,32 @@ class ORBIT:
                     necessarios.add(f"{ano}-{mes:02d}")
 
         rows = []
+        ciclos_existentes = set()
         for ativo in self.ativos:
             dados = tape_carregar_ativo(ativo)
             historico = dados.get("historico", [])
-            existentes = {
-                c["ciclo_id"] for c in historico}
-            if not necessarios <= existentes:
-                return None
-            rows.extend(historico)
+            for c in historico:
+                ciclos_existentes.add(c["ciclo_id"])
+                rows.append(c)
+
+        ciclos_faltantes = sorted(necessarios - ciclos_existentes)
 
         if not rows:
-            return None
+            # Cache vazio — processar todos os ciclos
+            print(f"  ~ Cache vazio — processando {len(ciclos_faltantes)} ciclos")
+            return pd.DataFrame(), ciclos_faltantes
 
         df = pd.DataFrame(rows)
         df["ciclo_id"] = df["ciclo_id"].astype(str)
-        print(f"  âœ“ Cache v3.4 carregado â€” "
-              f"{len(df):,} registros")
-        return df
+
+        if not ciclos_faltantes:
+            # Cache completo — nada a processar
+            print(f"  ✓ Cache completo — {len(df):,} registros, nenhum ciclo novo")
+            return df, []
+
+        # Cache parcial — retornar existentes + faltantes
+        print(f"  ~ Cache parcial — {len(ciclos_faltantes)} ciclo(s) ausente(s): {ciclos_faltantes[:3]}")
+        return df, ciclos_faltantes
 
 if __name__ == "__main__":
     print("âœ“ ORBIT v3.4 carregado")
