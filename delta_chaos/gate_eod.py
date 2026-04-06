@@ -145,14 +145,10 @@ def gate_eod(ticker: str, verbose: bool = True) -> str:
         else:
             defasagem = 99
 
-        if defasagem >= 2:
+        if defasagem >= 1:
             bloqueios.append(
-                f"ORBIT {defasagem}m defasado — "
+                f"ORBIT defasado {defasagem}m — "
                 f"atualizar antes de operar")
-        elif defasagem == 1:
-            avisos.append(
-                f"ORBIT desatualizado — "
-                f"rodar antes do próximo pregão")
 
         if sizing_atual <= 0.0:
             bloqueios.append(

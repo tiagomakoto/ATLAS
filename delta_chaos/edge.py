@@ -526,15 +526,59 @@ if __name__ == "__main__":
 
         elif args.modo == "orbit":
             # Modo leve mensal — não instancia EDGE, não apaga books
+            ticker = args.ticker
             anos = (list(map(int, args.anos.split(",")))
                     if args.anos
                     else list(range(2002, datetime.now().year + 1)))
-            cfg_ativo = tape_carregar_ativo(args.ticker)
-            df_ohlcv = tape_ohlcv(args.ticker, anos)
-            df_ibov = tape_ibov(anos)
-            orbit = ORBIT(universo={args.ticker: cfg_ativo})
-            orbit.rodar(df_ohlcv, anos, modo="mensal")
-            tape_reflect_cycle(args.ticker, datetime.now().strftime("%Y-%m"))
+
+            # ── TAPE: verificar/baixar dados ──
+            emit_dc_event("dc_module_start", "TAPE", "running",
+                          ticker=ticker, descricao="Verificando dados OHLCV para atualização")
+            try:
+                cfg_ativo = tape_carregar_ativo(ticker)
+                df_ohlcv = tape_ohlcv(ticker, anos)
+                df_ibov = tape_ibov(anos)
+                if df_ohlcv.empty:
+                    emit_dc_event("dc_module_complete", "TAPE", "error",
+                                  ticker=ticker, descricao="TAPE: dados OHLCV indisponíveis")
+                    print(f"  ✗ TAPE: dados OHLCV indisponíveis para {ticker}")
+                    sys.exit(1)
+                emit_dc_event("dc_module_complete", "TAPE", "ok",
+                              ticker=ticker, descricao=f"TAPE: {len(df_ohlcv)} registros disponíveis")
+                print(f"  ✓ TAPE: {len(df_ohlcv)} registros OHLCV para {ticker}")
+            except Exception as e:
+                emit_dc_event("dc_module_complete", "TAPE", "error",
+                              ticker=ticker, descricao=f"TAPE erro: {str(e)}")
+                print(f"  ✗ TAPE erro: {e}")
+                sys.exit(1)
+
+            # ── ORBIT: calcular regimes ──
+            emit_dc_event("dc_module_start", "ORBIT", "running",
+                          ticker=ticker, descricao="ORBIT: calculando regimes mensais")
+            try:
+                orbit = ORBIT(universo={ticker: cfg_ativo})
+                orbit.rodar(df_ohlcv, anos, modo="mensal")
+                emit_dc_event("dc_module_complete", "ORBIT", "ok",
+                              ticker=ticker, descricao="ORBIT: regimes calculados com sucesso")
+                print(f"  ✓ ORBIT: regimes calculados para {ticker}")
+            except Exception as e:
+                emit_dc_event("dc_module_complete", "ORBIT", "error",
+                              ticker=ticker, descricao=f"ORBIT erro: {str(e)}")
+                print(f"  ✗ ORBIT erro: {e}")
+                sys.exit(1)
+
+            # ── REFLECT: atualizar ciclo ──
+            emit_dc_event("dc_module_start", "REFLECT", "running",
+                          ticker=ticker, descricao="REFLECT: atualizando ciclo mensal")
+            try:
+                tape_reflect_cycle(ticker, datetime.now().strftime("%Y-%m"))
+                emit_dc_event("dc_module_complete", "REFLECT", "ok",
+                              ticker=ticker, descricao="REFLECT: ciclo atualizado")
+                print(f"  ✓ REFLECT: ciclo atualizado para {ticker}")
+            except Exception as e:
+                emit_dc_event("dc_module_complete", "REFLECT", "error",
+                              ticker=ticker, descricao=f"REFLECT erro: {str(e)}")
+                print(f"  ✗ REFLECT erro: {e}")
 
         elif args.modo == "tune":
             from delta_chaos.tune import executar_tune

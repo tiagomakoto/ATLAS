@@ -316,29 +316,59 @@ async def orchestrator_run(payload: dict):
                 evento_ativo["posicao"] = {"aberta": False, "acao": "sem_posicao"}
 
             # 3. gate_eod
-            gate_bloqueado_sem_gate = False
+            precisa_bloco_mensal = False
             try:
+                # Emitir evento de início do GATE EOD para o drawer
+                emit_dc_event("dc_module_start", "GATE", "running",
+                              ticker=ticker, descricao="GATE EOD — verificação de integridade")
+                emit_log(f"[ORQUESTRADOR] {ticker}: verificando GATE EOD...", level="info")
+
                 gate_eod_result = await run_gate_eod(ticker)
                 resultado = gate_eod_result.get("output", "")
                 if "OPERAR" in resultado:
                     evento_ativo["gate_eod"] = "OPERAR"
+                    emit_dc_event("dc_module_complete", "GATE", "ok",
+                                  ticker=ticker, descricao="GATE EOD = OPERAR")
                     emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = OPERAR (aguarda CEO)", level="info")
                 elif "MONITORAR" in resultado:
                     evento_ativo["gate_eod"] = "MONITORAR"
+                    emit_dc_event("dc_module_complete", "GATE", "ok",
+                                  ticker=ticker, descricao="GATE EOD = MONITORAR")
                     emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = MONITORAR", level="info")
                 elif "BLOQUEADO" in resultado:
                     evento_ativo["gate_eod"] = "BLOQUEADO"
-                    # Verifica se o bloqueio é porque GATE nunca foi executado
-                    if "GATE completo nunca executado" in resultado:
-                        gate_bloqueado_sem_gate = True
-                        emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — GATE nunca executado, rodando bloco mensal para resolver", level="info")
+                    # Verifica se o bloqueio exige bloco mensal
+                    precisa_bloco_mensal = (
+                        "GATE completo nunca executado" in resultado
+                        or "ORBIT defasado" in resultado
+                    )
+                    if precisa_bloco_mensal:
+                        # Extrai a causa do bloqueio para a mensagem
+                        if "ORBIT defasado" in resultado:
+                            import re
+                            match = re.search(r"ORBIT defasado (\d+)m", resultado)
+                            meses = match.group(1) if match else "?"
+                            emit_dc_event("dc_module_complete", "GATE", "error",
+                                          ticker=ticker,
+                                          descricao=f"ORBIT desatualizado {meses} meses, atualizando")
+                            emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — ORBIT defasado, rodando bloco mensal", level="info")
+                        else:
+                            emit_dc_event("dc_module_complete", "GATE", "error",
+                                          ticker=ticker, descricao="GATE EOD = BLOQUEADO — dados incompletos, iniciando atualização")
+                            emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — GATE nunca executado, rodando bloco mensal para resolver", level="info")
                     else:
+                        emit_dc_event("dc_module_complete", "GATE", "error",
+                                      ticker=ticker, descricao=f"GATE EOD = BLOQUEADO")
                         emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = BLOQUEADO", level="info")
                 else:
                     evento_ativo["gate_eod"] = resultado
+                    emit_dc_event("dc_module_complete", "GATE", "ok",
+                                  ticker=ticker, descricao=f"GATE EOD = {resultado}")
             except Exception as e:
                 evento_ativo["gate_eod"] = f"erro: {str(e)}"
                 erros_ativo.append(f"gate_eod: {str(e)}")
+                emit_dc_event("dc_module_complete", "GATE", "error",
+                              ticker=ticker, descricao=f"GATE EOD erro: {str(e)}")
 
             # Se posição aberta ou MONITORAR → fim do fluxo diário
             # Se BLOQUEADO mas é "GATE nunca executado" → vai para bloco mensal
@@ -353,8 +383,8 @@ async def orchestrator_run(payload: dict):
                 # await asyncio.sleep(30)
                 continue
 
-            # BLOQUEADO por outros motivos (não "GATE nunca executado") → pula bloco mensal
-            if evento_ativo["gate_eod"] == "BLOQUEADO" and not gate_bloqueado_sem_gate:
+            # BLOQUEADO por outros motivos (não exige bloco mensal) → pula bloco mensal
+            if evento_ativo["gate_eod"] == "BLOQUEADO" and not precisa_bloco_mensal:
                 evento_ativo["erros"] = erros_ativo
                 eventos_ativos.append(evento_ativo)
                 emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
@@ -384,11 +414,11 @@ async def orchestrator_run(payload: dict):
             except Exception as e:
                 erros_ativo.append(f"ciclo_detect: {str(e)}")
 
-            # Força bloco mensal se GATE nunca foi executado (precisa rodar para resolver)
-            if gate_bloqueado_sem_gate and not ciclo_mudou:
+            # Força bloco mensal se GATE nunca foi executado ou ORBIT defasado
+            if precisa_bloco_mensal and not ciclo_mudou:
                 ciclo_mudou = True
                 evento_ativo["ciclo_novo"] = True
-                emit_log(f"[ORQUESTRADOR] {ticker}: forçando bloco mensal — GATE nunca executado", level="info")
+                emit_log(f"[ORQUESTRADOR] {ticker}: forçando bloco mensal — dados incompletos", level="info")
 
             if not ciclo_mudou:
                 emit_log(f"[ORQUESTRADOR] {ticker}: ciclo não mudou, bloco mensal pulado", level="info")
@@ -414,13 +444,22 @@ async def orchestrator_run(payload: dict):
             # 4. run_orbit_update
             status_antes = None
             try:
+                # Emitir evento de início do ORBIT para o drawer
+                emit_dc_event("dc_module_start", "ORBIT", "running",
+                              ticker=ticker, descricao="Atualizando ciclo — ORBIT em execução")
+                emit_log(f"[ORQUESTRADOR] {ticker}: iniciando atualização ORBIT...", level="info")
+
                 status_antes = get_ativo(ticker).get("status")
                 await run_orbit_update(ticker)
                 bloco_mensal["orbit"] = "ok"
+                emit_dc_event("dc_module_complete", "ORBIT", "ok",
+                              ticker=ticker, descricao="ORBIT atualização concluída")
                 emit_log(f"[ORQUESTRADOR] {ticker}: orbit update ok", level="info")
             except Exception as e:
                 bloco_mensal["orbit"] = f"erro: {str(e)}"
                 erros_ativo.append(f"orbit: {str(e)}")
+                emit_dc_event("dc_module_complete", "ORBIT", "error",
+                              ticker=ticker, descricao=f"ORBIT erro: {str(e)}")
                 evento_ativo["erros"] = erros_ativo
                 evento_ativo["bloco_mensal"] = bloco_mensal
                 eventos_ativos.append(evento_ativo)
@@ -459,8 +498,12 @@ async def orchestrator_run(payload: dict):
                     last_tune = max(tunes)
                     dias_uteis = len(bdate_range(last_tune, date.today()))
                     if dias_uteis >= 126:
+                        emit_dc_event("dc_module_start", "FIRE", "running",
+                                      ticker=ticker, descricao="TUNE: recalibrando parâmetros")
                         await run_tune(ticker)
                         bloco_mensal["tune"] = "executado"
+                        emit_dc_event("dc_module_complete", "FIRE", "ok",
+                                      ticker=ticker, descricao="TUNE: parâmetros recalibrados")
                         emit_log(f"[ORQUESTRADOR] {ticker}: TUNE executado", level="info")
                     else:
                         bloco_mensal["tune"] = f"pulado — {dias_uteis} dias úteis"
@@ -469,6 +512,8 @@ async def orchestrator_run(payload: dict):
             except Exception as e:
                 erros_ativo.append(f"tune: {str(e)}")
                 bloco_mensal["tune"] = f"erro: {str(e)}"
+                emit_dc_event("dc_module_complete", "FIRE", "error",
+                              ticker=ticker, descricao=f"TUNE erro: {str(e)}")
 
             evento_ativo["bloco_mensal"] = bloco_mensal
             evento_ativo["erros"] = erros_ativo

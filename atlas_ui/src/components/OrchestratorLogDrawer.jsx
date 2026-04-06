@@ -178,11 +178,17 @@ export default function OrchestratorLogDrawer({ isRunning }) {
               return;
             }
 
-            // Start: só atualizar módulo atual
+            // Start: atualizar módulo atual — mas não sobrescrever "erro" com "rodando"
             if (data.type === "dc_module_start") {
               setModuloAtual(mod);
               setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
-              setMensagem(`${mod} iniciado`);
+              // Só marcar como "rodando" se não estiver em erro
+              setModuloStatus(prev => {
+                if (prev[mod] === "erro") return prev;
+                return { ...prev, [mod]: "rodando" };
+              });
+              const desc = data.data?.descricao;
+              setMensagem(desc || `${mod} iniciado`);
               return;
             }
 
@@ -206,7 +212,52 @@ export default function OrchestratorLogDrawer({ isRunning }) {
             if (tk) {
               setTicker(tk);
               setTickerTransition(true);
-              setMensagem(`Processando ${tk}...`);
+            }
+
+            // Gate EOD bloqueado → luz vermelha no GATE (antes do bloco mensal)
+            if (data.gate_eod === "BLOQUEADO") {
+              setModuloStatus(prev => ({ ...prev, GATE: "erro" }));
+              // A mensagem específica já vem do evento dc_module_complete do gate_eod
+              // Só atualizar se ainda não tiver mensagem mais específica
+              setMensagem(prev => {
+                if (prev.includes("desatualizado") || prev.includes("iniciando atualização") || prev.includes("dados incompletos")) {
+                  return prev; // Manter mensagem específica do dc_module_complete
+                }
+                return `${tk}: GATE EOD BLOQUEADO`;
+              });
+            } else if (data.gate_eod === "MONITORAR") {
+              setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
+              setMensagem(`${tk}: GATE EOD = MONITORAR`);
+            } else if (data.gate_eod === "OPERAR") {
+              setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
+              setMensagem(`${tk}: GATE EOD = OPERAR`);
+            }
+
+            // Bloco mensal: mostrar resumo do que aconteceu
+            if (data.bloco_mensal) {
+              const bm = data.bloco_mensal;
+              // Atualizar status dos módulos baseado no resultado do bloco mensal
+              setModuloStatus(prev => {
+                const next = { ...prev };
+                if (bm.orbit === "ok") next.ORBIT = "ok";
+                else if (typeof bm.orbit === "string" && bm.orbit.startsWith("erro")) next.ORBIT = "erro";
+
+                if (bm.gate === "ok") next.GATE = "ok";
+                else if (typeof bm.gate === "string" && bm.gate.startsWith("erro")) next.GATE = "erro";
+
+                if (bm.tune === "executado") next.FIRE = "ok";
+                else if (typeof bm.tune === "string" && bm.tune.startsWith("erro")) next.FIRE = "erro";
+
+                return next;
+              });
+
+              if (bm.tune === "executado") {
+                setMensagem(`${tk}: TUNE executado — parâmetros recalibrados`);
+              } else if (bm.tune && typeof bm.tune === "string" && bm.tune.startsWith("erro")) {
+                setMensagem(`${tk}: TUNE erro — ${bm.tune}`);
+              } else if (bm.status_anterior && bm.status_novo) {
+                setMensagem(`${tk}: ${bm.status_anterior} → ${bm.status_novo}`);
+              }
             }
             return;
           }
