@@ -1,12 +1,12 @@
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 import json
 import os
-# DELTA CHAOS â€” TAPE v2.0
-# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.2:
-# MIGRADO (P2): imports explÃ­citos de init â€” sem escopo global do notebook
-# MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
-# MANTIDO: toda a lÃ³gica, REFLECT, Black-Scholes, COTAHIST, master JSON
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DELTA CHAOS — TAPE v2.0
+# Alterações em relação à v1.2:
+# MIGRADO (P2): imports explícitos de init — sem escopo global do notebook
+# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
+# MANTIDO: toda a lógica, REFLECT, Black-Scholes, COTAHIST, master JSON
+# ════════════════════════════════════════════════════════════════════
 
 from delta_chaos.init import (
     carregar_config, cfg_global,
@@ -15,7 +15,7 @@ from delta_chaos.init import (
     DRIVE_BASE,
 )
 
-# â”€â”€ Logging ATLAS (graceful fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
     _atlas_disponivel = True
@@ -24,30 +24,30 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# DELTA CHAOS â€” TAPE v1.2
-# AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v1.1:
-# ADICIONADO: tape_salvar_ativo() â€” salva master JSON de forma atÃ´mica
-# ADICIONADO: tape_sizing_reflect() â€” retorna multiplicador REFLECT
-# ADICIONADO: tape_reflect_daily() â€” calcula componentes EOD
-# ADICIONADO: tape_reflect_cycle() â€” calcula estado REFLECT mensal
-# ADICIONADO: tape_process_eod_file() â€” processa arquivo EOD
-# ADICIONADO: _parse_preco_eod() â€” converte strike EOD (/100)
-# ADICIONADO: _process_eod_options_data() â€” filtra e prepara dados EOD
-# ADICIONADO: _calculate_divergence_components() â€” divergÃªncia bidirecional
-# ADICIONADO: _calculate_gex() â€” Gamma Exposure (dado auxiliar)
-# ADICIONADO: _calcular_zscore_rolling() â€” normalizaÃ§Ã£o rolling
-# ADICIONADO: _get_vencimento_referencia() â€” vencimento por maior OI
-# ALTERADO:   tape_carregar_ativo() â€” inicializa campos REFLECT
-# ALTERADO:   tape_salvar_ciclo() â€” usa tape_salvar_ativo() atÃ´mico
-# ALTERADO:   _ler_cotahist() â€” adiciona open_interest
-# CORRIGIDO (SCAN-3): ret_vol_ratio com proteÃ§Ã£o contra divisÃ£o por zero
-# CORRIGIDO (SCAN-5): deduplicaÃ§Ã£o reflect_all_cycles_history por ciclo_id
+# ════════════════════════════════════════════════════════════════════
+# DELTA CHAOS — TAPE v1.2
+# Alterações em relação à v1.1:
+# ADICIONADO: tape_salvar_ativo() — salva master JSON de forma atômica
+# ADICIONADO: tape_sizing_reflect() — retorna multiplicador REFLECT
+# ADICIONADO: tape_reflect_daily() — calcula componentes EOD
+# ADICIONADO: tape_reflect_cycle() — calcula estado REFLECT mensal
+# ADICIONADO: tape_process_eod_file() — processa arquivo EOD
+# ADICIONADO: _parse_preco_eod() — converte strike EOD (/100)
+# ADICIONADO: _process_eod_options_data() — filtra e prepara dados EOD
+# ADICIONADO: _calculate_divergence_components() — divergência bidirecional
+# ADICIONADO: _calculate_gex() — Gamma Exposure (dado auxiliar)
+# ADICIONADO: _calcular_zscore_rolling() — normalização rolling
+# ADICIONADO: _get_vencimento_referencia() — vencimento por maior OI
+# ALTERADO:   tape_carregar_ativo() — inicializa campos REFLECT
+# ALTERADO:   tape_salvar_ciclo() — usa tape_salvar_ativo() atômico
+# ALTERADO:   _ler_cotahist() — adiciona open_interest
+# CORRIGIDO (SCAN-3): ret_vol_ratio com proteção contra divisão por zero
+# CORRIGIDO (SCAN-5): deduplicação reflect_all_cycles_history por ciclo_id
 # CORRIGIDO (SCAN-6): limpeza daily_history com try/except
-# CORRIGIDO (SCAN-8): tape_salvar_ativo() usa escrita atÃ´mica via .tmp
-# CORRIGIDO (SCAN-1): _calcular_zscore_rolling min_periods estÃ¡vel
+# CORRIGIDO (SCAN-8): tape_salvar_ativo() usa escrita atômica via .tmp
+# CORRIGIDO (SCAN-1): _calcular_zscore_rolling min_periods estável
 # CORRIGIDO (SCAN-2): alpha estado A filtra apenas IR > ir_operar
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 
 import os, io, json, math, zipfile, warnings
 import urllib.request
@@ -60,10 +60,10 @@ warnings.filterwarnings("ignore")
 from scipy.stats import norm as _norm
 from tqdm.auto import tqdm as _tqdm
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 # CONSTANTES PRIVATIVAS DO TAPE
-# Caminhos vÃªm do escopo da CÃ©lula 1 â€” nÃ£o redeclarar aqui
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# Caminhos vêm do escopo da Célula 1 — não redeclarar aqui
+# ════════════════════════════════════════════════════════════════════
 SCHEMA_VERSION  = "1.0"
 COTAHIST_URL    = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
 BCB_SELIC_URL   = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados"
@@ -99,9 +99,208 @@ SELIC_HISTORICA = {
     2024: 10.8, 2025: 13.7, 2026: 14.3,
 }
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# MASTER JSON â€” leitura e escrita por ativo
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ── Registro de fontes de dados ──────────────────────────────────────────────
+# Extensível: adicionar nova fonte = novo entry aqui + helper _check_*
+# tipo "laggeada"   → verifica apenas cache local, não tenta download
+# tipo "tempo_real" → tenta atualizar cache antes de responder
+
+_FONTES_DADOS = {
+    "cotahist": {"tipo": "laggeada",   "check": "_check_cotahist"},
+    "selic":    {"tipo": "laggeada",   "check": "_check_selic"},
+    "ohlcv":    {"tipo": "tempo_real", "check": "_check_ohlcv"},
+}
+
+
+def _check_cotahist(ticker: str, ano: int, mes: int) -> dict:
+    """
+    Verifica cache local apenas — não tenta download.
+    COTAHIST anual tem precedência sobre mensais.
+    """
+    # Tenta anual
+    txt_anual = os.path.join(COTAHIST_DIR, f"COTAHIST_A{ano}.TXT")
+    _min_mb = (carregar_config()["tape"]["min_cotahist_mb_antigo"]
+               if ano < carregar_config()["tape"]["ano_corte_cotahist"]
+               else MIN_COTAHIST_MB)
+    if _cache_ok(txt_anual, _min_mb):
+        return {
+            "disponivel": True,
+            "ultima_data": date(ano, 12, 31),
+            "motivo": None
+        }
+    # Tenta mensais — verifica se mês solicitado está presente
+    if mes:
+        txt_mensal = os.path.join(
+            COTAHIST_DIR, f"COTAHIST_M{mes:02d}{ano}.TXT")
+        if _cache_ok(txt_mensal, 1.0):
+            return {
+                "disponivel": True,
+                "ultima_data": date(ano, mes, 1),
+                "motivo": None
+            }
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": f"COTAHIST {ano}-{mes:02d} ausente no cache local — aguardar liberação B3"
+        }
+    # Sem mês específico — verifica se qualquer mensal do ano existe
+    for m in range(1, 13):
+        txt = os.path.join(COTAHIST_DIR, f"COTAHIST_M{m:02d}{ano}.TXT")
+        if _cache_ok(txt, 1.0):
+            return {
+                "disponivel": True,
+                "ultima_data": date(ano, m, 1),
+                "motivo": None
+            }
+    return {
+        "disponivel": False,
+        "ultima_data": None,
+        "motivo": f"COTAHIST {ano} ausente no cache local — aguardar liberação B3"
+    }
+
+
+def _check_selic(ticker: str, ano: int, mes: int) -> dict:
+    """
+    Verifica cache local apenas — não tenta download.
+    SELIC é série diária contínua em selic_historica.parquet.
+    """
+    if not os.path.exists(SELIC_CACHE):
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": "selic_historica.parquet ausente — executar _obter_selic() primeiro"
+        }
+    try:
+        df = pd.read_parquet(SELIC_CACHE)
+        df["data"] = pd.to_datetime(df["data"])
+        ultima = df["data"].max().date()
+        # Verifica se tem dados para o período solicitado
+        referencia = date(ano, mes if mes else 12, 1)
+        if ultima >= referencia:
+            return {
+                "disponivel": True,
+                "ultima_data": ultima,
+                "motivo": None
+            }
+        mes_str = f"{mes:02d}" if mes else "??"
+        return {
+            "disponivel": False,
+            "ultima_data": ultima,
+            "motivo": f"SELIC cache vai até {ultima} — período {ano}-{mes_str} não coberto"
+        }
+    except Exception as e:
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": f"selic_historica.parquet corrompido: {e}"
+        }
+
+
+def _check_ohlcv(ticker: str, ano: int, mes: int) -> dict:
+    """
+    Fonte tempo-real: tenta atualizar cache via yfinance antes de responder.
+    Retorna disponível se após tentativa de atualização há dados do período.
+    """
+    if not ticker:
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": "OHLCV requer ticker"
+        }
+    anos_necessarios = list(range(ano - 1, ano + 1))
+    try:
+        # tape_ohlcv já incrementa cache se desatualizado
+        df = tape_ohlcv(ticker, anos_necessarios)
+        if df.empty:
+            return {
+                "disponivel": False,
+                "ultima_data": None,
+                "motivo": f"OHLCV {ticker}: sem dados após tentativa de atualização"
+            }
+        ultima = df.index.max().date()
+        referencia = date(ano, mes if mes else 12, 1)
+        if ultima >= referencia:
+            return {
+                "disponivel": True,
+                "ultima_data": ultima,
+                "motivo": None
+            }
+        return {
+            "disponivel": False,
+            "ultima_data": ultima,
+            "motivo": f"OHLCV {ticker} vai até {ultima} — período {ano}-{mes if mes else '??'} não coberto"
+        }
+    except Exception as e:
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": f"OHLCV {ticker}: erro ao atualizar — {e}"
+        }
+
+
+def tape_verificar_dados(
+    fonte: str,
+    ticker: str = None,
+    ano: int = None,
+    mes: int = None
+) -> dict:
+    """
+    Interface unificada de verificação de disponibilidade de dados.
+
+    Parâmetros:
+        fonte:  "cotahist" | "selic" | "ohlcv" | qualquer fonte registrada em _FONTES_DADOS
+        ticker: obrigatório para "ohlcv", ignorado para "cotahist" e "selic"
+        ano:    ano do período a verificar (default: ano corrente)
+        mes:    mês do período a verificar (default: None — verifica o ano inteiro)
+
+    Retorna:
+        {
+            "disponivel":  bool,
+            "ultima_data": date | None,
+            "motivo":      str | None,   # preenchido se não disponível
+            "fonte":       str,
+            "tipo":        "laggeada" | "tempo_real"
+        }
+
+    Extensibilidade:
+        Para adicionar nova fonte: registrar em _FONTES_DADOS e implementar _check_<fonte>().
+        O contrato de retorno do helper deve ser {"disponivel", "ultima_data", "motivo"}.
+
+    Exemplos:
+        tape_verificar_dados("cotahist", ano=2026, mes=4)
+        tape_verificar_dados("selic", ano=2026, mes=3)
+        tape_verificar_dados("ohlcv", ticker="VALE3", ano=2026, mes=4)
+    """
+    if fonte not in _FONTES_DADOS:
+        return {
+            "disponivel": False,
+            "ultima_data": None,
+            "motivo": f"Fonte desconhecida: '{fonte}'. Registradas: {list(_FONTES_DADOS.keys())}",
+            "fonte": fonte,
+            "tipo": None
+        }
+
+    ano = ano or date.today().year
+    config_fonte = _FONTES_DADOS[fonte]
+
+    # Despacha para o helper correto
+    _check_fn_map = {
+        "_check_cotahist": _check_cotahist,
+        "_check_selic":    _check_selic,
+        "_check_ohlcv":    _check_ohlcv,
+    }
+    check_fn = _check_fn_map[config_fonte["check"]]
+    resultado = check_fn(ticker=ticker, ano=ano, mes=mes)
+
+    return {
+        **resultado,
+        "fonte": fonte,
+        "tipo":  config_fonte["tipo"]
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# MASTER JSON — leitura e escrita por ativo
+# ════════════════════════════════════════════════════════════════════
 
 def tape_carregar_ativo(ticker: str) -> dict:
     ticker = ticker.replace(".SA", "").upper()
@@ -152,7 +351,7 @@ def tape_carregar_ativo(ticker: str) -> dict:
             with open(path, "r") as f:
                 dados = json.load(f)
 
-            # MigraÃ§Ã£o â€” garante que todos os campos novos existam
+            # Migração — garante que todos os campos novos existam
             for key, val in default_config.items():
                 if key not in dados:
                     dados[key] = val
@@ -174,7 +373,7 @@ def tape_carregar_ativo(ticker: str) -> dict:
             return dados
 
         except Exception as e:
-            # S2 â€” backup antes de recriar JSON corrompido
+            # S2 — backup antes de recriar JSON corrompido
             import shutil
             ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
             bak = os.path.join(
@@ -182,17 +381,17 @@ def tape_carregar_ativo(ticker: str) -> dict:
                 f"{ticker}_corrupto_{ts}.json")
             try:
                 shutil.copy2(path, bak)
-                print(f"  âš  S2: {ticker}.json corrompido â€” "
+                print(f"  ⚠ S2: {ticker}.json corrompido — "
                       f"backup: {os.path.basename(bak)}")
             except Exception as e2:
-                print(f"  âš  S2: backup falhou: {e2}")
-            print(f"  âš  S2: recriando {ticker}.json â€” "
+                print(f"  ⚠ S2: backup falhou: {e2}")
+            print(f"  ⚠ S2: recriando {ticker}.json — "
                   f"erro: {e}")
             # Recria com defaults completos
             tape_salvar_ativo(ticker, default_config)
             return default_config
 
-    # Arquivo nÃ£o existe â€” cria com defaults completos
+    # Arquivo não existe — cria com defaults completos
     tape_salvar_ativo(ticker, default_config)
     print(f"  + Master JSON {ticker} criado com defaults")
     return default_config
@@ -200,8 +399,8 @@ def tape_carregar_ativo(ticker: str) -> dict:
 def tape_inicializar_ativo(ticker: str) -> dict:
     """
     Garante que o master JSON do ativo existe e tem todos os campos
-    obrigatÃ³rios preenchidos com valores padrÃ£o.
-    Idempotente â€” seguro chamar mÃºltiplas vezes.
+    obrigatórios preenchidos com valores padrão.
+    Idempotente — seguro chamar múltiplas vezes.
     """
     json_path = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
@@ -211,12 +410,12 @@ def tape_inicializar_ativo(ticker: str) -> dict:
             cfg = json.load(f)
     else:
         cfg = {}
-        print(f"  ~ {ticker}: master JSON nÃ£o encontrado â€” criando")
+        print(f"  ~ {ticker}: master JSON não encontrado — criando")
 
     cfg_global = carregar_config()
     alterado   = False
 
-    # â”€â”€ Campos obrigatÃ³rios com fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Campos obrigatórios com fallback ─────────────────────────
     defaults = {
         "ticker":       ticker,
         "take_profit":  cfg_global["fire"]["take_profit"],
@@ -277,17 +476,17 @@ def tape_inicializar_ativo(ticker: str) -> dict:
 
     if alterado:
         tape_salvar_ativo(ticker, cfg)
-        print(f"  âœ“ {ticker}: master JSON inicializado/atualizado")
+        print(f"  ✓ {ticker}: master JSON inicializado/atualizado")
     else:
-        print(f"  âœ“ {ticker}: master JSON OK")
+        print(f"  ✓ {ticker}: master JSON OK")
 
     return cfg
 
 def tape_salvar_ativo(ticker: str, cfg_data: dict) -> None:
     """
-    Salva master JSON de forma atÃ´mica.
-    Escreve em .tmp e faz os.replace() â€” evita JSON truncado
-    se a sessÃ£o for interrompida durante a escrita.
+    Salva master JSON de forma atômica.
+    Escreve em .tmp e faz os.replace() — evita JSON truncado
+    se a sessão for interrompida durante a escrita.
     SCAN-8: criticidade alta com reflect_state.
     """
     ticker = ticker.replace(".SA","").upper()
@@ -299,14 +498,14 @@ def tape_salvar_ativo(ticker: str, cfg_data: dict) -> None:
     with open(path_tmp, "w") as f:
         json.dump(cfg_data, f, indent=2,
                   ensure_ascii=False, default=str)
-    os.replace(path_tmp, path)  # atÃ´mico no mesmo filesystem
+    os.replace(path_tmp, path)  # atômico no mesmo filesystem
 
 
 def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
     ticker = ticker.replace(".SA", "").upper()
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
-    # LÃª estado atual usando carregador robusto
+    # Lê estado atual usando carregador robusto
     dados = tape_carregar_ativo(ticker)
 
     # Atualiza histórico
@@ -326,9 +525,9 @@ def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
     dados["historico"].sort(key=lambda x: x["ciclo_id"])
     dados["atualizado_em"] = str(datetime.now())[:19]
 
-    # B24 â€” escrita atÃ´mica via tempfile + os.replace
-    # Garante que o arquivo original sÃ³ Ã© substituÃ­do
-    # quando o novo estÃ¡ completamente escrito no disco.
+    # B24 — escrita atômica via tempfile + os.replace
+    # Garante que o arquivo original só é substituído
+    # quando o novo está completamente escrito no disco.
     dir_ = os.path.dirname(path)
     try:
         import tempfile
@@ -347,7 +546,7 @@ def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
                 os.remove(tmp_path)
         except Exception:
             pass
-        print(f"  âœ— B24: tape_salvar_ciclo falhou â€” {e}")
+        print(f"  ✗ B24: tape_salvar_ciclo falhou — {e}")
         raise
 
 def tape_regime_para_data(ticker: str, data: str) -> dict:
@@ -379,7 +578,7 @@ def tape_sizing_reflect(ticker: str) -> float:
     """
     Retorna multiplicador_sizing.
     EDGE multiplica sizing do ORBIT por este valor antes de passar ao FIRE.
-    FIRE nÃ£o conhece o REFLECT â€" recebe apenas o sizing final modulado.
+    FIRE não conhece o REFLECT — recebe apenas o sizing final modulado.
     """
     ticker = ticker.replace(".SA","").upper()
     cfg    = tape_carregar_ativo(ticker)
@@ -410,9 +609,9 @@ def tape_sizing_reflect(ticker: str) -> float:
     return sizing_map.get(reflect_state, 1.0)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# OHLCV â€” download e cache via yfinance
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
+# OHLCV — download e cache via yfinance
+# ════════════════════════════════════════════════════════════════════
 
 def tape_ohlcv(ativo: str, anos: list) -> pd.DataFrame:
     ativo      = ativo.replace(".SA","").upper()
@@ -426,21 +625,21 @@ def tape_ohlcv(ativo: str, anos: list) -> pd.DataFrame:
             df.index = pd.to_datetime(df.index)
             if (df.index.year.min() <= ano_ini and
                     df.index.year.max() >= ano_fim):
-                print(f"  âœ“ OHLCV cache {ativo}: "
+                print(f"  ✓ OHLCV cache {ativo}: "
                       f"{len(df):,} dias")
                 return df
         except Exception:
             pass
 
     ticker_yf = f"{ativo}.SA"
-    print(f"  Baixando OHLCV {ativo} ({ano_ini}â†’{ano_fim})...")
+    print(f"  Baixando OHLCV {ativo} ({ano_ini}→{ano_fim})...")
     try:
         raw = yf.Ticker(ticker_yf).history(
             start=f"{ano_ini}-01-01",
             end=f"{ano_fim}-12-31",
             auto_adjust=True)
         if raw.empty:
-            print(f"  âš  Sem dados para {ativo}")
+            print(f"  ⚠ Sem dados para {ativo}")
             return pd.DataFrame()
         raw.index = pd.to_datetime(raw.index).tz_localize(None)
         df = raw[["Open","High","Low","Close","Volume"]].copy()
@@ -454,10 +653,10 @@ def tape_ohlcv(ativo: str, anos: list) -> pd.DataFrame:
         df = df.dropna()
         df.to_parquet(cache_path)
         mb = os.path.getsize(cache_path)/1e6
-        print(f"  âœ“ OHLCV {ativo}: {len(df):,} dias | {mb:.2f} MB")
+        print(f"  ✓ OHLCV {ativo}: {len(df):,} dias | {mb:.2f} MB")
         return df
     except Exception as e:
-        print(f"  âœ— Falha OHLCV {ativo}: {e}")
+        print(f"  ✗ Falha OHLCV {ativo}: {e}")
         return pd.DataFrame()
 
 
@@ -474,12 +673,12 @@ def tape_ibov(anos: list) -> pd.Series:
             df.index = pd.to_datetime(df.index)
             if (df.index.year.min() <= ano_ini and
                     df.index.year.max() >= ano_fim):
-                print(f"  âœ“ IBOV cache: {len(df):,} dias")
+                print(f"  ✓ IBOV cache: {len(df):,} dias")
                 return df["close"]
         except Exception:
             pass
 
-    print(f"  Baixando IBOV ({ano_ini}â†’{ano_fim})...")
+    print(f"  Baixando IBOV ({ano_ini}→{ano_fim})...")
     try:
         raw = yf.Ticker(TICKER_IBOV).history(
             start=f"{ano_ini}-01-01",
@@ -488,17 +687,17 @@ def tape_ibov(anos: list) -> pd.Series:
         raw.index = pd.to_datetime(raw.index).tz_localize(None)
         s = raw["Close"]
         s.to_frame(name="close").to_parquet(cache_path)
-        print(f"  âœ“ IBOV: {len(s):,} dias")
+        print(f"  ✓ IBOV: {len(s):,} dias")
         return s
     except Exception as e:
-        print(f"  âš  Falha IBOV: {e}")
+        print(f"  ⚠ Falha IBOV: {e}")
         return pd.Series(dtype=float)
 
 
 def tape_serie_externa(nome: str, anos: list) -> pd.Series:
     mapa = {"usdbrl": "USDBRL=X", "minerio": "TIO=F"}
     if nome not in mapa:
-        print(f"  âš  SÃ©rie externa desconhecida: {nome}")
+        print(f"  ⚠ Série externa desconhecida: {nome}")
         return None
 
     ticker     = mapa[nome]
@@ -514,38 +713,38 @@ def tape_serie_externa(nome: str, anos: list) -> pd.Series:
             df.index = pd.to_datetime(df.index)
             if (df.index.year.min() <= ano_ini and
                     df.index.year.max() >= ano_fim):
-                print(f"  âœ“ Cache externa {nome}: {len(df):,} dias")
+                print(f"  ✓ Cache externa {nome}: {len(df):,} dias")
                 return (df["close"] if "close" in df.columns
                         else df.iloc[:, 0])
         except Exception:
             pass
 
-    print(f"  Baixando sÃ©rie externa {nome} ({ticker}) "
-          f"{ano_ini}â†’{ano_fim}...")
+    print(f"  Baixando série externa {nome} ({ticker}) "
+          f"{ano_ini}→{ano_fim}...")
     try:
         raw = yf.Ticker(ticker).history(
             start=f"{ano_ini}-01-01",
             end=f"{ano_fim}-12-31",
             auto_adjust=True)
         if raw.empty:
-            print(f"  âš  Sem dados para {nome}")
+            print(f"  ⚠ Sem dados para {nome}")
             return None
         raw.index = pd.to_datetime(raw.index).tz_localize(None)
         serie = (raw["Close"] if "Close" in raw.columns
                  else raw.iloc[:, 0])
         serie.to_frame(name="close").to_parquet(cache_path)
         mb = os.path.getsize(cache_path)/1e6
-        print(f"  âœ“ SÃ©rie externa {nome}: {len(serie):,} dias "
+        print(f"  ✓ Série externa {nome}: {len(serie):,} dias "
               f"| {mb:.2f} MB")
         return serie
     except Exception as e:
-        print(f"  âœ— Falha ao baixar {nome}: {e}")
+        print(f"  ✗ Falha ao baixar {nome}: {e}")
         return None
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 # SELIC
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 
 def _obter_selic(ano_ini, ano_fim):
     df_cache = pd.DataFrame()
@@ -560,8 +759,8 @@ def _obter_selic(ano_ini, ano_fim):
                     (df_cache["data"].dt.year >= ano_ini) &
                     (df_cache["data"].dt.year <= ano_fim)
                 ].copy()
-                print(f"  âœ“ SELIC cache: {len(df):,} dias "
-                      f"({ano_ini}â†’{ano_fim})")
+                print(f"  ✓ SELIC cache: {len(df):,} dias "
+                      f"({ano_ini}→{ano_fim})")
                 return df
         except Exception:
             df_cache = pd.DataFrame()
@@ -572,7 +771,7 @@ def _obter_selic(ano_ini, ano_fim):
            f"&dataInicial=01/01/{ano_bcb_ini}"
            f"&dataFinal=31/12/{ano_bcb_fim}")
 
-    print(f"  Obtendo SELIC BCB ({ano_bcb_ini}â†’{ano_bcb_fim})...")
+    print(f"  Obtendo SELIC BCB ({ano_bcb_ini}→{ano_bcb_fim})...")
     try:
         req = urllib.request.Request(
             url, headers={"User-Agent": "python-requests/2.28.0"})
@@ -601,14 +800,14 @@ def _obter_selic(ano_ini, ano_fim):
             df_total = df_novo
 
         df_total.to_parquet(SELIC_CACHE, index=False)
-        print(f"  âœ“ SELIC: {len(df_total):,} dias")
+        print(f"  ✓ SELIC: {len(df_total):,} dias")
         return df_total[
             (df_total["data"].dt.year >= ano_ini) &
             (df_total["data"].dt.year <= ano_fim)
         ].copy()
 
     except Exception as e:
-        print(f"  âš  BCB indisponÃ­vel ({e}) â€” fallback diÃ¡rio")
+        print(f"  ⚠ BCB indisponível ({e}) — fallback diário")
         rows = []
         for ano, selic_aa in SELIC_HISTORICA.items():
             if ano_bcb_ini <= ano <= ano_bcb_fim:
@@ -620,7 +819,7 @@ def _obter_selic(ano_ini, ano_fim):
                  .sort_values("data")
                  .reset_index(drop=True))
         df_fb.to_parquet(SELIC_CACHE, index=False)
-        print(f"  âœ“ SELIC fallback: {len(df_fb):,} dias Ãºteis")
+        print(f"  ✓ SELIC fallback: {len(df_fb):,} dias úteis")
         return df_fb[
             (df_fb["data"].dt.year >= ano_ini) &
             (df_fb["data"].dt.year <= ano_fim)
@@ -643,9 +842,9 @@ def _selic_array(datas, df_selic):
     return np.array(result)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 # BLACK-SCHOLES VETORIZADO
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 
 def _calcular_iv_lote(pm, S, K, T, r, tipos):
     S,K,T,r,pm = (np.asarray(x,dtype=float)
@@ -711,9 +910,9 @@ def _gregas_vetorizadas(S, K, T, r, sigma, tipos):
     }
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 # COTAHIST
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
 
 def _cache_ok(path, min_mb):
     if not os.path.exists(path):
@@ -723,40 +922,40 @@ def _cache_ok(path, min_mb):
     except OSError:
         return False
     if min_mb > 0 and mb < min_mb:
-        print(f"  âš  Cache suspeito: {os.path.basename(path)} "
-              f"({mb:.1f}MB < {min_mb}MB) â€” recalculando")
+        print(f"  ⚠ Cache suspeito: {os.path.basename(path)} "
+              f"({mb:.1f}MB < {min_mb}MB) — recalculando")
         return False
     if mb == 0:
-        print(f"  âš  Cache vazio: {os.path.basename(path)} â€” recalculando")
+        print(f"  ⚠ Cache vazio: {os.path.basename(path)} — recalculando")
         return False
     return True
 
 def _cache_valido(path_parquet, min_linhas=50):
     """
-    Verifica se o cache parquet Ã© vÃ¡lido.
-    Retorna True se vÃ¡lido, False se deve recalcular.
+    Verifica se o cache parquet é válido.
+    Retorna True se válido, False se deve recalcular.
     """
     try:
         df = pd.read_parquet(path_parquet)
 
-        # Verifica estrutura mÃ­nima
+        # Verifica estrutura mínima
         colunas_obrigatorias = [
             "data", "ticker", "tipo", "strike",
             "fechamento", "delta", "iv", "T"
         ]
         if not all(c in df.columns for c in colunas_obrigatorias):
-            print(f"  âš  Cache suspeito: colunas faltando â€” recalculando")
+            print(f"  ⚠ Cache suspeito: colunas faltando — recalculando")
             return False
 
-        # Verifica volume mÃ­nimo de dados
+        # Verifica volume mínimo de dados
         if len(df) < min_linhas:
-            print(f"  âš  Cache suspeito: {len(df)} linhas < {min_linhas} â€” recalculando")
+            print(f"  ⚠ Cache suspeito: {len(df)} linhas < {min_linhas} — recalculando")
             return False
 
         return True
 
     except Exception as e:
-        print(f"  âš  Cache corrompido: {e} â€” recalculando")
+        print(f"  ⚠ Cache corrompido: {e} — recalculando")
         return False
 
 
@@ -768,7 +967,7 @@ def _parse_preco(s):
     return 0.0 if not s or s == "0"*len(s) else int(s)/100.0
 
 def _parse_preco_eod(s):
-    """Converte strike do formato EOD: '7896' â†’ 78.96"""
+    """Converte strike do formato EOD: '7896' → 78.96"""
     try:
         return float(str(s).strip()) / 100.0
     except (ValueError, TypeError):
@@ -790,8 +989,8 @@ def _detectar_ativo_base(codneg, ativos):
         return "BOVA11"
     return None
 
-# DELTA CHAOS â€” TAPE patch â€” _baixar_cotahist com suporte a mensais
-# Substitui a funÃ§Ã£o _baixar_cotahist integralmente
+# DELTA CHAOS — TAPE patch — _baixar_cotahist com suporte a mensais
+# Substitui a função _baixar_cotahist integralmente
 
 def _baixar_cotahist(ano, forcar=False):
     from datetime import date as _date
@@ -801,13 +1000,13 @@ def _baixar_cotahist(ano, forcar=False):
                  if ano < carregar_config()["tape"]["ano_corte_cotahist"]
                  else MIN_COTAHIST_MB)
 
-    # â”€â”€ Anual em cache vÃ¡lido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Anual em cache válido ─────────────────────────────────────
     if not forcar and _cache_ok(txt_anual, _min_mb):
         print(f"  Cache COTAHIST {ano}: "
               f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
         return [txt_anual]
 
-    # â”€â”€ Tenta baixar o anual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Tenta baixar o anual ──────────────────────────────────────
     url_anual = f"{COTAHIST_URL}/COTAHIST_A{ano}.ZIP"
     try:
         with urllib.request.urlopen(
@@ -833,24 +1032,24 @@ def _baixar_cotahist(ano, forcar=False):
                         os.remove(txt_anual)
                     os.rename(ext, txt_anual)
                 if _cache_ok(txt_anual, _min_mb):
-                    print(f"  âœ“ COTAHIST {ano}: "
+                    print(f"  ✓ COTAHIST {ano}: "
                           f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
                     return [txt_anual]
 
     except Exception:
-        pass  # anual indisponÃ­vel â€” tenta mensais abaixo
+        pass  # anual indisponível — tenta mensais abaixo
 
-    # â”€â”€ Anual indisponÃ­vel â€” mensais apenas para ano corrente â”€â”€â”€â”€â”€
+    # ── Anual indisponível — mensais apenas para ano corrente ─────
     ano_atual = _date.today().year
     mes_atual = _date.today().month
 
     if ano != ano_atual:
-        print(f"  âœ— COTAHIST {ano}: anual indisponÃ­vel "
-              f"e nÃ£o Ã© ano corrente â€” pulando")
+        print(f"  ✗ COTAHIST {ano}: anual indisponível "
+              f"e não é ano corrente — pulando")
         return []
 
-    print(f"  COTAHIST {ano}: anual indisponÃ­vel "
-          f"â€” baixando mensais 01 a {mes_atual:02d}...")
+    print(f"  COTAHIST {ano}: anual indisponível "
+          f"— baixando mensais 01 a {mes_atual:02d}...")
     txts_mensais = []
 
     for mes in range(1, mes_atual + 1):
@@ -890,8 +1089,8 @@ def _baixar_cotahist(ano, forcar=False):
                 txts = [n for n in z.namelist()
                         if n.upper().endswith(".TXT")]
                 if not txts:
-                    print(f"  âš  COTAHIST {ano}-{mes:02d}: "
-                          f"ZIP sem TXT â€” pulando")
+                    print(f"  ⚠ COTAHIST {ano}-{mes:02d}: "
+                          f"ZIP sem TXT — pulando")
                     continue
                 z.extract(txts[0], COTAHIST_DIR)
                 ext = os.path.join(COTAHIST_DIR, txts[0])
@@ -901,15 +1100,15 @@ def _baixar_cotahist(ano, forcar=False):
                     os.rename(ext, txt_path)
 
             mb = os.path.getsize(txt_path) / 1e6
-            print(f"  âœ“ COTAHIST {ano}-{mes:02d}: {mb:.0f} MB")
+            print(f"  ✓ COTAHIST {ano}-{mes:02d}: {mb:.0f} MB")
             txts_mensais.append(txt_path)
 
         except Exception as e:
-            print(f"  âœ— COTAHIST {ano}-{mes:02d}: {e} â€” pulando")
+            print(f"  ✗ COTAHIST {ano}-{mes:02d}: {e} — pulando")
 
     return txts_mensais
 
-print("âœ“ _baixar_cotahist atualizado â€” suporte a mensais para ano corrente")
+print("✓ _baixar_cotahist atualizado — suporte a mensais para ano corrente")
 
 def _ler_cotahist(txt_path, ativos, anos=None):
     registros = []
@@ -945,7 +1144,7 @@ def _ler_cotahist(txt_path, ativos, anos=None):
                                  if eh_opcao else None),
                 "vencimento":   (_parse_data(linha[202:210])
                                  if eh_opcao else None),
-                # open_interest adicionado â€” necessÃ¡rio para GEX/REFLECT
+                # open_interest adicionado — necessário para GEX/REFLECT
                 "open_interest": (int(linha[210:223].strip() or 0)
                                   if eh_opcao else None),
             })
@@ -977,7 +1176,7 @@ def _enriquecer(df, df_selic):
     df_enr = df_enr[df_enr["T"]>0].reset_index(drop=True)
     if df_enr.empty: return pd.DataFrame()
     n = len(df_enr)
-    print(f"    {n:,} opÃ§Ãµes â€” calculando IV e gregas...")
+    print(f"    {n:,} opções — calculando IV e gregas...")
     r_arr = _selic_array(df_enr["data"].values, df_selic)
     S     = df_enr["preco_acao"].values
     K     = df_enr["strike"].values
@@ -1012,22 +1211,22 @@ def _enriquecer(df, df_selic):
     df_enr["schema_version"]  = SCHEMA_VERSION
     df_enr["fonte"]           = "backtest"
     pct = np.isfinite(ivs).mean() * 100
-    print(f"    âœ“ IV convergiu em {pct:.1f}% | "
-          f"delta mÃ©dio: {df_enr['delta'].mean():.4f}")
+    print(f"    ✓ IV convergiu em {pct:.1f}% | "
+          f"delta médio: {df_enr['delta'].mean():.4f}")
     return df_enr
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# REFLECT â€” funÃ§Ãµes auxiliares privadas
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
+# REFLECT — funções auxiliares privadas
+# ════════════════════════════════════════════════════════════════════
 
 def _calcular_zscore_rolling(series: pd.Series,
                               window: int) -> pd.Series:
     """
     Z-score rolling.
     SCAN-1: min_periods = max(3, window//2) para evitar z-scores
-    instÃ¡veis com 1-2 amostras nos primeiros ciclos.
-    Retorna 0.0 onde nÃ£o hÃ¡ dados suficientes â€” sinalizado no log.
+    instáveis com 1-2 amostras nos primeiros ciclos.
+    Retorna 0.0 onde não há dados suficientes — sinalizado no log.
     """
     if series.empty:
         return pd.Series(dtype=float)
@@ -1041,7 +1240,7 @@ def _calcular_zscore_rolling(series: pd.Series,
     z = (series - rolling_mean) / rolling_std
     n_nan = z.isna().sum()
     if n_nan > 0:
-        pass  # ciclos iniciais sem dados suficientes â€” normal
+        pass  # ciclos iniciais sem dados suficientes — normal
     return z.fillna(0.0)
 
 
@@ -1058,10 +1257,10 @@ def _get_vencimento_referencia(df_options: pd.DataFrame):
 def _calculate_gex(df_options_filtered: pd.DataFrame,
                    preco_acao: float) -> float:
     """
-    Gamma Exposure (dado auxiliar de diagnÃ³stico).
-    NÃ£o entra na fÃ³rmula do score â€” armazenado no daily_history
-    para anÃ¡lise futura.
-    ConvenÃ§Ã£o: calls positivo, puts negativo (perspectiva do dealer).
+    Gamma Exposure (dado auxiliar de diagnóstico).
+    Não entra na fórmula do score — armazenado no daily_history
+    para análise futura.
+    Convenção: calls positivo, puts negativo (perspectiva do dealer).
     """
     if df_options_filtered.empty or preco_acao <= 0:
         return 0.0
@@ -1077,7 +1276,7 @@ def _process_eod_options_data(df_eod_raw: pd.DataFrame,
                                data: str) -> pd.DataFrame:
     """
     Filtra e prepara dados do arquivo EOD para o REFLECT.
-    Aplica: conversÃ£o de strikes, filtro NaN, filtro 20% ATM.
+    Aplica: conversão de strikes, filtro NaN, filtro 20% ATM.
     """
     column_map = {
         "ticker":        "ticker",
@@ -1094,12 +1293,12 @@ def _process_eod_options_data(df_eod_raw: pd.DataFrame,
         columns={k: v for k, v in column_map.items()
                  if k in df_eod_raw.columns})
 
-    # Normaliza tipo: C/P â†’ CALL/PUT
+    # Normaliza tipo: C/P → CALL/PUT
     if "tipo" in df.columns:
         df["tipo"] = (df["tipo"].astype(str).str.upper()
                       .replace({"C": "CALL", "P": "PUT"}))
 
-    # Converte strikes: 7896 â†’ 78.96
+    # Converte strikes: 7896 → 78.96
     if "strike" in df.columns:
         df["strike"] = df["strike"].apply(_parse_preco_eod)
 
@@ -1112,7 +1311,7 @@ def _process_eod_options_data(df_eod_raw: pd.DataFrame,
     df["T"] = ((df["vencimento"] - df["data"]).dt.days / 365.0
                if "vencimento" in df.columns else np.nan)
 
-    # PreÃ§o da aÃ§Ã£o do dia via OHLCV cache
+    # Preço da ação do dia via OHLCV cache
     current_year = pd.to_datetime(data).year
     df_ohlcv = tape_ohlcv(ativo_base, [current_year - 1, current_year])
     data_ts  = pd.to_datetime(data)
@@ -1123,11 +1322,11 @@ def _process_eod_options_data(df_eod_raw: pd.DataFrame,
             preco_acao = float(subset.iloc[-1])
 
     if preco_acao is None or preco_acao <= 0:
-        print(f"  âš  Sem preco_acao para {ativo_base} em {data} "
-              f"â€” EOD ignorado")
+        print(f"  ⚠ Sem preco_acao para {ativo_base} em {data} "
+              f"— EOD ignorado")
         return pd.DataFrame()
 
-    # Filtros de qualidade mÃ­nima
+    # Filtros de qualidade mínima
     required = ["strike", "fechamento", "T",
                 "delta", "gamma", "iv", "open_interest"]
     for col in required:
@@ -1159,18 +1358,18 @@ def _calculate_divergence_components(
         ativo_base: str,
         data: str) -> dict:
     """
-    Calcula os dois ratios de divergÃªncia bidirecional.
+    Calcula os dois ratios de divergência bidirecional.
 
     Ratio 1 (iv_prem_ratio):
-      IV implÃ­cita ponderada por OI / prÃªmio mÃ©dio ponderado por OI.
+      IV implícita ponderada por OI / prêmio médio ponderado por OI.
       Sobe quando o mercado precifica mais risco do que o sistema captura.
 
     Ratio 2 (ret_vol_ratio):
-      Retorno diÃ¡rio realizado / (IV_anualizada / sqrt(252)).
-      Sobe quando o ativo se move mais do que a IV previa â€”
-      o sistema estÃ¡ vendendo vol estruturalmente barata.
+      Retorno diário realizado / (IV_anualizada / sqrt(252)).
+      Sobe quando o ativo se move mais do que a IV previa —
+      o sistema está vendendo vol estruturalmente barata.
 
-    SCAN-3: proteÃ§Ã£o explÃ­cita contra divisÃ£o por zero em ret_vol_ratio.
+    SCAN-3: proteção explícita contra divisão por zero em ret_vol_ratio.
     """
     if df_options.empty:
         return {"iv_prem_ratio": np.nan, "ret_vol_ratio": np.nan}
@@ -1210,7 +1409,7 @@ def _calculate_divergence_components(
             preco_anterior = float(subset.iloc[-2])
             if preco_anterior > 0:
                 retorno_diario = preco_hoje / preco_anterior - 1.0
-                # SCAN-3: proteÃ§Ã£o divisÃ£o por zero
+                # SCAN-3: proteção divisão por zero
                 iv_diaria = iv_pond / math.sqrt(252)
                 if iv_diaria > 1e-8:
                     ret_vol_ratio = retorno_diario / iv_diaria
@@ -1219,13 +1418,13 @@ def _calculate_divergence_components(
             "ret_vol_ratio": ret_vol_ratio}
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# REFLECT â€” interface pÃºblica
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
+# REFLECT — interface pública
+# ════════════════════════════════════════════════════════════════════
 
 def tape_process_eod_file(filepath: str) -> None:
     """
-    Ponto de entrada para arquivos EOD de opÃ§Ãµes.
+    Ponto de entrada para arquivos EOD de opções.
     Chama tape_reflect_daily para cada ativo encontrado no arquivo.
     """
     print(f"\n  Processando EOD: {os.path.basename(filepath)}")
@@ -1235,10 +1434,10 @@ def tape_process_eod_file(filepath: str) -> None:
         elif filepath.endswith(".csv"):
             df_raw = pd.read_csv(filepath)
         else:
-            print(f"  âš  Formato nÃ£o suportado: {filepath}")
+            print(f"  ⚠ Formato não suportado: {filepath}")
             return
     except Exception as e:
-        print(f"  âœ— Erro ao ler {filepath}: {e}")
+        print(f"  ✗ Erro ao ler {filepath}: {e}")
         return
 
     # Extrai data do nome do arquivo (formato: ..._YYYY-MM-DD.xlsx)
@@ -1250,18 +1449,18 @@ def tape_process_eod_file(filepath: str) -> None:
     except ValueError:
         data_ref = date.today().strftime("%Y-%m-%d")
 
-    # InferÃªncia de ativo base
+    # Inferência de ativo base
     if "ativo_base" not in df_raw.columns:
         if "ticker" not in df_raw.columns:
-            print("  âš  Coluna 'ticker' nÃ£o encontrada no EOD")
+            print("  ⚠ Coluna 'ticker' não encontrada no EOD")
             return
-        # SCAN-7 (limitaÃ§Ã£o conhecida): funciona para ativos de 4 chars
+        # SCAN-7 (limitação conhecida): funciona para ativos de 4 chars
         # Registrar quando universo expandir para ativos de 5 chars
         unique_bases = df_raw["ticker"].astype(str).str[:4].unique()
         if len(unique_bases) == 1:
             df_raw["ativo_base"] = unique_bases[0]
         else:
-            print("  âš  MÃºltiplos ativos base no EOD â€” "
+            print("  ⚠ Múltiplos ativos base no EOD — "
                   "adicione coluna 'ativo_base'")
             return
 
@@ -1272,7 +1471,7 @@ def tape_process_eod_file(filepath: str) -> None:
         if not df_proc.empty:
             tape_reflect_daily(ativo, data_ref, df_proc)
         else:
-            print(f"  ~ {ativo}: sem dados vÃ¡lidos em {data_ref}")
+            print(f"  ~ {ativo}: sem dados válidos em {data_ref}")
 
 
 def tape_reflect_daily(ativo: str,
@@ -1280,7 +1479,7 @@ def tape_reflect_daily(ativo: str,
                         df_eod: pd.DataFrame) -> None:
     """
     Calcula e armazena componentes brutos do REFLECT para um dia.
-    O estado definitivo Ã© calculado em tape_reflect_cycle.
+    O estado definitivo é calculado em tape_reflect_cycle.
     """
     cfg = tape_carregar_ativo(ativo)
 
@@ -1293,15 +1492,15 @@ def tape_reflect_daily(ativo: str,
     if "reflect_daily_history" not in cfg:
         cfg["reflect_daily_history"] = {}
 
-    # NÃ£o sobrescreve se jÃ¡ existe entrada para este dia
+    # Não sobrescreve se já existe entrada para este dia
     if data not in cfg["reflect_daily_history"]:
         cfg["reflect_daily_history"][data] = {
             "iv_prem_ratio": div["iv_prem_ratio"],
             "ret_vol_ratio": div["ret_vol_ratio"],
-            "gex":           gex,  # dado auxiliar, nÃ£o entra no score
+            "gex":           gex,  # dado auxiliar, não entra no score
         }
-        print(f"  âœ“ REFLECT diÃ¡rio {ativo} {data}: "
-              f"IV/PrÃªmio={div['iv_prem_ratio']:.4f}  "
+        print(f"  ✓ REFLECT diário {ativo} {data}: "
+              f"IV/Prêmio={div['iv_prem_ratio']:.4f}  "
               f"Ret/Vol={div['ret_vol_ratio']:.4f}")
 
     tape_salvar_ativo(ativo, cfg)
@@ -1313,8 +1512,8 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     Chamado pelo EDGE no fechamento de cada ciclo.
 
     Componentes:
-      1. AceleraÃ§Ã£o: derivada segunda do score_vel do ORBIT
-      2. DivergÃªncia bidirecional: mÃ©dia(iv_prem + ret_vol) normalizados
+      1. Aceleração: derivada segunda do score_vel do ORBIT
+      2. Divergência bidirecional: média(iv_prem + ret_vol) normalizados
       3. Delta_IR: IR de curto prazo minus IR de longo prazo
     """
     cfg          = tape_carregar_ativo(ativo)
@@ -1337,7 +1536,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     if not ciclo_existe_orbit:
         causa_provisorio = "ORBIT desatualizado — ciclo atual ausente no master JSON"
 
-    # â”€â”€ 1. AceleraÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 1. Aceleração ─────────────────────────────────────────────
     historico_df = pd.DataFrame(cfg.get("historico", []))
     aceleracao   = np.nan
     if not historico_df.empty and "ciclo_id" in historico_df.columns:
@@ -1355,7 +1554,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
                     "score_vel", 0.0))
                 aceleracao = sv_atual - sv_ant
 
-    # â”€â”€ 2. DivergÃªncia bidirecional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 2. Divergência bidirecional ───────────────────────────────
     daily_hist = cfg.get("reflect_daily_history", {})
     daily_df   = pd.DataFrame.from_dict(daily_hist, orient="index")
 
@@ -1372,7 +1571,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
                 ret_vol_avg = float(
                     df_ciclo["ret_vol_ratio"].mean())
         except Exception as e:
-            print(f"  âš  REFLECT divergÃªncia {ativo} {ciclo_id}: {e}")
+            print(f"  ⚠ REFLECT divergência {ativo} {ciclo_id}: {e}")
 
     # ── Verificação Causa 2: EOD não processado (componente 2 zerado) ──
     if causa_provisorio is None:
@@ -1383,7 +1582,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         if not eod_processado:
             causa_provisorio = "EOD não processado — componente 2 zerado"
 
-    # â”€â”€ 3. Delta_IR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 3. Delta_IR ───────────────────────────────────────────────
     delta_ir = np.nan
     if not historico_df.empty and len(historico_df) >= delta_ir_long_window:
         try:
@@ -1397,10 +1596,10 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
                     idx + 1]["ir"].mean())
                 delta_ir = ir_short - ir_long
         except Exception as e:
-            print(f"  âš  REFLECT delta_ir {ativo} {ciclo_id}: {e}")
+            print(f"  ⚠ REFLECT delta_ir {ativo} {ciclo_id}: {e}")
 
-    # â”€â”€ NormalizaÃ§Ã£o via z-score rolling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # ConstrÃ³i sÃ©rie histÃ³rica acumulada para z-score
+    # ── Normalização via z-score rolling ──────────────────────────
+    # Constrói série histórica acumulada para z-score
     all_hist = cfg.get("reflect_all_cycles_history", [])
     entrada_atual = {
         "ciclo_id":        ciclo_id,
@@ -1411,7 +1610,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         "delta_ir":        delta_ir,
     }
 
-    # SCAN-5 CORRIGIDO: deduplicaÃ§Ã£o por ciclo_id (nÃ£o date_ref)
+    # SCAN-5 CORRIGIDO: deduplicação por ciclo_id (não date_ref)
     all_hist_limpo = [e for e in all_hist
                       if e.get("ciclo_id") != ciclo_id]
     all_hist_limpo.append(entrada_atual)
@@ -1442,13 +1641,13 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
         norm_dir = 0.0
     norm_delta_ir = _zscore_ultimo("delta_ir")
 
-    # â”€â”€ Score ponderado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Score ponderado ───────────────────────────────────────────
     w = _cfg_reflect["weights"]
     reflect_score = (norm_acel      * w["aceleracao"] +
                      norm_dir       * w["divergencia"] +
                      norm_delta_ir  * w["delta_ir"])
 
-    # â”€â”€ Estado Aâ€“E â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Estado A–E ────────────────────────────────────────────────
     thr = _cfg_reflect["thresholds"]
     if reflect_score >= thr["A"]:
         state = "A"
@@ -1479,7 +1678,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     cfg["reflect_state"] = state
     cfg["reflect_score"] = float(reflect_score)
 
-    # HistÃ³rico de estados para dashboard (N mais recentes)
+    # Histórico de estados para dashboard (N mais recentes)
     hist_entry = {
         "ciclo_id":   ciclo_id,
         "date":       str(datetime.now())[:10],
@@ -1495,7 +1694,7 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
     reflect_hist.sort(key=lambda x: x.get("ciclo_id",""))
     cfg["reflect_history"] = reflect_hist
 
-    # HistÃ³rico completo de ciclos (para z-score futuro)
+    # Histórico completo de ciclos (para z-score futuro)
     entrada_completa = {
         **entrada_atual,
         "norm_aceleracao": norm_acel,
@@ -1521,31 +1720,31 @@ def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
             if pd.to_datetime(k).to_period("M") != pd.Period(ciclo_id)
         }
     except Exception as e:
-        print(f"  âš  REFLECT limpeza daily_history {ativo}: {e}")
+        print(f"  ⚠ REFLECT limpeza daily_history {ativo}: {e}")
 
     tape_salvar_ativo(ativo, cfg)
     print(f"  OK REFLECT ciclo {ativo} {ciclo_id}: "
           f"Edge {state}  Score={reflect_score:+.4f}")
 
 
-    # PendÃªncia crÃ­tica â€” protocolo de retomada apÃ³s estado E
-    # nÃ£o estÃ¡ definido. Retomada Ã© processo manual com protocolo
+    # Pendência crítica — protocolo de retomada após estado E
+    # não está definido. Retomada é processo manual com protocolo
     # a ser definido pelo board antes do paper trading.
     # SCAN item aberto: definir tape_reflect_reset_e(ticker)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# INTERFACE PÃšBLICA
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════
+# INTERFACE PÚBLICA
+# ════════════════════════════════════════════════════════════════════
 
 def tape_backtest(ativos, anos, forcar=False):
     ativos = [a.replace(".SA","").upper() for a in ativos]
-    print(f"\n{'â•'*60}")
+    print(f"\n{'═'*60}")
     print(f"  TAPE.backtest")
     print(f"  Ativos:  {ativos}")
     print(f"  Anos:    {anos}")
     print(f"  Cache:   {TAPE_DIR}")
-    print(f"{'â•'*60}")
+    print(f"{'═'*60}")
     df_selic = _obter_selic(min(anos), max(anos))
     frames   = []
     total    = len(anos) * len(ativos)
@@ -1571,15 +1770,15 @@ def tape_backtest(ativos, anos, forcar=False):
                     if not forcar and _cache_ok(
                             cache, _min_gregas):
                         mb = os.path.getsize(cache) / 1e6
-                        print(f"\n  âœ“ {ativo} {ano} "
+                        print(f"\n  ✓ {ativo} {ano} "
                               f"cache ({mb:.1f} MB)")
                         try:
                             frames.append(
                                 pd.read_parquet(cache))
                         except Exception as e:
-                            print(f"\n  âš  {ativo} {ano} "
+                            print(f"\n  ⚠ {ativo} {ano} "
                                   f"cache corrompido: {e} "
-                                  f"â€” reprocessando")
+                                  f"— reprocessando")
                             os.remove(cache)
                         else:
                             pbar.update(1)
@@ -1589,14 +1788,14 @@ def tape_backtest(ativos, anos, forcar=False):
                         df_raw = _ler_cotahist(
                             txt, [ativo], [ano])
                     except Exception as e:
-                        print(f"\n  âš  {ativo} {ano} "
-                              f"erro COTAHIST: {e} â€” pulando")
+                        print(f"\n  ⚠ {ativo} {ano} "
+                              f"erro COTAHIST: {e} — pulando")
                         pbar.update(1)
                         continue
 
                     if df_raw.empty:
                         print(f"\n  ~ {ativo} {ano}: "
-                              f"sem dados â€” pulando")
+                              f"sem dados — pulando")
                         pbar.update(1)
                         continue
 
@@ -1604,55 +1803,55 @@ def tape_backtest(ativos, anos, forcar=False):
                         ["CALL","PUT"])).sum()
                     if n_op == 0:
                         print(f"\n  ~ {ativo} {ano}: "
-                              f"sem opÃ§Ãµes â€” pulando")
+                              f"sem opções — pulando")
                         pbar.update(1)
                         continue
 
                     print(f"\n  {ativo} {ano}: "
-                          f"{n_op:,} opÃ§Ãµes")
+                          f"{n_op:,} opções")
 
                     try:
                         df_enr = _enriquecer(
                             df_raw, df_selic)
                     except Exception as e:
-                        print(f"\n  âš  {ativo} {ano} "
+                        print(f"\n  ⚠ {ativo} {ano} "
                               f"erro enriquecimento: {e} "
-                              f"â€” pulando")
+                              f"— pulando")
                         pbar.update(1)
                         continue
 
                     if df_enr.empty:
                         print(f"\n  ~ {ativo} {ano}: "
-                              f"enriquecimento vazio â€” pulando")
+                              f"enriquecimento vazio — pulando")
                         pbar.update(1)
                         continue
 
                     try:
                         df_enr.to_parquet(
                             cache, index=False)
-                        print(f"  âœ“ Salvo: "
+                        print(f"  ✓ Salvo: "
                               f"{os.path.basename(cache)} "
                               f"({os.path.getsize(cache)/1e6:.1f} MB)")
                     except Exception as e:
-                        print(f"  âš  Falha cache {ativo} "
+                        print(f"  ⚠ Falha cache {ativo} "
                               f"{ano}: {e}")
 
                     frames.append(df_enr)
                     pbar.update(1)
 
     if not frames:
-        print("  âœ— Nenhum dado.")
+        print("  ✗ Nenhum dado.")
         return pd.DataFrame()
     df = pd.concat(frames, ignore_index=True)
-    print(f"\n  âœ“ ConcluÃ­do: {len(df):,} registros")
+    print(f"\n  ✓ Concluído: {len(df):,} registros")
     return df
 
-print("âœ“ tape_backtest atualizado â€” loop COTAHIST via lista")
+print("✓ tape_backtest atualizado — loop COTAHIST via lista")
 
 def tape_paper(ativo, filepath, preco_acao=None, data=None):
     ativo = ativo.replace(".SA","").upper()
     data  = data or str(date.today())
-    print(f"  TAPE.paper: {ativo} â€” {filepath}")
+    print(f"  TAPE.paper: {ativo} — {filepath}")
 
     try:
         df_raw = pd.read_excel(filepath, header=1)
@@ -1662,10 +1861,10 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
                 filepath, sep=";",
                 encoding="latin-1", header=1)
         except Exception as e2:
-            print(f"  âœ— {e2}")
+            print(f"  ✗ {e2}")
             return pd.DataFrame()
 
-    # Normaliza nomes â€” remove \xa0, espaÃ§os, caracteres especiais
+    # Normaliza nomes — remove \xa0, espaços, caracteres especiais
     df_raw.columns = [
         str(c).strip()
         .replace("\xa0","")
@@ -1689,22 +1888,22 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
     mapa = {
         "ticker":           "ticker",
         "vencimento":       "vencimento",
-        "dias_Ãºteis":       "dias_uteis",
+        "dias_úteis":       "dias_uteis",
         "dias_uteis":       "dias_uteis",
         "tipo":             "tipo",
         "strike":           "strike",
         "a_i_otm":          "moneyness",
         "dist__pct_do_strike": "dist_strike",
-        "Ãºltimo":           "fechamento",
+        "último":           "fechamento",
         "ultimo":           "fechamento",
         "delta":            "delta",
         "gamma":            "gamma",
         "theta_":           "theta",
         "vega":             "vega",
         "vol_financeiro":   "volume",
-        "lanÃ§":             "lancamentos",
+        "lanç":             "lancamentos",
         "tit":              "open_interest",
-        "nÃºm_de_neg":       "n_negocios",
+        "núm_de_neg":       "n_negocios",
         "num_de_neg":       "n_negocios",
     }
 
@@ -1727,14 +1926,14 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
                str(t)[4].upper() in letras_call
             else "PUT")
 
-    # Strike â€” estÃ¡ em centavos (13700 = R$137,00)
+    # Strike — está em centavos (13700 = R$137,00)
     if "strike" in df_raw.columns:
         df_raw["strike"] = pd.to_numeric(
             df_raw["strike"], errors="coerce")
         if df_raw["strike"].median() > 1000:
             df_raw["strike"] = df_raw["strike"] / 100
 
-    # Fechamento â€” estÃ¡ em centavos (3610 = R$36,10)
+    # Fechamento — está em centavos (3610 = R$36,10)
     if "fechamento" in df_raw.columns:
         df_raw["fechamento"] = pd.to_numeric(
             df_raw["fechamento"].astype(str)
@@ -1742,7 +1941,7 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
         if df_raw["fechamento"].median() > 100:
             df_raw["fechamento"] = df_raw["fechamento"] / 100
 
-    # Volume â€” usa lanÃ§amentos como proxy
+    # Volume — usa lançamentos como proxy
     if "volume" not in df_raw.columns:
         if "lancamentos" in df_raw.columns:
             df_raw["volume"] = pd.to_numeric(
@@ -1765,12 +1964,12 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
             df_raw["data"]).dt.days / 365.0
         df_raw["T"] = df_raw["T"].clip(lower=0)
 
-    # Campos obrigatÃ³rios
+    # Campos obrigatórios
     df_raw["ativo_base"]     = ativo
     df_raw["fonte"]          = "paper"
     df_raw["schema_version"] = SCHEMA_VERSION
 
-    # Gregas â€” calcula se tiver preÃ§o da aÃ§Ã£o
+    # Gregas — calcula se tiver preço da ação
     if preco_acao and preco_acao > 0:
         df_raw["preco_acao"] = preco_acao
         selic_aa = SELIC_HISTORICA.get(
@@ -1818,23 +2017,23 @@ def tape_paper(ativo, filepath, preco_acao=None, data=None):
 
     df_raw = df_raw.dropna(
         subset=["ticker","tipo"]).copy()
-    print(f"  âœ“ {len(df_raw)} opÃ§Ãµes carregadas")
+    print(f"  ✓ {len(df_raw)} opções carregadas")
     return df_raw
 
 def tape_auto(ativos):
     raise NotImplementedError(
-        "TAPE.auto nÃ£o implementado.\n"
-        "DisponÃ­vel quando a API OpLab/opcoes.net.br "
+        "TAPE.auto não implementado.\n"
+        "Disponível quando a API OpLab/opcoes.net.br "
         "for contratada.\n"
         "Use tape_paper() enquanto isso.")
 
 if __name__ == "__main__":
-    print(f"âœ“ TAPE v1.2 carregado")
-    print(f"  Caminhos via CÃ©lula 1 â€” sem redeclaraÃ§Ã£o")
+    print(f"✓ TAPE v1.2 carregado")
+    print(f"  Caminhos via Célula 1 — sem redeclaração")
     print(f"  Master JSON: tape_carregar_ativo | tape_salvar_ativo | "
           f"tape_salvar_ciclo | tape_regime_para_data")
     print(f"  Dados:       tape_ohlcv | tape_ibov | tape_serie_externa")
     print(f"  Backtest:    tape_backtest | tape_paper | tape_auto")
     print(f"  REFLECT:     tape_process_eod_file | tape_reflect_daily | "
           f"tape_reflect_cycle | tape_sizing_reflect")
-    print(f"  SCAN aberto: protocolo retomada apÃ³s estado E nÃ£o definido")
+    print(f"  SCAN aberto: protocolo retomada após estado E não definido")

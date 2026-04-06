@@ -95,7 +95,6 @@ async def _stream_subprocess(
             if pattern.search(line):
                 if mod_name not in detected_modules:
                     detected_modules[mod_name] = {"started": True, "completed": False}
-                    emit_log(f"[DC-DEBUG] START detectado: {mod_name} | line={line[:80]}", level="info")
                     emit_dc_event("dc_module_start", mod_name, "running", **action_payload)
 
         for mod_name, pattern in _MODULE_COMPLETE_MARKERS.items():
@@ -104,7 +103,6 @@ async def _stream_subprocess(
                     detected_modules[mod_name] = {"started": True, "completed": True}
                 else:
                     detected_modules[mod_name]["completed"] = True
-                emit_log(f"[DC-DEBUG] COMPLETE detectado: {mod_name} | line={line[:80]}", level="info")
                 emit_dc_event("dc_module_complete", mod_name, "ok", **action_payload)
 
     def _sync_runner():
@@ -162,20 +160,15 @@ async def _stream_subprocess(
         
         status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
         
-        # ── Debug: estado final dos módulos detectados ──
-        emit_log(f"[DC-DEBUG] Estado final: detected_modules={detected_modules} | status={status}", level="info")
-        
         # ── Emitir evento de conclusão do módulo principal ──
         if modulo:
             dc_status = "ok" if status == "OK" else "error"
-            emit_log(f"[DC-DEBUG] Emitindo complete para módulo principal: {modulo} | status={dc_status}", level="info")
             emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
         
         # ── Marcar módulos detectados mas não concluídos como erro ──
         if status == "ERRO":
             for mod_name, mod_state in detected_modules.items():
                 if not mod_state.get("completed", False):
-                    emit_log(f"[DC-DEBUG] Marcando {mod_name} como error (não completou)", level="info")
                     emit_dc_event("dc_module_complete", mod_name, "error", **action_payload)
         
         if tem_erro and returncode == 0:
@@ -287,14 +280,11 @@ async def run_backtest_gate(ticker: str) -> dict:
     )
 
 async def run_reflect(ticker: str) -> dict:
-    """Executa o módulo Reflect para atualização de dados."""
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "reflect", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_reflect",
-        action_payload={"ticker": ticker},
-        modulo="REFLECT"
+    """DEPRECATED — usar run_reflect_daily ou run_orbit_update."""
+    raise NotImplementedError(
+        "run_reflect foi descontinuado. "
+        "Use run_reflect_daily(ticker, xlsx_path) para EOD diário "
+        "ou run_orbit_update(ticker) para atualização mensal."
     )
 
 async def run_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:

@@ -86,6 +86,14 @@ const VisaoGeral = ({
             }
           }
         }
+        // Sinalizar conclusão — reseta orchestratorAtivo
+        updateFromEvent({
+          type: "orchestrator_done",
+          data: {
+            items: [],
+            timestamp: new Date().toISOString()
+          }
+        });
         // Fallback para formato antigo (v2.5.2)
         if (data.digest) {
           updateFromEvent({
@@ -175,7 +183,7 @@ const VisaoGeral = ({
       </div>
 
       {/* BLOCO 1.5 — Log Drawer do Orquestrador */}
-      <OrchestratorLogDrawer isRunning={carregando} />
+      <OrchestratorLogDrawer isRunning={rodando} />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
       {state.orchestratorAtivo && (

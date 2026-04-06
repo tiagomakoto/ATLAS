@@ -1,6 +1,6 @@
 ﻿# ws_test.py
 # Cliente de teste WebSocket para ATLAS Backend — logs em tempo real
-# Conecta em /ws/logs e escuta mensagens broadcast de todos os módulos
+# Conecta em /ws/events e escuta mensagens broadcast de todos os módulos
 
 import asyncio
 import websockets
@@ -9,8 +9,8 @@ from datetime import datetime
 
 async def test():
     # ⚠️ ROTA: Deve bater com @app.websocket() em main.py
-    # Atualmente: /ws/logs (NÃO /delta-chaos/ws/logs)
-    uri = "ws://localhost:8000/ws/logs"
+    # Atualmente: /ws/events (único endpoint WebSocket)
+    uri = "ws://localhost:8000/ws/events"
     
     print(f"=" * 60)
     print(f"  ATLAS WebSocket Test Client")
@@ -67,7 +67,7 @@ async def test():
     except websockets.exceptions.InvalidStatus as e:
         print(f"\n❌ ERRO: HTTP {e.status_code} no handshake")
         print(f"   Verifique se a rota WebSocket está correta em main.py")
-        print(f"   Esperado: @app.websocket('/ws/logs')")
+        print(f"   Esperado: @app.websocket('/ws/events')")
         sys.exit(1)
     except ConnectionRefusedError:
         print(f"\n❌ ERRO: Servidor não responde em localhost:8000")

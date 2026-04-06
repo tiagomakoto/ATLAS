@@ -9,39 +9,6 @@ from typing import List, Dict, Any
 from atlas_backend.core.paths import get_paths
 
 
-# =====================================================================
-# [ATLAS-STATUS-LOGIC] — DO NOT DELETE — Lógica de Status do Sistema
-# ---------------------------------------------------------------------
-# Status válidos: SEM_EDGE | OPERAR | MONITORAR | SUSPENSO
-#
-#   SEM_EDGE   — Backtest com dados suficientes mas sem IR capturável
-#                em nenhum regime. Sem estratégia viável.
-#                Ex: ITUB4
-#
-#   MONITORAR  — Edge identificado em backtest mas GATE incompleto,
-#                parcial (5-7/8) ou condições atuais inadequadas.
-#                Ex: BBAS3 (GATE 7/8, E5 bloqueado)
-#
-#   OPERAR     — GATE 8/8 aprovado, ORBIT atual autoriza.
-#                Elegível para paper trading ou capital real.
-#                Ex: VALE3, PETR4, BOVA11
-#
-#   SUSPENSO   — Estava em OPERAR. Duas quedas consecutivas de Edge
-#                de um mês para o outro (ex: A→C ou B→D).
-#                Edge histórico existe — condições atuais impedem.
-#                Retoma quando REFLECT recuperar por 2-3 ciclos.
-#
-# Regras de determinação (ver bloco "Determinar status" em get_ativo):
-#   1. Sem histórico OU lock ativo → SUSPENSO
-#   2. Quedas REFLECT consecutivas >= 2 (D ou E) → SUSPENSO
-#   3. GATE 8/8 + IR > 0 + REFLECT em A/B → OPERAR
-#   4. GATE com resultado válido (não 8/8) → MONITORAR
-#   5. Sem IR capturável em nenhum regime → SEM_EDGE
-# ---------------------------------------------------------------------
-# [ATLAS-STATUS-LOGIC-END] — DO NOT DELETE
-# =====================================================================
-
-
 def sanitize_nan(value):
     """Converte NaN Python para None (JSON válido)."""
     if isinstance(value, float) and math.isnan(value):
@@ -174,6 +141,7 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         "core": core,
         "historico": historico,
         "reflect_historico": reflect_historico,
+        "reflect_state": raw_data.get("reflect_state", "B"),
         "staleness_days": staleness_days,
         "ultimo_ciclo": ultimo_ciclo,
         "version": raw_data.get("version", 0),

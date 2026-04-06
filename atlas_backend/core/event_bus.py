@@ -69,6 +69,9 @@ def emit_dc_event(event_type: str, modulo: str, status: Optional[str] = None, **
         "data": data
     }
 
+    # ── Debug: log do evento emitido ──
+    print(f"[DC-EVENT] type={event_type} | modulo={modulo} | status={status} | data={data}")
+
     emit_event(event)
 
 async def publish_event(event: dict):
@@ -86,8 +89,8 @@ async def health_monitor():
     """
     Monitora saúde dos módulos e envia eventos via WebSocket COM health_reason.
     """
-    from api.websocket.stream import manager
-    from core.paths import get_paths
+    from atlas_backend.api.websocket.stream import manager
+    from atlas_backend.core.paths import get_paths
     
     while True:
         try:
@@ -150,7 +153,7 @@ async def event_dispatcher():
     Loop central que envia eventos para os WebSockets.
     Inclui health_monitor integrado.
     """
-    from api.websocket.stream import manager
+    from atlas_backend.api.websocket.stream import manager
     
     # ✅ Iniciar health_monitor em paralelo
     asyncio.create_task(health_monitor())

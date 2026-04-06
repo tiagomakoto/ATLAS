@@ -30,8 +30,6 @@ export default function App() {
   }, []);
 
   useWebSocket(`${WS_BASE}/ws/events`, handleEvent);
-  useWebSocket(`${WS_BASE}/ws/modules`, handleEvent);
-  useWebSocket(`${WS_BASE}/ws/logs`, handleEvent);
 
   useEffect(() => {
     async function fetchAtivo() {

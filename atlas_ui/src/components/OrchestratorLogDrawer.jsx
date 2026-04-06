@@ -23,7 +23,7 @@ const MODULOS = [
 // confiável entre backend e frontend, eliminando dependência de texto dos logs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function processDCEvent(data, setModuloAtual, setModuloStatus, setProgresso, setMensagem) {
+function processDCEvent(data, moduloAtual, setModuloAtual, setModuloStatus, setProgresso, setMensagem) {
   const { type, data: eventData } = data;
   const { modulo, status, timestamp } = eventData || {};
   
@@ -115,8 +115,12 @@ export default function OrchestratorLogDrawer({ isRunning }) {
   const [moduloStatus, setModuloStatus] = useState({});
   const [mensagem, setMensagem] = useState("");
   const [progresso, setProgresso] = useState(0);
+  const [ticker, setTicker] = useState("");
+  const [tickerTransition, setTickerTransition] = useState(false);
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
+  const moduloAtualRef = useRef(moduloAtual);
+  moduloAtualRef.current = moduloAtual;
 
   useEffect(() => {
     if (isRunning && !visible) {
@@ -125,10 +129,16 @@ export default function OrchestratorLogDrawer({ isRunning }) {
       setModuloStatus({});
       setModuloAtual(null);
       setProgresso(0);
+      setTicker("");
+      setTickerTransition(false);
       
       // Conectar WebSocket
-      wsRef.current = new WebSocket("ws://localhost:8000/ws/logs");
+      wsRef.current = new WebSocket("ws://localhost:8000/ws/events");
       
+      wsRef.current.onopen = () => {
+        console.log("[ORCH-WS] WebSocket conectado em /ws/events");
+      };
+
       wsRef.current.onmessage = (event) => {
         try {
           let msg = event.data;
@@ -141,51 +151,82 @@ export default function OrchestratorLogDrawer({ isRunning }) {
           
           // ── Tentar processar como evento estruturado do Delta Chaos ──
           if (data && data.type && data.type.startsWith("dc_")) {
-            const handled = processDCEvent(
-              data, 
-              setModuloAtual, 
-              setModuloStatus, 
-              setProgresso, 
-              setMensagem
-            );
-            if (handled) {
-              // Evento processado com sucesso — não fazer fallback para texto
+            const mod = data.data?.modulo;
+            const status = data.data?.status;
+            const tk = data.data?.ticker;
+
+            // Quando TAPE inicia, limpar status anterior e mostrar ticker
+            if (data.type === "dc_module_start" && mod === "TAPE") {
+              setModuloStatus({});
+              setModuloAtual(null);
+              if (tk) {
+                setTicker(tk);
+                setTickerTransition(true);
+              }
+              setMensagem(`${mod} iniciado`);
+              return;
+            }
+
+            // Complete: só atualizar status
+            if (data.type === "dc_module_complete") {
+              setModuloStatus(prev => ({ 
+                ...prev, 
+                [mod]: status === "ok" ? "ok" : "erro" 
+              }));
+              setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
+              setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"}`);
+              return;
+            }
+
+            // Start: só atualizar módulo atual
+            if (data.type === "dc_module_start") {
+              setModuloAtual(mod);
+              setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
+              setMensagem(`${mod} iniciado`);
+              return;
+            }
+
+            if (data.type === "dc_module_error") {
+              setModuloStatus(prev => ({ ...prev, [mod]: "erro" }));
+              setMensagem(`${mod} erro`);
+              return;
+            }
+
+            if (data.type === "dc_workflow_complete") {
+              setModuloAtual(null);
+              setProgresso(100);
+              setMensagem("Concluído");
               return;
             }
           }
-          
-          // ── Fallback: parsing de texto legado ──
-          const { modulo, erro } = parseMessage(msg);
-          
-          if (erro) {
-            if (moduloAtual) {
-              setModuloStatus(prev => ({ ...prev, [moduloAtual]: "erro" }));
+
+          // ── Eventos do orquestrador ──
+          if (data && data.type === "orchestrator_ativo_result") {
+            const tk = data.ticker;
+            if (tk) {
+              setTicker(tk);
+              setTickerTransition(true);
+              setMensagem(`Processando ${tk}...`);
             }
-          } else if (modulo && modulo !== "FINAL") {
-            // Marcar módulo anterior como concluído se existia
-            if (moduloAtual && moduloAtual !== modulo) {
-              setModuloStatus(prev => ({ 
-                ...prev, 
-                [moduloAtual]: modulo === moduloAtual ? "ok" : prev[moduloAtual] || "ok" 
-              }));
-            }
-            setModuloAtual(modulo);
-            
-            // Calcular progresso baseado no módulo
-            const idx = MODULOS.findIndex(m => m.id === modulo);
-            if (idx >= 0) {
-              setProgresso(((idx + 1) / MODULOS.length) * 100);
-            }
-          } else if (modulo === "FINAL") {
-            setModuloStatus(prev => {
-              const final = { ...prev };
-              if (moduloAtual) final[moduloAtual] = "ok";
-              return final;
-            });
-            setProgresso(100);
+            return;
           }
-          
-          setMensagem(msg);
+
+          if (data && data.type === "status_transition") {
+            const tk = data.ticker;
+            setMensagem(`${tk}: ${data.status_anterior} → ${data.status_novo}`);
+            return;
+          }
+
+          // ── Terminal logs: atualizar mensagem em tempo real ──
+          if (data && data.type === "terminal_log") {
+            setMensagem(data.data?.message || msg);
+            return;
+          }
+
+          // ── Fallback: qualquer texto recebido ──
+          if (msg && msg.trim()) {
+            setMensagem(msg.trim().substring(0, 120));
+          }
         } catch (e) {
           console.error("WS parse error:", e);
         }
@@ -195,26 +236,25 @@ export default function OrchestratorLogDrawer({ isRunning }) {
         // Conexão fechada
       };
     }
+
+    // Quando isRunning fica false, fechar o drawer
+    if (!isRunning && visible) {
+      setVisible(false);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      clearTimeout(timeoutRef.current);
+    }
     
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
+      clearTimeout(timeoutRef.current);
     };
   }, [isRunning]);
-
-  useEffect(() => {
-    // Quando para de rodar, esperar 3 segundos e fechar
-    if (!isRunning && visible) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        setVisible(false);
-      }, 3000);
-    }
-    
-    return () => clearTimeout(timeoutRef.current);
-  }, [isRunning, visible]);
 
   const handleClose = () => {
     if (wsRef.current) {
@@ -348,8 +388,21 @@ export default function OrchestratorLogDrawer({ isRunning }) {
         color: "#aaa",
         minHeight: 40,
         display: "flex",
-        alignItems: "center"
+        alignItems: "center",
+        gap: 8
       }}>
+        {ticker && (
+          <span style={{
+            color: "var(--atlas-blue)",
+            fontSize: 10,
+            padding: "2px 6px",
+            border: "1px solid var(--atlas-blue)",
+            borderRadius: 2,
+            animation: tickerTransition ? "pulse 1s infinite" : "none"
+          }}>
+            {ticker}
+          </span>
+        )}
         <span style={{ color: "#fff" }}>
           {mensagem || "Aguardando..."}
         </span>

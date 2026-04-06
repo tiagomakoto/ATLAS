@@ -219,6 +219,14 @@ async def orchestrator_run(payload: dict):
             emit_log("[ORQUESTRADOR] Nenhum ativo parametrizado encontrado", level="warning")
             return {"status": "OK", "output": "Nenhum ativo para processar", "manutencao": []}
 
+        # ── DEBUG: limitar a um único ativo para testes ──
+        DEBUG_TICKER = "VALE3"  # ex: "VALE3" — None = roda todos
+        if DEBUG_TICKER and DEBUG_TICKER in ativos:
+            ativos = [DEBUG_TICKER]
+            emit_log(f"[ORQUESTRADOR] ⚠ MODO DEBUG — processando apenas {DEBUG_TICKER}", level="warning")
+        elif DEBUG_TICKER and DEBUG_TICKER not in ativos:
+            emit_log(f"[ORQUESTRADOR] ⚠ DEBUG_TICKER={DEBUG_TICKER} não encontrado em ativos", level="warning")
+
         delta_chaos_base = paths.get("delta_chaos_base")
         if not delta_chaos_base:
             raise ValueError("delta_chaos_base ausente no paths.json")
@@ -340,9 +348,9 @@ async def orchestrator_run(payload: dict):
                 eventos_ativos.append(evento_ativo)
                 emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
                 emit_log(f"[ORQUESTRADOR] {ticker}: fim do fluxo diário", level="info")
-                # PAUSE
-                emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
-                await asyncio.sleep(30)
+                # PAUSE (comentado temporariamente)
+                # emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
+                # await asyncio.sleep(30)
                 continue
 
             # BLOQUEADO por outros motivos (não "GATE nunca executado") → pula bloco mensal
@@ -351,9 +359,9 @@ async def orchestrator_run(payload: dict):
                 eventos_ativos.append(evento_ativo)
                 emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
                 emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO (outros motivos) — bloco mensal pulado", level="info")
-                # PAUSE
-                emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
-                await asyncio.sleep(30)
+                # PAUSE (comentado temporariamente)
+                # emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
+                # await asyncio.sleep(30)
                 continue
 
             # === MENSAL ===
@@ -376,12 +384,19 @@ async def orchestrator_run(payload: dict):
             except Exception as e:
                 erros_ativo.append(f"ciclo_detect: {str(e)}")
 
+            # Força bloco mensal se GATE nunca foi executado (precisa rodar para resolver)
+            if gate_bloqueado_sem_gate and not ciclo_mudou:
+                ciclo_mudou = True
+                evento_ativo["ciclo_novo"] = True
+                emit_log(f"[ORQUESTRADOR] {ticker}: forçando bloco mensal — GATE nunca executado", level="info")
+
             if not ciclo_mudou:
                 emit_log(f"[ORQUESTRADOR] {ticker}: ciclo não mudou, bloco mensal pulado", level="info")
                 eventos_ativos.append(evento_ativo)
-                # PAUSE
-                emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
-                await asyncio.sleep(30)
+                emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
+                # PAUSE (comentado temporariamente)
+                # emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
+                # await asyncio.sleep(30)
                 continue
 
             # Bloco mensal
@@ -409,7 +424,8 @@ async def orchestrator_run(payload: dict):
                 evento_ativo["erros"] = erros_ativo
                 evento_ativo["bloco_mensal"] = bloco_mensal
                 eventos_ativos.append(evento_ativo)
-                await asyncio.sleep(30)
+                # PAUSE (comentado temporariamente)
+                # await asyncio.sleep(30)
                 continue
 
             # 5. tape_reflect_cycle (já chamado dentro de --modo orbit)
@@ -459,9 +475,9 @@ async def orchestrator_run(payload: dict):
             eventos_ativos.append(evento_ativo)
             emit_dc_event("orchestrator_ativo_result", "ORQUESTRADOR", status="ok", **evento_ativo)
 
-            # PAUSE
-            emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
-            await asyncio.sleep(30)
+            # PAUSE (comentado temporariamente)
+            # emit_log(f"[PAUSE] Aguardando 30 segundos antes do próximo ativo...", level="info")
+            # await asyncio.sleep(30)
 
         emit_log(f"[ORQUESTRADOR] ✅ Ciclo de manutenção concluído — {len(eventos_ativos)} ativos processados", level="info")
 

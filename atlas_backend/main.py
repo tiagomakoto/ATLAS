@@ -16,11 +16,9 @@ from atlas_backend.api.routes import config, modules, mode, ativos, cycle, confi
 from atlas_backend.api.websocket.stream import manager
 from atlas_backend.core.event_bus import event_dispatcher
 from atlas_backend.core.runtime_mode import get_mode
-from atlas_backend.core.terminal_stream import emit_log, emit_error, set_ws_broadcast
 
 # ── Variáveis globais ─────────────────────────────────────────────
 _started_at = datetime.utcnow()
-_ws_connections: list[WebSocket] = []
 
 # ── lifespan ──────────────────────────────────────────────────────
 @asynccontextmanager
@@ -30,39 +28,6 @@ async def lifespan(app: FastAPI):
 
 # ── App ───────────────────────────────────────────────────────────
 app = FastAPI(title="ATLAS Backend", lifespan=lifespan)
-
-# ── WebSocket /ws/logs (SEM heartbeat customizado) ────────────────
-@app.websocket("/ws/logs")
-async def ws_logs(websocket: WebSocket):
-    await websocket.accept()
-    _ws_connections.append(websocket)
-    
-    # Log via broadcast (chega no cliente WebSocket)
-    emit_log(f"WebSocket client conectado — total: {len(_ws_connections)}")
-    
-    try:
-        # Mantém conexão aberta; biblioteca websockets gerencia ping/pong nativamente
-        while True:
-            await asyncio.sleep(60)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
-    finally:
-        if websocket in _ws_connections:
-            _ws_connections.remove(websocket)
-
-async def broadcast_to_logs(message: str, level: str = "info"):
-    """Broadcast seguro para todos os clientes conectados."""
-    for ws in _ws_connections[:]:
-        try:
-            await ws.send_json({"type": "terminal_log", "level": level, "message": message})
-        except Exception:
-            if ws in _ws_connections:
-                _ws_connections.remove(ws)
-
-# ── REGISTRA broadcast ───────────────────────────────────────────
-set_ws_broadcast(broadcast_to_logs)
 
 # ── Routers ───────────────────────────────────────────────────────
 app.include_router(delta_chaos.router)
@@ -95,18 +60,9 @@ def health_check():
         "timestamp": now.isoformat(),
     }
 
-# ── Outros WebSockets (manager) ───────────────────────────────────
+# ── WebSocket /ws/events (único endpoint para todos os eventos) ───
 @app.websocket("/ws/events")
 async def ws_events(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-@app.websocket("/ws/modules")
-async def ws_modules(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:

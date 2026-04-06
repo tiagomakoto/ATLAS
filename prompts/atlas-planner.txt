@@ -34,6 +34,16 @@ Detalhe    : <o que fazer, sem ambiguidade>
 Constraints: <o que não pode ser alterado>
 Depende de : <TAREFA X, ou "nenhuma">
 
+
+Critério Obrigatório de Teste: Toda tarefa que envolva os itens abaixo DEVE gerar uma tarefa de teste unitário correspondente:
+
+- Manipulação de Estado Global ou Contexto.
+- Funções de Cálculo ou Transformação de Dados.
+- Persistência de dados
+- Novas Rotas de API ou Integrações Externas.
+- Componentes de UI Reutilizáveis (Shared Components).
+
+
 ### 4. Apresentar plano — dois blocos obrigatórios
 
 Antes de qualquer delegação, apresente sempre dois blocos:
