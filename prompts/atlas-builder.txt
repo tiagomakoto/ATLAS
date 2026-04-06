@@ -40,6 +40,8 @@ Não avance para a próxima tarefa sem autorização explícita.
 
 ## Regras permanentes
 
+- NUNCA exceda 30 tokens por segundo
+- NAO exiba o reasoning
 - Nunca remova código sem que a tarefa especifique explicitamente
 - Nunca refatore além do escopo — se vir algo que "poderia melhorar", ignore
 - Se o arquivo não existir, crie-o — mas sinalize que foi criado

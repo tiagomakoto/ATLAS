@@ -1,4 +1,4 @@
-# ════════════════════════════════════════════════════════════════════
+ # ════════════════════════════════════════════════════════════════════
 import os
 from datetime import datetime
 # DELTA CHAOS — EDGE v2.0
@@ -40,6 +40,15 @@ from datetime import datetime
 # ---------------------------------------------------------------------
 # [ATLAS-STATUS-LOGIC-END] — DO NOT DELETE
 # =====================================================================
+
+#
+# --modo backtest_dados   onboarding step 1: COTAHIST + ORBIT + popula historico[]
+# --modo tune             onboarding step 2 + atualização mensal step 3 (se elegível)
+# --modo backtest_gate    onboarding step 3 + atualização mensal step 2: GATE completo
+# --modo orbit            atualização mensal: OHLCV cache + ORBIT + reflect_cycle
+# --modo eod_preview      preview do EOD sem executar
+# --modo eod              diário: paper/live
+
 
 
 from delta_chaos.init import (
@@ -494,6 +503,12 @@ if __name__ == "__main__":
     try:
         universo = carregar_config().get("universo", [])
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: eod_preview
+        # Propósito: Verificar status de todos os ativos sem executar trades
+        # Uso: python -m delta_chaos.edge --modo eod_preview
+        # Fluxo: roda gate_eod para cada ativo do universo
+        # ──────────────────────────────────────────────────────────────
         if args.modo == "eod_preview":
             # Apenas gate_eod por ativo — sem executar
             print(f"[PREVIEW] Verificando {len(universo)} ativos...")
@@ -501,6 +516,12 @@ if __name__ == "__main__":
                 parecer = gate_eod(ticker, verbose=True)
                 print(f"[PREVIEW] {ticker}: {parecer}")
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: eod
+        # Propósito: Execução diária — paper/live trading
+        # Uso: python -m delta_chaos.edge --modo eod --xlsx_dir /caminho
+        # Fluxo: instancia EDGE em modo paper, executa EOD
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "eod":
             edge = EDGE(
                 capital=carregar_config()["book"]["capital"],
@@ -509,6 +530,12 @@ if __name__ == "__main__":
             )
             edge.executar_eod(xlsx_dir=args.xlsx_dir)
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: backtest_dados
+        # Propósito: Onboarding step 1 — COTAHIST + ORBIT + popula historico[]
+        # Uso: python -m delta_chaos.edge --modo backtest_dados --ticker VALE3
+        # Fluxo: instancia EDGE completo (apaga books), roda TAPE + ORBIT
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "backtest_dados":
             # Mantém comportamento atual do orbit (instancia EDGE completo, apaga books)
             anos = (list(map(int, args.anos.split(",")))
@@ -524,6 +551,12 @@ if __name__ == "__main__":
             orbit = ORBIT(universo={args.ticker: tape_carregar_ativo(args.ticker)})
             orbit.rodar(df_tape, anos, modo="mensal")
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: orbit
+        # Propósito: Atualização mensal — OHLCV cache + ORBIT + reflect_cycle
+        # Uso: python -m delta_chaos.edge --modo orbit --ticker VALE3
+        # Fluxo: TAPE verifica/baixa dados → ORBIT calcula regimes → REFLECT atualiza ciclo
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "orbit":
             # Modo leve mensal — não instancia EDGE, não apaga books
             ticker = args.ticker
@@ -537,6 +570,7 @@ if __name__ == "__main__":
             try:
                 cfg_ativo = tape_carregar_ativo(ticker)
                 df_ohlcv = tape_ohlcv(ticker, anos)
+                raise Exception("ERRO TESTE TAPE")  # ← TESTE: remover após teste
                 df_ibov = tape_ibov(anos)
                 if df_ohlcv.empty:
                     emit_dc_event("dc_module_complete", "TAPE", "error",
@@ -580,21 +614,45 @@ if __name__ == "__main__":
                               ticker=ticker, descricao=f"REFLECT erro: {str(e)}")
                 print(f"  ✗ REFLECT erro: {e}")
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: tune
+        # Propósito: Onboarding step 2 + atualização mensal step 3 (se elegível)
+        # Uso: python -m delta_chaos.edge --modo tune --ticker VALE3
+        # Fluxo: recalibra parâmetros do FIRE
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "tune":
             from delta_chaos.tune import executar_tune
             executar_tune(args.ticker)
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: backtest_gate
+        # Propósito: Onboarding step 3 + atualização mensal step 2 — GATE completo
+        # Uso: python -m delta_chaos.edge --modo backtest_gate --ticker VALE3
+        # Fluxo: executa GATE completo para o ativo
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "backtest_gate":
             from delta_chaos.gate import executar_gate
             resultado = executar_gate(args.ticker)
             print(f"[GATE] {args.ticker}: {resultado}")
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: reflect_daily
+        # Propósito: Processamento diário de dados EOD para REFLECT
+        # Uso: python -m delta_chaos.edge --modo reflect_daily --ticker VALE3 --xlsx_path /caminho
+        # Fluxo: processa arquivo xlsx EOD e atualiza reflect_daily
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "reflect_daily":
             if not args.ticker or not args.xlsx_path:
                 print("ERRO: --ticker e --xlsx_path obrigatorios para reflect_daily", file=sys.stderr)
                 sys.exit(1)
             tape_process_eod_file(args.xlsx_path)
 
+        # ──────────────────────────────────────────────────────────────
+        # Modo: gate_eod
+        # Propósito: Verificação de integridade EOD — decide OPERAR/MONITORAR/BLOQUEADO
+        # Uso: python -m delta_chaos.edge --modo gate_eod --ticker VALE3
+        # Fluxo: verifica GATE completo + regime atual + REFLECT
+        # ──────────────────────────────────────────────────────────────
         elif args.modo == "gate_eod":
             resultado = gate_eod(args.ticker, verbose=True)
             print(f"[GATE_EOD] {args.ticker}: {resultado}")

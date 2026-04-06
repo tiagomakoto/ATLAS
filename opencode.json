@@ -2,25 +2,25 @@
   "$schema": "https://opencode.ai/config.json",
   "agent": {
     "plan": {
-      "mode": "primary", // Tab-navegável, agente principal
+      "mode": "primary",
       "model": "opencode/minimax-m2.5-free",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-planner.txt}",
       "description": "Analisa specs e decompõe em tarefas atômicas para o BUILD. Não escreve código.",
-      "maxSteps": 20, // Cap de iterações — PLAN não precisa de muitas
+      "maxSteps": 20,
       "permission": {
         "edit": "ask",
         "bash": "ask",
-        "write": "deny" // PLAN nunca cria arquivo novo diretamente
+        "write": "deny"
       }
     },
     "build": {
       "mode": "primary",
-      "model": "opencode/qwen3.6-plus-free",
+      "model": "opencode/minimax-m2.5-free",
       "temperature": 0.3,
       "prompt": "{file:./prompts/atlas-builder.txt}",
       "description": "Executa tarefas atômicas delegadas pelo PLAN. Edição cirúrgica.",
-      "maxSteps": 50, // BUILD pode ter pipelines mais longas
+      "maxSteps": 50,
       "permission": {
         "edit": "allow",
         "bash": "ask",
@@ -29,13 +29,13 @@
     },
     "debug": {
       "mode": "primary",
-      "model": "openrouter/qwen/qwen3.6-plus:free", // modelo analítico — troque se preferir
-      "temperature": 0.1, // baixo: diagnóstico precisa de determinismo
+      "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+      "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-debugger.txt}",
       "description": "Investiga bugs, emite diagnóstico ou aplica hotfix cirúrgico. Aciona PLAN para correções complexas.",
       "maxSteps": 30,
       "permission": {
-        "edit": "ask", // HOTFIX exige confirmação — ask força o pause
+        "edit": "ask",
         "bash": "ask",
         "write": "ask"
       }
