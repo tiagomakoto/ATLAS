@@ -288,7 +288,9 @@ export default function OrchestratorLogDrawer({ isRunning }) {
       };
     }
 
-    // Quando isRunning fica false, fechar o drawer
+    // Quando isRunning fica false, NÃO fechar mais automaticamente
+    // (removido temporariamente para debug)
+    /*
     if (!isRunning && visible) {
       setVisible(false);
       if (wsRef.current) {
@@ -297,6 +299,7 @@ export default function OrchestratorLogDrawer({ isRunning }) {
       }
       clearTimeout(timeoutRef.current);
     }
+    */
     
     return () => {
       if (wsRef.current) {

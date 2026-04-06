@@ -132,7 +132,7 @@ const VisaoGeral = ({
 
   const rodando = carregando || state.orchestratorAtivo;
 
-  const tunesPendentes = (state.digestItems || [])
+  const tunesPendentes = (Array.isArray(state.digestItems) ? state.digestItems : Object.values(state.digestItems || {}))
     .filter(i => i.tipo === "aprovacao_pendente" && i.modulo === "TUNE")
     .map(i => i.ticker)
     .filter(Boolean);

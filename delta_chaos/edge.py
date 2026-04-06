@@ -55,6 +55,11 @@ from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, BOOK_DIR,
     OPCOES_HOJE_DIR, DRIVE_BASE,
 )
+from pathlib import Path
+
+# Diretório temporário para flags de módulos
+TMP_DIR = Path(DRIVE_BASE) / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
 from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ativo,
     tape_paper, tape_backtest, tape_reflect_cycle,
@@ -76,21 +81,11 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# Eventos estruturados do Delta Chaos (graceful fallback)
-# Emite eventos dc_module_start/complete para o frontend processar status.
-# Se rodando fora do contexto ATLAS, fallback silencioso.
-try:
-    from atlas_backend.core.event_bus import emit_dc_event
-except ImportError:
-    def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
-
-# Eventos estruturados do Delta Chaos (graceful fallback)
-# Emite eventos dc_module_start/complete para o frontend processar status.
-# Se rodando fora do contexto ATLAS, fallback silencioso.
-try:
-    from atlas_backend.core.event_bus import emit_dc_event
-except ImportError:
-    def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
+# Eventos estruturados do Delta Chaos (DESATIVADO — quem emite é o dc_runner)
+# try:
+#     from atlas_backend.core.event_bus import emit_dc_event
+# except ImportError:
+#     def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
 
 # ════════════════════════════════════════════════════════════════════
 # DELTA CHAOS — EDGE v1.3
@@ -196,23 +191,21 @@ class EDGE:
       print(f"\n  [1/3] TAPE")
       df_tape = tape_backtest(
           ativos=self.ativos, anos=anos, forcar=False)
-      if df_tape.empty:
-          print("  ✗ TAPE vazio. Abortando.")
-          emit_dc_event("dc_module_complete", "TAPE", "error")
-          return pd.DataFrame()
-      emit_dc_event("dc_module_complete", "TAPE", "ok")
+       if df_tape.empty:
+           print("  ✗ TAPE vazio. Abortando.")
+           return pd.DataFrame()
+       print(f"  ✓ TAPE: {len(df_tape)} registros")
       df_selic = _obter_selic(min(anos), max(anos))
 
       # [2/3] ORBIT
       print(f"\n  [2/3] ORBIT v3.4")
       df_regimes = self.orbit.rodar(
           df_tape, anos, modo=modo_orbit)
-      if df_regimes.empty:
-          print("  ✗ ORBIT vazio. Abortando.")
-          emit_dc_event("dc_module_complete", "ORBIT", "error")
-          return pd.DataFrame()
+       if df_regimes.empty:
+           print("  ✗ ORBIT vazio. Abortando.")
+           return pd.DataFrame()
 
-      emit_dc_event("dc_module_complete", "ORBIT", "ok")
+       print(f"  ✓ ORBIT: regimes calculados")
 
       df_regimes["ciclo_id"] = \
           df_regimes["ciclo_id"].astype(str)
@@ -288,11 +281,9 @@ class EDGE:
                       if op.core.motivo_saida),
               )
 
-      print(f"\n  {'═'*55}")
-      emit_dc_event("dc_module_complete", "FIRE", "ok")
-      emit_dc_event("dc_workflow_complete", "FIRE", "ok")
-      print(f"  EDGE.backtest concluído")
-      print(f"  {'═'*55}")
+       print(f"\n  {'═'*55}")
+       print(f"  EDGE.backtest concluído")
+       print(f"  {'═'*55}")
       self.book.dashboard()
       return self.book.df()
 
@@ -565,53 +556,41 @@ if __name__ == "__main__":
                     else list(range(2002, datetime.now().year + 1)))
 
             # ── TAPE: verificar/baixar dados ──
-            emit_dc_event("dc_module_start", "TAPE", "running",
-                          ticker=ticker, descricao="Verificando dados OHLCV para atualização")
+            print(f"\n  [1/3] TAPE")
             try:
                 cfg_ativo = tape_carregar_ativo(ticker)
                 df_ohlcv = tape_ohlcv(ticker, anos)
-                raise Exception("ERRO TESTE TAPE")  # ← TESTE: remover após teste
                 df_ibov = tape_ibov(anos)
                 if df_ohlcv.empty:
-                    emit_dc_event("dc_module_complete", "TAPE", "error",
-                                  ticker=ticker, descricao="TAPE: dados OHLCV indisponíveis")
                     print(f"  ✗ TAPE: dados OHLCV indisponíveis para {ticker}")
                     sys.exit(1)
-                emit_dc_event("dc_module_complete", "TAPE", "ok",
-                              ticker=ticker, descricao=f"TAPE: {len(df_ohlcv)} registros disponíveis")
                 print(f"  ✓ TAPE: {len(df_ohlcv)} registros OHLCV para {ticker}")
+                # Flag de sucesso para o dc_runner
+                (TMP_DIR / f"TAPE_{ticker}.done").touch()
             except Exception as e:
-                emit_dc_event("dc_module_complete", "TAPE", "error",
-                              ticker=ticker, descricao=f"TAPE erro: {str(e)}")
                 print(f"  ✗ TAPE erro: {e}")
                 sys.exit(1)
 
             # ── ORBIT: calcular regimes ──
-            emit_dc_event("dc_module_start", "ORBIT", "running",
-                          ticker=ticker, descricao="ORBIT: calculando regimes mensais")
+            print(f"\n  [2/3] ORBIT")
             try:
                 orbit = ORBIT(universo={ticker: cfg_ativo})
                 orbit.rodar(df_ohlcv, anos, modo="mensal")
-                emit_dc_event("dc_module_complete", "ORBIT", "ok",
-                              ticker=ticker, descricao="ORBIT: regimes calculados com sucesso")
                 print(f"  ✓ ORBIT: regimes calculados para {ticker}")
+                # Flag de sucesso para o dc_runner
+                (TMP_DIR / f"ORBIT_{ticker}.done").touch()
             except Exception as e:
-                emit_dc_event("dc_module_complete", "ORBIT", "error",
-                              ticker=ticker, descricao=f"ORBIT erro: {str(e)}")
                 print(f"  ✗ ORBIT erro: {e}")
                 sys.exit(1)
 
             # ── REFLECT: atualizar ciclo ──
-            emit_dc_event("dc_module_start", "REFLECT", "running",
-                          ticker=ticker, descricao="REFLECT: atualizando ciclo mensal")
+            print(f"\n  [3/3] REFLECT")
             try:
                 tape_reflect_cycle(ticker, datetime.now().strftime("%Y-%m"))
-                emit_dc_event("dc_module_complete", "REFLECT", "ok",
-                              ticker=ticker, descricao="REFLECT: ciclo atualizado")
                 print(f"  ✓ REFLECT: ciclo atualizado para {ticker}")
+                # Flag de sucesso para o dc_runner
+                (TMP_DIR / f"REFLECT_{ticker}.done").touch()
             except Exception as e:
-                emit_dc_event("dc_module_complete", "REFLECT", "error",
-                              ticker=ticker, descricao=f"REFLECT erro: {str(e)}")
                 print(f"  ✗ REFLECT erro: {e}")
 
         # ──────────────────────────────────────────────────────────────

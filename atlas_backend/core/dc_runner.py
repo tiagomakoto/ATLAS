@@ -10,7 +10,6 @@ delta_chaos.py   EXPÕE o botão — endpoints HTTP apenas
 
 import asyncio
 import os
-import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -26,19 +25,6 @@ _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
 DEBUG_TICKER = "VALE3"  # None = roda todos
-
-# ── Marcadores de módulo no stdout do subprocesso ──
-_MODULE_START_MARKERS = {
-    "TAPE":  re.compile(r"\[\s*1\s*/\s*3\s*\]\s*TAPE"),
-    "ORBIT": re.compile(r"\[\s*2\s*/\s*3\s*\]\s*ORBIT"),
-    "FIRE":  re.compile(r"\[\s*3\s*/\s*3\s*\]\s*FIRE"),
-}
-
-_MODULE_COMPLETE_MARKERS = {
-    "TAPE":  re.compile(r"Conclu.*do:.*registros|\[\s*2\s*/\s*3\s*\]\s*ORBIT"),
-    "ORBIT": re.compile(r"\[\s*3\s*/\s*3\s*\]\s*FIRE"),
-    "FIRE":  re.compile(r"EDGE\.backtest conclu.*do"),
-}
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -81,30 +67,16 @@ async def _stream_subprocess(
     _dc_running = True
     full_output = []
 
+    # Diretório temporário para flags de módulos
+    paths = get_paths()
+    TMP_DIR = Path(paths.get("drive_base", ".")) / "tmp"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
     # ── Emitir evento de início do módulo ──
     if modulo:
         emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
-
-    # Estado para rastrear módulos detectados no stdout
-    detected_modules = {}  # modulo -> {"started": bool, "completed": bool}
-
-    def _check_module_transitions(line: str):
-        """Verifica se a linha indica início ou conclusão de um módulo."""
-        for mod_name, pattern in _MODULE_START_MARKERS.items():
-            if pattern.search(line):
-                if mod_name not in detected_modules:
-                    detected_modules[mod_name] = {"started": True, "completed": False}
-                    emit_dc_event("dc_module_start", mod_name, "running", **action_payload)
-
-        for mod_name, pattern in _MODULE_COMPLETE_MARKERS.items():
-            if pattern.search(line):
-                if mod_name not in detected_modules:
-                    detected_modules[mod_name] = {"started": True, "completed": True}
-                else:
-                    detected_modules[mod_name]["completed"] = True
-                emit_dc_event("dc_module_complete", mod_name, "ok", **action_payload)
 
     def _sync_runner():
         import subprocess
@@ -115,6 +87,14 @@ async def _stream_subprocess(
         # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
+
+        # Limpar flags antigos deste ticker antes de executar
+        ticker = action_payload.get("ticker")
+        if ticker:
+            for mod in ["TAPE", "ORBIT", "REFLECT", "GATE", "TUNE"]:
+                flag_file = TMP_DIR / f"{mod}_{ticker}.done"
+                if flag_file.exists():
+                    flag_file.unlink()
 
         proc = subprocess.Popen(
             [sys.executable] + args,
@@ -132,9 +112,6 @@ async def _stream_subprocess(
             if not line:
                 continue
             full_output.append(line)
-
-            # ── Detectar transições de módulo no stdout ──
-            _check_module_transitions(line)
 
             lvl = "info"
             if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
@@ -165,11 +142,35 @@ async def _stream_subprocess(
             dc_status = "ok" if status == "OK" else "error"
             emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
         
-        # ── Marcar módulos detectados mas não concluídos como erro ──
-        if status == "ERRO":
-            for mod_name, mod_state in detected_modules.items():
-                if not mod_state.get("completed", False):
-                    emit_dc_event("dc_module_complete", mod_name, "error", **action_payload)
+        # ── Processar flags de módulos (TAPE, ORBIT, REFLECT) ──
+        # Determinar modo a partir dos args
+        modo = None
+        if "--modo" in args:
+            idx = args.index("--modo")
+            if idx + 1 < len(args):
+                modo = args[idx + 1]
+        
+        # Módulos esperados por modo
+        expected_modules = {
+            "orbit": ["TAPE", "ORBIT", "REFLECT"],
+            "backtest_gate": ["GATE"],
+            "backtest_dados": ["TAPE", "ORBIT"],
+            "tune": ["TUNE"],
+            "eod": [],  # eod não usa flags
+            "eod_preview": [],
+            "reflect_daily": ["REFLECT"],
+            "gate_eod": ["GATE"],
+        }.get(modo, [])
+        
+        ticker = action_payload.get("ticker")
+        if ticker and expected_modules:
+            for mod in expected_modules:
+                flag_file = TMP_DIR / f"{mod}_{ticker}.done"
+                if flag_file.exists():
+                    emit_dc_event("dc_module_complete", mod, "ok", ticker=ticker)
+                    flag_file.unlink()
+                else:
+                    emit_dc_event("dc_module_complete", mod, "error", ticker=ticker)
         
         if tem_erro and returncode == 0:
             emit_log("[ORQUESTRADOR] ⚠ Processo completou mas com warnings", level="warning")

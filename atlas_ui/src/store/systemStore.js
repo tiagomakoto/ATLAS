@@ -28,11 +28,16 @@ export const useSystemStore = create((set) => ({
         };
       case "health":
         return { health: event.status };
-      case "module_status":
+      // v2.6 — eventos dc_module (TAPE, ORBIT, GATE, etc) via WebSocket
+      case "dc_module_complete":
+      case "dc_module_start":
         return {
           modules: {
             ...state.modules,
-            [event.module]: event.status,
+            [event.data?.ticker || "global"]: {
+              ...(state.modules[event.data?.ticker || "global"] || {}),
+              [event.data?.modulo]: event.data?.status,
+            },
           },
         };
       case "cycle_update":
