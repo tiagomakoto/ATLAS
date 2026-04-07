@@ -16,7 +16,7 @@
     },
     "build": {
       "mode": "primary",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "openrouter/stepfun/step-3.5-flash:free",
       "temperature": 0.3,
       "prompt": "{file:./prompts/atlas-builder.txt}",
       "description": "Executa tarefas atômicas delegadas pelo PLAN. Edição cirúrgica.",
@@ -35,9 +35,11 @@
       "description": "Investiga bugs, emite diagnóstico ou aplica hotfix cirúrgico. Aciona PLAN para correções complexas.",
       "maxSteps": 30,
       "permission": {
-        "edit": "ask",
+        "edit": "deny",
         "bash": "ask",
-        "write": "ask"
+        "write": "deny",
+        "read": "allow",
+        "search": "allow",
       }
     }
   }
