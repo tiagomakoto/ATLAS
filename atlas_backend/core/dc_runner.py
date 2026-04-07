@@ -9,9 +9,12 @@ delta_chaos.py   EXPÕE o botão — endpoints HTTP apenas
 """
 
 import asyncio
+import json
 import os
 import sys
-from datetime import date
+import threading
+import time
+from datetime import date, datetime
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
@@ -60,14 +63,10 @@ async def _stream_subprocess(
         modulo: Nome do módulo para eventos ("TAPE", "ORBIT", "FIRE", etc.)
                 Se None, não emite eventos (comportamento legacy).
     """
-    global _dc_running
-    if _dc_running:
-        raise RuntimeError("CONFLICT: A engine do Delta Chaos já está em execução no server.")
-    
-    _dc_running = True
+
     full_output = []
 
-    # Diretório compartilhado para flags de módulos
+    # Diretório compartilhado para eventos JSONL
     ATLAS_ROOT = Path(__file__).resolve().parent.parent.parent
     TMP_DIR = ATLAS_ROOT / "tmp"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -77,6 +76,33 @@ async def _stream_subprocess(
         emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
+
+    def _watch_events(event_log_path, action_payload, stop_event):
+        """Lê arquivo JSONL continuamente e emite eventos ATLAS."""
+        last_pos = 0
+        while not stop_event.is_set():
+            try:
+                if event_log_path.exists():
+                    with open(event_log_path, "r", encoding="utf-8") as f:
+                        f.seek(last_pos)
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            event = json.loads(line)
+                            ev_modulo = event.get("modulo")
+                            ev_status = event.get("status")
+                            
+                            if ev_status == "start":
+                                emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                            elif ev_status == "done":
+                                emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                            elif ev_status == "error":
+                                emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                        last_pos = f.tell()
+            except Exception:
+                pass
+            time.sleep(0.5)
 
     def _sync_runner():
         import subprocess
@@ -88,13 +114,19 @@ async def _stream_subprocess(
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
 
-        # Limpar flags antigos deste ticker antes de executar
-        ticker = action_payload.get("ticker")
-        if ticker:
-            for mod in ["TAPE", "ORBIT", "REFLECT", "GATE", "TUNE"]:
-                flag_file = TMP_DIR / f"{mod}_{ticker}.done"
-                if flag_file.exists():
-                    flag_file.unlink()
+        # Gerar run_id único e passar para subprocesso
+        run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        event_log_path = TMP_DIR / f"events_{run_id}.jsonl"
+        env["ATLAS_RUN_ID"] = run_id
+
+        # Iniciar watcher de eventos em thread separada
+        stop_event = threading.Event()
+        watch_thread = threading.Thread(
+            target=_watch_events,
+            args=(event_log_path, action_payload, stop_event),
+            daemon=True
+        )
+        watch_thread.start()
 
         proc = subprocess.Popen(
             [sys.executable] + args,
@@ -122,6 +154,18 @@ async def _stream_subprocess(
             main_loop.call_soon_threadsafe(emit_log, line, lvl)
 
         proc.wait()
+        
+        # Parar watcher e esperar thread terminar
+        stop_event.set()
+        watch_thread.join(timeout=2)
+        
+        # Cleanup do arquivo de eventos (exceto se DEBUG)
+        if not DEBUG_TICKER and event_log_path.exists():
+            try:
+                event_log_path.unlink()
+            except Exception:
+                pass
+        
         return proc.returncode
 
     try:
@@ -141,35 +185,6 @@ async def _stream_subprocess(
         if modulo:
             dc_status = "ok" if status == "OK" else "error"
             emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
-        
-        # ── Processar flags de módulos (TAPE, ORBIT, REFLECT) ──
-        # Determinar modo a partir dos args
-        modo = None
-        if "--modo" in args:
-            idx = args.index("--modo")
-            if idx + 1 < len(args):
-                modo = args[idx + 1]
-        
-        # Módulos esperados por modo
-        expected_modules = {
-            "orbit": ["TAPE", "ORBIT", "REFLECT"],
-            "backtest_gate": ["GATE"],
-            "backtest_dados": ["TAPE", "ORBIT"],
-            "tune": ["TUNE"],
-            "eod": [],  # eod não usa flags
-            "reflect_daily": ["REFLECT"],
-            "gate_eod": ["GATE"],
-        }.get(modo, [])
-        
-        ticker = action_payload.get("ticker")
-        if ticker and expected_modules:
-            for mod in expected_modules:
-                flag_file = TMP_DIR / f"{mod}_{ticker}.done"
-                if flag_file.exists():
-                    emit_dc_event("dc_module_complete", mod, "ok", ticker=ticker)
-                    flag_file.unlink()
-                else:
-                    emit_dc_event("dc_module_complete", mod, "error", ticker=ticker)
         
         if tem_erro and returncode == 0:
             emit_log("[ORQUESTRADOR] ⚠ Processo completou mas com warnings", level="warning")
@@ -200,8 +215,7 @@ async def _stream_subprocess(
             response={"status": "ERRO", "error": repr(e)}
         )
         raise
-    finally:
-        _dc_running = False
+
 
 def _validar_caminho(caminho: str) -> None:
     paths = get_paths()

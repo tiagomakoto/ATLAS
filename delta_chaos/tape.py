@@ -739,7 +739,7 @@ def tape_serie_externa(nome: str, anos: list) -> pd.Series:
         return serie
     except Exception as e:
         print(f"  ✗ Falha ao baixar {nome}: {e}")
-            return None
+        return None
 
 
 # ════════════════════════════════════════════════════════════════════

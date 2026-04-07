@@ -55,11 +55,33 @@ from delta_chaos.init import (
     OPCOES_HOJE_DIR, DRIVE_BASE,
 )
 from pathlib import Path
+import os
+import json
+from datetime import datetime
 
-# Diretório compartilhado para flags de módulos
+# Diretório compartilhado para eventos JSONL
 ATLAS_ROOT = Path(__file__).resolve().parent.parent
 TMP_DIR = ATLAS_ROOT / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# run_id para isolamento entre múltiplos runners
+RUN_ID = os.environ.get("ATLAS_RUN_ID", f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+EVENT_LOG = TMP_DIR / f"events_{RUN_ID}.jsonl"
+
+def emit_event(modulo, status, **kwargs):
+    """Escreve evento estruturado em arquivo JSONL para o runner consumir."""
+    event = {
+        "modulo": modulo,
+        "status": status,
+        "timestamp": datetime.now().isoformat(),
+        "run_id": RUN_ID,
+        **kwargs
+    }
+    with open(EVENT_LOG, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    # Manter print para debug humano
+    print(f"  [EVENT] {modulo}: {status}")
+
 from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ativo,
     tape_paper, tape_backtest, tape_reflect_cycle,
@@ -527,12 +549,28 @@ if __name__ == "__main__":
                 modo="backtest",
                 universo=[args.ticker]
             )
+            # TAPE
+            emit_event("TAPE", "start")
             df_tape = tape_backtest(
                 ativos=[args.ticker], anos=anos, forcar=False)
+            if df_tape.empty:
+                print("  ✗ TAPE vazio. Abortando.")
+                emit_event("TAPE", "error", erro="TAPE vazio")
+                sys.exit(1)
+            print(f"  ✓ TAPE: {len(df_tape)} registros")
+            emit_event("TAPE", "done", registros=len(df_tape))
+            # ORBIT
+            emit_event("ORBIT", "start")
             cfg_ativo = tape_carregar_ativo(args.ticker)
             externas = tape_externas([args.ticker], anos)
             orbit = ORBIT(universo={args.ticker: cfg_ativo})
             orbit.rodar(df_tape, anos, modo="mensal", externas_dict=externas)
+            if orbit.df_regimes is None or orbit.df_regimes.empty:
+                print("  ✗ ORBIT vazio. Abortando.")
+                emit_event("ORBIT", "error", erro="ORBIT vazio")
+                sys.exit(1)
+            print(f"  ✓ ORBIT: regimes calculados")
+            emit_event("ORBIT", "done")
 
         # ──────────────────────────────────────────────────────────────
         # Modo: orbit
@@ -549,18 +587,20 @@ if __name__ == "__main__":
 
             # ── TAPE: verificar/baixar dados ──
             print(f"\n  [1/3] TAPE")
+            emit_event("TAPE", "start")
             try:
                 cfg_ativo = tape_carregar_ativo(ticker)
                 df_ohlcv = tape_ohlcv(ticker, anos)
                 df_ibov = tape_ibov(anos)
                 if df_ohlcv.empty:
                     print(f"  ✗ TAPE: dados OHLCV indisponíveis para {ticker}")
+                    emit_event("TAPE", "error", erro="OHLCV vazio")
                     sys.exit(1)
                 print(f"  ✓ TAPE: {len(df_ohlcv)} registros OHLCV para {ticker}")
-                # Flag de sucesso para o dc_runner
-                (TMP_DIR / f"TAPE_{ticker}.done").touch()
+                emit_event("TAPE", "done", registros=len(df_ohlcv))
             except Exception as e:
                 print(f"  ✗ TAPE erro: {e}")
+                emit_event("TAPE", "error", erro=str(e))
                 sys.exit(1)
 
             # ── Carregar séries externas (responsabilidade do TAPE) ──
@@ -568,25 +608,27 @@ if __name__ == "__main__":
 
             # ── ORBIT: calcular regimes ──
             print(f"\n  [2/3] ORBIT")
+            emit_event("ORBIT", "start")
             try:
                 orbit = ORBIT(universo={ticker: cfg_ativo})
                 orbit.rodar(df_ohlcv, anos, modo="mensal", externas_dict=externas)
                 print(f"  ✓ ORBIT: regimes calculados para {ticker}")
-                # Flag de sucesso para o dc_runner
-                (TMP_DIR / f"ORBIT_{ticker}.done").touch()
+                emit_event("ORBIT", "done")
             except Exception as e:
                 print(f"  ✗ ORBIT erro: {e}")
+                emit_event("ORBIT", "error", erro=str(e))
                 sys.exit(1)
 
             # ── REFLECT: atualizar ciclo ──
             print(f"\n  [3/3] REFLECT")
+            emit_event("REFLECT", "start")
             try:
                 tape_reflect_cycle(ticker, datetime.now().strftime("%Y-%m"))
                 print(f"  ✓ REFLECT: ciclo atualizado para {ticker}")
-                # Flag de sucesso para o dc_runner
-                (TMP_DIR / f"REFLECT_{ticker}.done").touch()
+                emit_event("REFLECT", "done")
             except Exception as e:
                 print(f"  ✗ REFLECT erro: {e}")
+                emit_event("REFLECT", "error", erro=str(e))
 
         # ──────────────────────────────────────────────────────────────
         # Modo: tune
@@ -634,5 +676,6 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         print(f"ERRO: {e}", file=sys.stderr)
+        emit_event("UNKNOWN", "error", erro=str(e))
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
