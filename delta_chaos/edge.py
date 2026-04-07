@@ -56,14 +56,15 @@ from delta_chaos.init import (
 )
 from pathlib import Path
 
-# Diretório temporário para flags de módulos
-TMP_DIR = Path(DRIVE_BASE) / "tmp"
+# Diretório compartilhado para flags de módulos
+ATLAS_ROOT = Path(__file__).resolve().parent.parent
+TMP_DIR = ATLAS_ROOT / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 from delta_chaos.tape import (
     tape_carregar_ativo, tape_salvar_ativo,
     tape_paper, tape_backtest, tape_reflect_cycle,
     tape_sizing_reflect, tape_process_eod_file,
-    tape_ohlcv, tape_ibov,
+    tape_ohlcv, tape_ibov, tape_externas,
     _obter_selic,
 )
 from .orbit import ORBIT
@@ -196,10 +197,13 @@ class EDGE:
       print(f"  ✓ TAPE: {len(df_tape)} registros")
       df_selic = _obter_selic(min(anos), max(anos))
 
+      # Carregar séries externas (responsabilidade do TAPE)
+      externas = tape_externas(self.ativos, anos)
+
       # [2/3] ORBIT
       print(f"\n  [2/3] ORBIT v3.4")
       df_regimes = self.orbit.rodar(
-          df_tape, anos, modo=modo_orbit)
+          df_tape, anos, modo=modo_orbit, externas_dict=externas)
       if df_regimes.empty:
           print("  ✗ ORBIT vazio. Abortando.")
           return pd.DataFrame()
@@ -280,9 +284,9 @@ class EDGE:
                       if op.core.motivo_saida),
               )
 
-       print(f"\n  {'═'*55}")
-       print(f"  EDGE.backtest concluído")
-       print(f"  {'═'*55}")
+      print(f"\n  {'═'*55}")
+      print(f"  EDGE.backtest concluído")
+      print(f"  {'═'*55}")
       self.book.dashboard()
       return self.book.df()
 
@@ -525,8 +529,10 @@ if __name__ == "__main__":
             )
             df_tape = tape_backtest(
                 ativos=[args.ticker], anos=anos, forcar=False)
-            orbit = ORBIT(universo={args.ticker: tape_carregar_ativo(args.ticker)})
-            orbit.rodar(df_tape, anos, modo="mensal")
+            cfg_ativo = tape_carregar_ativo(args.ticker)
+            externas = tape_externas([args.ticker], anos)
+            orbit = ORBIT(universo={args.ticker: cfg_ativo})
+            orbit.rodar(df_tape, anos, modo="mensal", externas_dict=externas)
 
         # ──────────────────────────────────────────────────────────────
         # Modo: orbit
@@ -557,11 +563,14 @@ if __name__ == "__main__":
                 print(f"  ✗ TAPE erro: {e}")
                 sys.exit(1)
 
+            # ── Carregar séries externas (responsabilidade do TAPE) ──
+            externas = tape_externas([ticker], anos)
+
             # ── ORBIT: calcular regimes ──
             print(f"\n  [2/3] ORBIT")
             try:
                 orbit = ORBIT(universo={ticker: cfg_ativo})
-                orbit.rodar(df_ohlcv, anos, modo="mensal")
+                orbit.rodar(df_ohlcv, anos, modo="mensal", externas_dict=externas)
                 print(f"  ✓ ORBIT: regimes calculados para {ticker}")
                 # Flag de sucesso para o dc_runner
                 (TMP_DIR / f"ORBIT_{ticker}.done").touch()

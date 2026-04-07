@@ -739,7 +739,43 @@ def tape_serie_externa(nome: str, anos: list) -> pd.Series:
         return serie
     except Exception as e:
         print(f"  ✗ Falha ao baixar {nome}: {e}")
-        return None
+            return None
+
+
+# ════════════════════════════════════════════════════════════════════
+# SÉRIES EXTERNAS — função de alto nível para carregar todas as ativas
+# ════════════════════════════════════════════════════════════════════
+
+def tape_externas(ativos: list, anos: list) -> dict:
+    """
+    Identifica séries externas ativas na configuração dos ativos,
+    baixa e cacheia via tape_serie_externa().
+
+    Retorna dict {nome_serie: pd.Series} com todas as séries ativas.
+    Segue o mesmo padrão de tape_ohlcv() e tape_ibov() —
+    o chamador recebe dados prontos sem saber como foram obtidos.
+
+    Extensibilidade: adicionar nova fonte = novo entry no mapa
+    dentro de tape_serie_externa() — tape_externas() não muda.
+    """
+    series_ativas = set()
+
+    for ticker in ativos:
+        cfg = tape_carregar_ativo(ticker)
+        for nome_serie, ativa in cfg.get("externas", {}).items():
+            if ativa:
+                series_ativas.add(nome_serie)
+
+    externas = {}
+    for nome_serie in sorted(series_ativas):
+        serie = tape_serie_externa(nome_serie, anos)
+        if serie is not None:
+            externas[nome_serie] = serie
+            print(f"  ✓ Série externa {nome_serie}: {len(serie):,} dias")
+        else:
+            print(f"  ~ Série externa {nome_serie}: indisponível")
+
+    return externas
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -17,7 +17,7 @@ from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, DRIVE_BASE, CONFIG_PATH,
 )
 from delta_chaos.tape import (
-    tape_carregar_ativo, tape_backtest,
+    tape_carregar_ativo, tape_backtest, tape_externas,
     _obter_selic,
 )
 from delta_chaos.orbit import ORBIT
@@ -117,7 +117,8 @@ def executar_tune(ticker: str) -> dict:
     if len(historico_c) == 0:
         print(f"  ~ Histórico ORBIT vazio — calculando agora...")
         _orbit_tune = ORBIT(universo={TICKER: {}})
-        _orbit_tune.rodar(df_tape_c, ANOS, modo="cache")
+        externas = tape_externas([TICKER], ANOS)
+        _orbit_tune.rodar(df_tape_c, ANOS, modo="cache", externas_dict=externas)
         with open(path_ativo) as f:
             dados_ativo = json.load(f)
         historico_c = pd.DataFrame(dados_ativo["historico"])

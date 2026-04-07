@@ -67,9 +67,9 @@ async def _stream_subprocess(
     _dc_running = True
     full_output = []
 
-    # Diretório temporário para flags de módulos
-    paths = get_paths()
-    TMP_DIR = Path(paths.get("drive_base", ".")) / "tmp"
+    # Diretório compartilhado para flags de módulos
+    ATLAS_ROOT = Path(__file__).resolve().parent.parent.parent
+    TMP_DIR = ATLAS_ROOT / "tmp"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── Emitir evento de início do módulo ──

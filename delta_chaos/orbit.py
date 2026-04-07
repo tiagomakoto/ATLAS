@@ -424,7 +424,7 @@ class ORBIT:
         print(f"  ORBIT v3.4 — {len(self.ativos)} ativos")
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
-    def rodar(self, df_tape, anos, modo="pipeline"):
+    def rodar(self, df_tape, anos, modo="pipeline", externas_dict=None):
         df_cache, ciclos_faltantes = self._carregar_cache(anos)
 
         # Cache completo — retorna sem processar
@@ -448,20 +448,8 @@ class ORBIT:
             print("  ✗ Nenhum ativo com OHLCV")
             return pd.DataFrame()
 
-        self._externas_cache = {}
-        for ativo in ohlcv_ativos:
-            cfg_ativo = tape_carregar_ativo(ativo)
-            for nome_serie, ativa in \
-                    cfg_ativo.get("externas", {}).items():
-                if ativa and nome_serie \
-                        not in self._externas_cache:
-                    serie = tape_serie_externa(
-                        nome_serie, anos)
-                    if serie is not None:
-                        self._externas_cache[nome_serie] = serie
-                        print(f"  ✓ Série externa {nome_serie} "
-                              f"pré-carregada: "
-                              f"{len(serie):,} dias")
+        # Séries externas — recebidas do TAPE (não buscar internamente)
+        self._externas_cache = externas_dict or {}
 
         # ← MUDANÇA: usar ciclos_faltantes em vez de _gerar_ciclos(anos)
         ciclos = ciclos_faltantes
