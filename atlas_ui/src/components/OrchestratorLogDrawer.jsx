@@ -210,13 +210,7 @@ export default function OrchestratorLogDrawer({ isRunning }) {
             }
           }
 
-          // ── Eventos do orquestrador ──
-          if (data && data.type === "orchestrator_ativo_result") {
-            const tk = data.ticker;
-            if (tk) {
-              setTicker(tk);
-              setTickerTransition(true);
-            }
+
 
             // Gate EOD bloqueado → luz vermelha no GATE (antes do bloco mensal)
             if (data.gate_eod === "BLOQUEADO") {

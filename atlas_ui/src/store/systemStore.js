@@ -66,18 +66,9 @@ export const useSystemStore = create((set) => ({
           digestItems: event.data?.items || [],
           digestTimestamp: event.data?.timestamp || new Date().toISOString(),
         };
-      case "orchestrator_error":
-        return { orchestratorAtivo: false, progresso: null };
-      // v2.6 — eventos estruturados por ativo
-      case "orchestrator_ativo_result":
-        return {
-          digestPorAtivo: {
-            ...state.digestPorAtivo,
-            [event.ticker]: event
-          },
-          cicloNovo: state.cicloNovo || event.ciclo_novo
-        };
-      case "status_transition":
+       case "orchestrator_error":
+         return { orchestratorAtivo: false, progresso: null };
+       case "status_transition":
         return {
           statusTransitions: [...state.statusTransitions, event]
         };
