@@ -46,7 +46,6 @@ from datetime import datetime
 # --modo tune             onboarding step 2 + atualização mensal step 3 (se elegível)
 # --modo backtest_gate    onboarding step 3 + atualização mensal step 2: GATE completo
 # --modo orbit            atualização mensal: OHLCV cache + ORBIT + reflect_cycle
-# --modo eod_preview      preview do EOD sem executar
 # --modo eod              diário: paper/live
 
 
@@ -448,7 +447,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--modo",
-        choices=["backtest_dados", "backtest_gate", "eod", "eod_preview", "tune", "orbit", "reflect_daily", "gate_eod"],
+        choices=["backtest_dados", "backtest_gate", "eod", "tune", "orbit", "reflect_daily", "gate_eod"],
         required=True,
         help="Rotina a executar"
     )
@@ -485,7 +484,7 @@ if __name__ == "__main__":
               file=sys.stderr)
         sys.exit(1)
 
-    if args.modo in ("eod", "eod_preview") and not args.xlsx_dir:
+    if args.modo == "eod" and not args.xlsx_dir:
         print("ERRO: --xlsx_dir obrigatório para modo eod",
               file=sys.stderr)
         sys.exit(1)
@@ -495,25 +494,12 @@ if __name__ == "__main__":
         universo = carregar_config().get("universo", [])
 
         # ──────────────────────────────────────────────────────────────
-        # Modo: eod_preview
-        # Propósito: Verificar status de todos os ativos sem executar trades
-        # Uso: python -m delta_chaos.edge --modo eod_preview
-        # Fluxo: roda gate_eod para cada ativo do universo
-        # ──────────────────────────────────────────────────────────────
-        if args.modo == "eod_preview":
-            # Apenas gate_eod por ativo — sem executar
-            print(f"[PREVIEW] Verificando {len(universo)} ativos...")
-            for ticker in universo:
-                parecer = gate_eod(ticker, verbose=True)
-                print(f"[PREVIEW] {ticker}: {parecer}")
-
-        # ──────────────────────────────────────────────────────────────
         # Modo: eod
         # Propósito: Execução diária — paper/live trading
         # Uso: python -m delta_chaos.edge --modo eod --xlsx_dir /caminho
         # Fluxo: instancia EDGE em modo paper, executa EOD
         # ──────────────────────────────────────────────────────────────
-        elif args.modo == "eod":
+        if args.modo == "eod":
             edge = EDGE(
                 capital=carregar_config()["book"]["capital"],
                 modo="paper",

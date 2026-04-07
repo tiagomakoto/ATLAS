@@ -7,8 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from pathlib import Path
 from atlas_backend.core.dc_runner import (
-    run_eod_preview, run_eod,
-    run_orbit, run_tune, run_gate,
+    run_eod, run_orbit, run_tune, run_gate,
     run_reflect_daily, run_orbit_update, run_gate_eod,
     run_backtest_gate, run_orchestrator
 )
@@ -71,21 +70,6 @@ def _resolver_xlsx_dir(xlsx_dir: Optional[str]) -> str:
     return default
 
 # ── Endpoints ─────────────────────────────────────────────────────
-
-@router.post("/eod/preview")
-async def eod_preview(payload: EodPayload):
-    """
-    Estágio 1 — verifica quais ativos serão processados no EOD.
-    Não executa nada. O operador vê o resultado e decide se avança.
-    """
-    xlsx_dir = _resolver_xlsx_dir(payload.xlsx_dir)
-    try:
-        result = await run_eod_preview(xlsx_dir=xlsx_dir)
-        return {"status": result["status"], "output": result["output"]}
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/eod/executar")
 async def eod_executar(payload: EodPayload):

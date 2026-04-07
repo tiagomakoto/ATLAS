@@ -157,7 +157,6 @@ async def _stream_subprocess(
             "backtest_dados": ["TAPE", "ORBIT"],
             "tune": ["TUNE"],
             "eod": [],  # eod não usa flags
-            "eod_preview": [],
             "reflect_daily": ["REFLECT"],
             "gate_eod": ["GATE"],
         }.get(modo, [])
@@ -529,17 +528,6 @@ async def run_orchestrator(tickers: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # Modos atômicos — um subprocess por função
 # ─────────────────────────────────────────────────────────────────────────────
-
-async def run_eod_preview(xlsx_dir: str) -> dict:
-    _validar_caminho(xlsx_dir)
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "eod_preview", "--xlsx_dir", xlsx_dir],
-        cwd=script.parent,
-        action_name="dc_eod_preview",
-        action_payload={"xlsx_dir": xlsx_dir},
-        modulo=None  # EOD preview não é um módulo principal
-    )
 
 async def run_eod(xlsx_dir: str) -> dict:
     _validar_caminho(xlsx_dir)
