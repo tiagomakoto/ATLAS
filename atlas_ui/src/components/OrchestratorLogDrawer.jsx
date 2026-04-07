@@ -5,6 +5,7 @@ const MODULOS = [
   { id: "TAPE",  label: "TAPE",  icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "ORBIT", label: "ORBIT", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "FIRE",  label: "FIRE",  icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "REFLECT", label: "REFLECT", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "GATE",  label: "GATE",  icon: "●", iconOk: "✓", iconErr: "✗" },
 ];
 
@@ -97,9 +98,12 @@ function parseMessage(msg) {
   if (upper.includes("FIRE")) {
     return { modulo: "FIRE", erro: false };
   }
-  if (upper.includes("GATE") || upper.includes("REFLECT")) {
-    return { modulo: "GATE", erro: false };
-  }
+   if (upper.includes("GATE") && !upper.includes("REFLECT")) {
+     return { modulo: "GATE", erro: false };
+   }
+   if (upper.includes("REFLECT")) {
+     return { modulo: "REFLECT", erro: false };
+   }
   
   if (upper.includes("CONCLUÍDO") || upper.includes("CONCLUIDO") || 
       upper.includes("FINALIZADO") || upper.includes("OK")) {
@@ -302,11 +306,9 @@ export default function OrchestratorLogDrawer({ isRunning }) {
     */
     
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // Apenas limpar timeouts — NÃO fechar WebSocket aqui
       clearTimeout(timeoutRef.current);
+      // O WebSocket será fechado pelo handleClose ou quando o componente desmontar
     };
   }, [isRunning]);
 
