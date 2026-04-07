@@ -53,9 +53,20 @@ def emit_dc_event(event_type: str, modulo: str, status: Optional[str] = None, **
     Exemplo:
         emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker="PETR4")
     """
+    # Gerar message amigável para display
+    if event_type == "dc_module_start":
+        message = f"{modulo} iniciado"
+    elif event_type == "dc_module_complete":
+        message = f"{modulo} {'ok' if status == 'ok' else 'falhou'}"
+    elif event_type == "dc_module_error":
+        message = f"{modulo} erro"
+    else:
+        message = f"{modulo}: {event_type}"
+
     data = {
         "modulo": modulo,
         "status": status,
+        "message": message,
         "timestamp": datetime.utcnow().isoformat(),
         **metadata
     }

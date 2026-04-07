@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODULOS = [
-  { id: "TAPE",  label: "TAPE",  icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "TAPE", label: "TAPE", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "ORBIT", label: "ORBIT", icon: "●", iconOk: "✓", iconErr: "✗" },
-  { id: "FIRE",  label: "FIRE",  icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "FIRE", label: "FIRE", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "REFLECT", label: "REFLECT", icon: "●", iconOk: "✓", iconErr: "✗" },
-  { id: "GATE",  label: "GATE",  icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "GATE", label: "GATE", icon: "●", iconOk: "✓", iconErr: "✗" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const MODULOS = [
 function processDCEvent(data, moduloAtual, setModuloAtual, setModuloStatus, setProgresso, setMensagem) {
   const { type, data: eventData } = data;
   const { modulo, status, timestamp } = eventData || {};
-  
+
   if (!modulo || !MODULOS.find(m => m.id === modulo)) {
     return false; // Não é evento de módulo conhecido
   }
@@ -49,9 +49,9 @@ function processDCEvent(data, moduloAtual, setModuloAtual, setModuloStatus, setP
       break;
 
     case "dc_module_complete":
-      setModuloStatus(prev => ({ 
-        ...prev, 
-        [modulo]: status === "ok" ? "ok" : "erro" 
+      setModuloStatus(prev => ({
+        ...prev,
+        [modulo]: status === "ok" ? "ok" : "erro"
       }));
       if (status === "ok" && moduloAtual === modulo) {
         setModuloAtual(null);
@@ -84,11 +84,11 @@ function processDCEvent(data, moduloAtual, setModuloAtual, setModuloStatus, setP
 
 function parseMessage(msg) {
   const upper = msg.toUpperCase();
-  
+
   if (upper.includes("ERRO") || upper.includes("ERROR")) {
     return { modulo: null, erro: true };
   }
-  
+
   if (upper.includes("TAPE") && !upper.includes("ORBIT")) {
     return { modulo: "TAPE", erro: false };
   }
@@ -98,18 +98,18 @@ function parseMessage(msg) {
   if (upper.includes("FIRE")) {
     return { modulo: "FIRE", erro: false };
   }
-   if (upper.includes("GATE") && !upper.includes("REFLECT")) {
-     return { modulo: "GATE", erro: false };
-   }
-   if (upper.includes("REFLECT")) {
-     return { modulo: "REFLECT", erro: false };
-   }
-  
-  if (upper.includes("CONCLUÍDO") || upper.includes("CONCLUIDO") || 
-      upper.includes("FINALIZADO") || upper.includes("OK")) {
+  if (upper.includes("GATE") && !upper.includes("REFLECT")) {
+    return { modulo: "GATE", erro: false };
+  }
+  if (upper.includes("REFLECT")) {
+    return { modulo: "REFLECT", erro: false };
+  }
+
+  if (upper.includes("CONCLUÍDO") || upper.includes("CONCLUIDO") ||
+    upper.includes("FINALIZADO") || upper.includes("OK")) {
     return { modulo: "FINAL", erro: false };
   }
-  
+
   return { modulo: null, erro: false };
 }
 
@@ -135,10 +135,10 @@ export default function OrchestratorLogDrawer({ isRunning }) {
       setProgresso(0);
       setTicker("");
       setTickerTransition(false);
-      
+
       // Conectar WebSocket
       wsRef.current = new WebSocket("ws://localhost:8000/ws/events");
-      
+
       wsRef.current.onopen = () => {
         console.log("[ORCH-WS] WebSocket conectado em /ws/events");
       };
@@ -147,12 +147,12 @@ export default function OrchestratorLogDrawer({ isRunning }) {
         try {
           let msg = event.data;
           let data = null;
-          
-          try {
-            data = JSON.parse(msg);
-            msg = data.message || data.msg || msg;
-          } catch {}
-          
+
+           try {
+             data = JSON.parse(msg);
+             msg = data.data?.message || data.message || data.msg || msg;
+           } catch { }
+
           // ── Tentar processar como evento estruturado do Delta Chaos ──
           if (data && data.type && data.type.startsWith("dc_")) {
             const mod = data.data?.modulo;
@@ -173,9 +173,9 @@ export default function OrchestratorLogDrawer({ isRunning }) {
 
             // Complete: só atualizar status
             if (data.type === "dc_module_complete") {
-              setModuloStatus(prev => ({ 
-                ...prev, 
-                [mod]: status === "ok" ? "ok" : "erro" 
+              setModuloStatus(prev => ({
+                ...prev,
+                [mod]: status === "ok" ? "ok" : "erro"
               }));
               setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
               setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"}`);
@@ -212,53 +212,53 @@ export default function OrchestratorLogDrawer({ isRunning }) {
 
 
 
-            // Gate EOD bloqueado → luz vermelha no GATE (antes do bloco mensal)
-            if (data.gate_eod === "BLOQUEADO") {
-              setModuloStatus(prev => ({ ...prev, GATE: "erro" }));
-              // A mensagem específica já vem do evento dc_module_complete do gate_eod
-              // Só atualizar se ainda não tiver mensagem mais específica
-              setMensagem(prev => {
-                if (prev.includes("desatualizado") || prev.includes("iniciando atualização") || prev.includes("dados incompletos")) {
-                  return prev; // Manter mensagem específica do dc_module_complete
-                }
-                return `${tk}: GATE EOD BLOQUEADO`;
-              });
-            } else if (data.gate_eod === "MONITORAR") {
-              setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
-              setMensagem(`${tk}: GATE EOD = MONITORAR`);
-            } else if (data.gate_eod === "OPERAR") {
-              setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
-              setMensagem(`${tk}: GATE EOD = OPERAR`);
-            }
-
-            // Bloco mensal: mostrar resumo do que aconteceu
-            if (data.bloco_mensal) {
-              const bm = data.bloco_mensal;
-              // Atualizar status dos módulos baseado no resultado do bloco mensal
-              setModuloStatus(prev => {
-                const next = { ...prev };
-                if (bm.orbit === "ok") next.ORBIT = "ok";
-                else if (typeof bm.orbit === "string" && bm.orbit.startsWith("erro")) next.ORBIT = "erro";
-
-                if (bm.gate === "ok") next.GATE = "ok";
-                else if (typeof bm.gate === "string" && bm.gate.startsWith("erro")) next.GATE = "erro";
-
-                if (bm.tune === "executado") next.FIRE = "ok";
-                else if (typeof bm.tune === "string" && bm.tune.startsWith("erro")) next.FIRE = "erro";
-
-                return next;
-              });
-
-              if (bm.tune === "executado") {
-                setMensagem(`${tk}: TUNE executado — parâmetros recalibrados`);
-              } else if (bm.tune && typeof bm.tune === "string" && bm.tune.startsWith("erro")) {
-                setMensagem(`${tk}: TUNE erro — ${bm.tune}`);
-              } else if (bm.status_anterior && bm.status_novo) {
-                setMensagem(`${tk}: ${bm.status_anterior} → ${bm.status_novo}`);
+          // Gate EOD bloqueado → luz vermelha no GATE (antes do bloco mensal)
+          if (data.gate_eod === "BLOQUEADO") {
+            setModuloStatus(prev => ({ ...prev, GATE: "erro" }));
+            // A mensagem específica já vem do evento dc_module_complete do gate_eod
+            // Só atualizar se ainda não tiver mensagem mais específica
+            setMensagem(prev => {
+              if (prev.includes("desatualizado") || prev.includes("iniciando atualização") || prev.includes("dados incompletos")) {
+                return prev; // Manter mensagem específica do dc_module_complete
               }
-            }
-            return;
+              return `${tk}: GATE EOD BLOQUEADO`;
+            });
+          } else if (data.gate_eod === "MONITORAR") {
+            setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
+            setMensagem(`${tk}: GATE EOD = MONITORAR`);
+          } else if (data.gate_eod === "OPERAR") {
+            setModuloStatus(prev => ({ ...prev, GATE: "ok" }));
+            setMensagem(`${tk}: GATE EOD = OPERAR`);
           }
+
+          // Bloco mensal: mostrar resumo do que aconteceu
+          if (data.bloco_mensal) {
+            const bm = data.bloco_mensal;
+            // Atualizar status dos módulos baseado no resultado do bloco mensal
+            setModuloStatus(prev => {
+              const next = { ...prev };
+              if (bm.orbit === "ok") next.ORBIT = "ok";
+              else if (typeof bm.orbit === "string" && bm.orbit.startsWith("erro")) next.ORBIT = "erro";
+
+              if (bm.gate === "ok") next.GATE = "ok";
+              else if (typeof bm.gate === "string" && bm.gate.startsWith("erro")) next.GATE = "erro";
+
+              if (bm.tune === "executado") next.FIRE = "ok";
+              else if (typeof bm.tune === "string" && bm.tune.startsWith("erro")) next.FIRE = "erro";
+
+              return next;
+            });
+
+            if (bm.tune === "executado") {
+              setMensagem(`${tk}: TUNE executado — parâmetros recalibrados`);
+            } else if (bm.tune && typeof bm.tune === "string" && bm.tune.startsWith("erro")) {
+              setMensagem(`${tk}: TUNE erro — ${bm.tune}`);
+            } else if (bm.status_anterior && bm.status_novo) {
+              setMensagem(`${tk}: ${bm.status_anterior} → ${bm.status_novo}`);
+            }
+          }
+          return;
+
 
           if (data && data.type === "status_transition") {
             const tk = data.ticker;
@@ -280,7 +280,7 @@ export default function OrchestratorLogDrawer({ isRunning }) {
           console.error("WS parse error:", e);
         }
       };
-      
+
       wsRef.current.onclose = () => {
         // Conexão fechada
       };
@@ -298,7 +298,7 @@ export default function OrchestratorLogDrawer({ isRunning }) {
       clearTimeout(timeoutRef.current);
     }
     */
-    
+
     return () => {
       // Apenas limpar timeouts — NÃO fechar WebSocket aqui
       clearTimeout(timeoutRef.current);
