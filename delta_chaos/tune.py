@@ -17,7 +17,7 @@ from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, DRIVE_BASE, CONFIG_PATH,
 )
 from delta_chaos.tape import (
-    tape_carregar_ativo, tape_backtest, tape_externas,
+    tape_ativo_carregar, tape_historico_carregar, tape_externas_carregar,
     _obter_selic,
 )
 from delta_chaos.orbit import ORBIT
@@ -85,7 +85,7 @@ def executar_tune(ticker: str) -> dict:
 
     # TAPE — uma vez
     print(f"\n  [1/4] TAPE...")
-    df_tape_c = tape_backtest(
+    df_tape_c = tape_historico_carregar(
         ativos = [TICKER],
         anos   = ANOS,
         forcar = False)
@@ -98,7 +98,7 @@ def executar_tune(ticker: str) -> dict:
 
     # Config do ativo — sem take_profit/stop_loss para não sobrescrever TUNE
     print(f"\n  [3/4] Config ativo...")
-    cfg_ativo = tape_carregar_ativo(TICKER)
+    cfg_ativo = tape_ativo_carregar(TICKER)
     cfg_ativo.pop("take_profit", None)
     cfg_ativo.pop("stop_loss",   None)
     print(f"  ✓ {TICKER} config carregado (take_profit/stop_loss removidos para TUNE)")
@@ -117,8 +117,8 @@ def executar_tune(ticker: str) -> dict:
     if len(historico_c) == 0:
         print(f"  ~ Histórico ORBIT vazio — calculando agora...")
         _orbit_tune = ORBIT(universo={TICKER: {}})
-        externas = tape_externas([TICKER], ANOS)
-        _orbit_tune.rodar(df_tape_c, ANOS, modo="cache", externas_dict=externas)
+        externas = tape_externas_carregar([TICKER], ANOS)
+        _orbit_tune.orbit_rodar(df_tape_c, ANOS, modo="cache", externas_dict=externas)
         with open(path_ativo) as f:
             dados_ativo = json.load(f)
         historico_c = pd.DataFrame(dados_ativo["historico"])

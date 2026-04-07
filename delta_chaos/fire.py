@@ -7,7 +7,7 @@
 # ════════════════════════════════════════════════════════════════════
 
 from delta_chaos.init import carregar_config, ATIVOS_DIR
-from .tape import tape_carregar_ativo
+from .tape import tape_ativo_carregar
 from .book import (
     BOOK, Operacao, Core, Context,
     OrbitData, Leg, SCHEMA_VERSION,
@@ -186,7 +186,7 @@ class FIRE:
         sizing_orbit = orbit_data.get("sizing", 0.0)
 
         if cfg is None:
-            cfg = tape_carregar_ativo(ativo)
+            cfg = tape_ativo_carregar(ativo)
 
         regimes_sizing = cfg.get(
             "regimes_sizing", REGIMES_SIZING_PADRAO)
@@ -423,7 +423,7 @@ class FIRE:
 
             # S5 — usa configs_ativos cacheado se disponível
             cfg_ativo = (configs_ativos or {}).get(ativo) \
-                        or tape_carregar_ativo(ativo)
+                        or tape_ativo_carregar(ativo)
             _tp   = float(cfg_ativo.get("take_profit")
                           or _tp_global)
             _stop = float(cfg_ativo.get("stop_loss")

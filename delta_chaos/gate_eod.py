@@ -7,7 +7,7 @@
 # ════════════════════════════════════════════════════════════════════
 
 from delta_chaos.init import carregar_config, ATIVOS_DIR
-from delta_chaos.tape import tape_carregar_ativo
+from delta_chaos.tape import tape_ativo_carregar
 
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
 try:
@@ -43,9 +43,9 @@ def _emoji(parecer: str) -> str:
     return {"OPERAR": "✓", "MONITORAR": "~",
             "BLOQUEADO": "✗", "GATE VENCIDO": "⚠"}.get(parecer, "?")
 
-def gate_eod(ticker: str, verbose: bool = True) -> str:
+def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
     ticker = ticker.replace(".SA", "").upper()
-    dados  = tape_carregar_ativo(ticker)
+    dados  = tape_ativo_carregar(ticker)
     hoje   = date.today().strftime("%Y-%m-%d")
     avisos    = []
     bloqueios = []
@@ -231,4 +231,4 @@ def gate_eod(ticker: str, verbose: bool = True) -> str:
 
 if __name__ == "__main__":
     print("✓ gate_eod v1.0 carregado")
-    print("  gate_eod(ticker) → OPERAR | MONITORAR | BLOQUEADO | GATE VENCIDO")
+    print("  gate_eod_verificar(ticker) → OPERAR | MONITORAR | BLOQUEADO | GATE VENCIDO")

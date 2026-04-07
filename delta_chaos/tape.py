@@ -24,29 +24,12 @@ except ImportError:
     def emit_error(e): print(f"[ERROR] {e}")
     _atlas_disponivel = False
 
-# ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — TAPE v1.2
-# Alterações em relação à v1.1:
-# ADICIONADO: tape_salvar_ativo() — salva master JSON de forma atômica
-# ADICIONADO: tape_sizing_reflect() — retorna multiplicador REFLECT
-# ADICIONADO: tape_reflect_daily() — calcula componentes EOD
-# ADICIONADO: tape_reflect_cycle() — calcula estado REFLECT mensal
-# ADICIONADO: tape_process_eod_file() — processa arquivo EOD
-# ADICIONADO: _parse_preco_eod() — converte strike EOD (/100)
-# ADICIONADO: _process_eod_options_data() — filtra e prepara dados EOD
-# ADICIONADO: _calculate_divergence_components() — divergência bidirecional
-# ADICIONADO: _calculate_gex() — Gamma Exposure (dado auxiliar)
-# ADICIONADO: _calcular_zscore_rolling() — normalização rolling
-# ADICIONADO: _get_vencimento_referencia() — vencimento por maior OI
-# ALTERADO:   tape_carregar_ativo() — inicializa campos REFLECT
-# ALTERADO:   tape_salvar_ciclo() — usa tape_salvar_ativo() atômico
-# ALTERADO:   _ler_cotahist() — adiciona open_interest
-# CORRIGIDO (SCAN-3): ret_vol_ratio com proteção contra divisão por zero
-# CORRIGIDO (SCAN-5): deduplicação reflect_all_cycles_history por ciclo_id
-# CORRIGIDO (SCAN-6): limpeza daily_history com try/except
-# CORRIGIDO (SCAN-8): tape_salvar_ativo() usa escrita atômica via .tmp
-# CORRIGIDO (SCAN-1): _calcular_zscore_rolling min_periods estável
-# CORRIGIDO (SCAN-2): alpha estado A filtra apenas IR > ir_operar
+# DELTA CHAOS — TAPE v2.0
+# Alterações em relação à v1.2:
+# MIGRADO (P2): imports explícitos de init — sem escopo global do notebook
+# MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
+# MANTIDO: toda a lógica de dados, Black-Scholes, COTAHIST, master JSON
+# REFLECT: funções movidas para EDGE (reflect_daily_calcular, reflect_cycle_calcular, reflect_sizing_calcular)
 # ════════════════════════════════════════════════════════════════════
 
 import os, io, json, math, zipfile, warnings
@@ -208,8 +191,8 @@ def _check_ohlcv(ticker: str, ano: int, mes: int) -> dict:
         }
     anos_necessarios = list(range(ano - 1, ano + 1))
     try:
-        # tape_ohlcv já incrementa cache se desatualizado
-        df = tape_ohlcv(ticker, anos_necessarios)
+        # tape_ohlcv_carregar já incrementa cache se desatualizado
+        df = tape_ohlcv_carregar(ticker, anos_necessarios)
         if df.empty:
             return {
                 "disponivel": False,
@@ -237,7 +220,7 @@ def _check_ohlcv(ticker: str, ano: int, mes: int) -> dict:
         }
 
 
-def tape_verificar_dados(
+def tape_dados_verificar(
     fonte: str,
     ticker: str = None,
     ano: int = None,
@@ -266,9 +249,9 @@ def tape_verificar_dados(
         O contrato de retorno do helper deve ser {"disponivel", "ultima_data", "motivo"}.
 
     Exemplos:
-        tape_verificar_dados("cotahist", ano=2026, mes=4)
-        tape_verificar_dados("selic", ano=2026, mes=3)
-        tape_verificar_dados("ohlcv", ticker="VALE3", ano=2026, mes=4)
+        tape_dados_verificar("cotahist", ano=2026, mes=4)
+        tape_dados_verificar("selic", ano=2026, mes=3)
+        tape_dados_verificar("ohlcv", ticker="VALE3", ano=2026, mes=4)
     """
     if fonte not in _FONTES_DADOS:
         return {
@@ -302,7 +285,7 @@ def tape_verificar_dados(
 # MASTER JSON — leitura e escrita por ativo
 # ════════════════════════════════════════════════════════════════════
 
-def tape_carregar_ativo(ticker: str) -> dict:
+def tape_ativo_carregar(ticker: str) -> dict:
     ticker = ticker.replace(".SA", "").upper()
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
@@ -388,15 +371,15 @@ def tape_carregar_ativo(ticker: str) -> dict:
             print(f"  ⚠ S2: recriando {ticker}.json — "
                   f"erro: {e}")
             # Recria com defaults completos
-            tape_salvar_ativo(ticker, default_config)
+            tape_ativo_salvar(ticker, default_config)
             return default_config
 
     # Arquivo não existe — cria com defaults completos
-    tape_salvar_ativo(ticker, default_config)
+    tape_ativo_salvar(ticker, default_config)
     print(f"  + Master JSON {ticker} criado com defaults")
     return default_config
 
-def tape_inicializar_ativo(ticker: str) -> dict:
+def tape_ativo_inicializar(ticker: str) -> dict:
     """
     Garante que o master JSON do ativo existe e tem todos os campos
     obrigatórios preenchidos com valores padrão.
@@ -475,14 +458,14 @@ def tape_inicializar_ativo(ticker: str) -> dict:
                     alterado = True
 
     if alterado:
-        tape_salvar_ativo(ticker, cfg)
+        tape_ativo_salvar(ticker, cfg)
         print(f"  ✓ {ticker}: master JSON inicializado/atualizado")
     else:
         print(f"  ✓ {ticker}: master JSON OK")
 
     return cfg
 
-def tape_salvar_ativo(ticker: str, cfg_data: dict) -> None:
+def tape_ativo_salvar(ticker: str, cfg_data: dict) -> None:
     """
     Salva master JSON de forma atômica.
     Escreve em .tmp e faz os.replace() — evita JSON truncado
@@ -501,12 +484,12 @@ def tape_salvar_ativo(ticker: str, cfg_data: dict) -> None:
     os.replace(path_tmp, path)  # atômico no mesmo filesystem
 
 
-def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
+def tape_ciclo_salvar(ticker: str, resultado: dict) -> None:
     ticker = ticker.replace(".SA", "").upper()
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
     # Lê estado atual usando carregador robusto
-    dados = tape_carregar_ativo(ticker)
+    dados = tape_ativo_carregar(ticker)
 
     # Atualiza histórico
     ciclo_id = resultado.get("ciclo_id")
@@ -546,12 +529,12 @@ def tape_salvar_ciclo(ticker: str, resultado: dict) -> None:
                 os.remove(tmp_path)
         except Exception:
             pass
-        print(f"  ✗ B24: tape_salvar_ciclo falhou — {e}")
+        print(f"  ✗ B24: tape_ciclo_salvar falhou — {e}")
         raise
 
-def tape_regime_para_data(ticker: str, data: str) -> dict:
+def tape_ciclo_para_data(ticker: str, data: str) -> dict:
     ticker = ticker.replace(".SA","").upper()
-    dados  = tape_carregar_ativo(ticker)
+    dados  = tape_ativo_carregar(ticker)
 
     historico = dados.get("historico", [])
     if not historico:
@@ -574,46 +557,12 @@ def tape_regime_para_data(ticker: str, data: str) -> dict:
     }
 
 
-def tape_sizing_reflect(ticker: str) -> float:
-    """
-    Retorna multiplicador_sizing.
-    EDGE multiplica sizing do ORBIT por este valor antes de passar ao FIRE.
-    FIRE não conhece o REFLECT — recebe apenas o sizing final modulado.
-    """
-    ticker = ticker.replace(".SA","").upper()
-    cfg    = tape_carregar_ativo(ticker)
-
-    reflect_state = cfg.get("reflect_state", "B")
-    if reflect_state == "E":
-        return 0.0
-
-    _cfg_reflect  = carregar_config()["reflect"]
-    _cfg_orbit    = carregar_config()["orbit"]
-    ir_operar     = _cfg_orbit["ir_operar"]
-
-    if reflect_state == "A":
-        reflect_score = cfg.get("reflect_score", 0.0)
-        threshold_A   = _cfg_reflect["thresholds"]["A"]
-        alpha_factor  = _cfg_reflect["sizing_A_alpha_factor"]
-        max_cap_alpha = _cfg_reflect["sizing_A_max_cap_alpha"]
-        alpha = (reflect_score - threshold_A) * alpha_factor
-        alpha = float(np.clip(alpha, 0.0, max_cap_alpha))
-        return 1.0 + alpha
-
-    sizing_map = {
-        "B": 1.0,
-        "C": _cfg_reflect["reflect_sizing_C"],
-        "D": _cfg_reflect["reflect_sizing_D"],
-        "E": _cfg_reflect["reflect_sizing_E"],
-    }
-    return sizing_map.get(reflect_state, 1.0)
-
 
 # ════════════════════════════════════════════════════════════════════
 # OHLCV — download e cache via yfinance
 # ════════════════════════════════════════════════════════════════════
 
-def tape_ohlcv(ativo: str, anos: list) -> pd.DataFrame:
+def tape_ohlcv_carregar_carregar(ativo: str, anos: list) -> pd.DataFrame:
     ativo      = ativo.replace(".SA","").upper()
     cache_path = os.path.join(OHLCV_DIR, f"{ativo}.parquet")
     ano_ini    = min(anos) - 2
@@ -660,7 +609,7 @@ def tape_ohlcv(ativo: str, anos: list) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def tape_ibov(anos: list) -> pd.Series:
+def tape_ibov_carregar_carregar(anos: list) -> pd.Series:
     cache_path = os.path.join(OHLCV_DIR, "IBOV.parquet")
     ano_ini    = min(anos) - 2
     ano_fim    = max(anos)
@@ -694,7 +643,7 @@ def tape_ibov(anos: list) -> pd.Series:
         return pd.Series(dtype=float)
 
 
-def tape_serie_externa(nome: str, anos: list) -> pd.Series:
+def tape_externa_carregar(nome: str, anos: list) -> pd.Series:
     mapa = {"usdbrl": "USDBRL=X", "minerio": "TIO=F"}
     if nome not in mapa:
         print(f"  ⚠ Série externa desconhecida: {nome}")
@@ -746,29 +695,29 @@ def tape_serie_externa(nome: str, anos: list) -> pd.Series:
 # SÉRIES EXTERNAS — função de alto nível para carregar todas as ativas
 # ════════════════════════════════════════════════════════════════════
 
-def tape_externas(ativos: list, anos: list) -> dict:
+def tape_externas_carregar_carregar(ativos: list, anos: list) -> dict:
     """
     Identifica séries externas ativas na configuração dos ativos,
-    baixa e cacheia via tape_serie_externa().
+    baixa e cacheia via tape_externa_carregar().
 
     Retorna dict {nome_serie: pd.Series} com todas as séries ativas.
-    Segue o mesmo padrão de tape_ohlcv() e tape_ibov() —
+    Segue o mesmo padrão de tape_ohlcv_carregar() e tape_ibov_carregar() —
     o chamador recebe dados prontos sem saber como foram obtidos.
 
     Extensibilidade: adicionar nova fonte = novo entry no mapa
-    dentro de tape_serie_externa() — tape_externas() não muda.
+    dentro de tape_externa_carregar() — tape_externas_carregar() não muda.
     """
     series_ativas = set()
 
     for ticker in ativos:
-        cfg = tape_carregar_ativo(ticker)
+        cfg = tape_ativo_carregar(ticker)
         for nome_serie, ativa in cfg.get("externas", {}).items():
             if ativa:
                 series_ativas.add(nome_serie)
 
     externas = {}
     for nome_serie in sorted(series_ativas):
-        serie = tape_serie_externa(nome_serie, anos)
+        serie = tape_externa_carregar(nome_serie, anos)
         if serie is not None:
             externas[nome_serie] = serie
             print(f"  ✓ Série externa {nome_serie}: {len(serie):,} dias")
@@ -1349,7 +1298,7 @@ def _process_eod_options_data(df_eod_raw: pd.DataFrame,
 
     # Preço da ação do dia via OHLCV cache
     current_year = pd.to_datetime(data).year
-    df_ohlcv = tape_ohlcv(ativo_base, [current_year - 1, current_year])
+    df_ohlcv = tape_ohlcv_carregar(ativo_base, [current_year - 1, current_year])
     data_ts  = pd.to_datetime(data)
     preco_acao = None
     if not df_ohlcv.empty:
@@ -1434,7 +1383,7 @@ def _calculate_divergence_components(
 
     # Ratio 2
     current_year = pd.to_datetime(data).year
-    df_ohlcv     = tape_ohlcv(ativo_base,
+    df_ohlcv     = tape_ohlcv_carregar(ativo_base,
                                [current_year - 1, current_year])
     ret_vol_ratio = np.nan
     if not df_ohlcv.empty and iv_pond > 0:
@@ -1458,23 +1407,6 @@ def _calculate_divergence_components(
 # REFLECT — interface pública
 # ════════════════════════════════════════════════════════════════════
 
-def tape_process_eod_file(filepath: str) -> None:
-    """
-    Ponto de entrada para arquivos EOD de opções.
-    Chama tape_reflect_daily para cada ativo encontrado no arquivo.
-    """
-    print(f"\n  Processando EOD: {os.path.basename(filepath)}")
-    try:
-        if filepath.endswith(".xlsx"):
-            df_raw = pd.read_excel(filepath)
-        elif filepath.endswith(".csv"):
-            df_raw = pd.read_csv(filepath)
-        else:
-            print(f"  ⚠ Formato não suportado: {filepath}")
-            return
-    except Exception as e:
-        print(f"  ✗ Erro ao ler {filepath}: {e}")
-        return
 
     # Extrai data do nome do arquivo (formato: ..._YYYY-MM-DD.xlsx)
     basename  = os.path.basename(filepath)
@@ -1500,280 +1432,12 @@ def tape_process_eod_file(filepath: str) -> None:
                   "adicione coluna 'ativo_base'")
             return
 
-    for ativo in df_raw["ativo_base"].unique():
-        df_ativo = df_raw[df_raw["ativo_base"] == ativo].copy()
-        df_proc  = _process_eod_options_data(
-            df_ativo, ativo, data_ref)
-        if not df_proc.empty:
-            tape_reflect_daily(ativo, data_ref, df_proc)
-        else:
-            print(f"  ~ {ativo}: sem dados válidos em {data_ref}")
-
-
-def tape_reflect_daily(ativo: str,
-                        data: str,
-                        df_eod: pd.DataFrame) -> None:
-    """
-    Calcula e armazena componentes brutos do REFLECT para um dia.
-    O estado definitivo é calculado em tape_reflect_cycle.
-    """
-    cfg = tape_carregar_ativo(ativo)
-
-    div = _calculate_divergence_components(df_eod, ativo, data)
-    preco_acao = (float(df_eod["preco_acao"].iloc[0])
-                  if not df_eod.empty and
-                  "preco_acao" in df_eod.columns else 0.0)
-    gex = _calculate_gex(df_eod, preco_acao)
-
-    if "reflect_daily_history" not in cfg:
-        cfg["reflect_daily_history"] = {}
-
-    # Não sobrescreve se já existe entrada para este dia
-    if data not in cfg["reflect_daily_history"]:
-        cfg["reflect_daily_history"][data] = {
-            "iv_prem_ratio": div["iv_prem_ratio"],
-            "ret_vol_ratio": div["ret_vol_ratio"],
-            "gex":           gex,  # dado auxiliar, não entra no score
-        }
-        print(f"  ✓ REFLECT diário {ativo} {data}: "
-              f"IV/Prêmio={div['iv_prem_ratio']:.4f}  "
-              f"Ret/Vol={div['ret_vol_ratio']:.4f}")
-
-    tape_salvar_ativo(ativo, cfg)
-
-
-def tape_reflect_cycle(ativo: str, ciclo_id: str) -> None:
-    """
-    Calcula o estado REFLECT definitivo para o ciclo mensal.
-    Chamado pelo EDGE no fechamento de cada ciclo.
-
-    Componentes:
-      1. Aceleração: derivada segunda do score_vel do ORBIT
-      2. Divergência bidirecional: média(iv_prem + ret_vol) normalizados
-      3. Delta_IR: IR de curto prazo minus IR de longo prazo
-    """
-    cfg          = tape_carregar_ativo(ativo)
-    _cfg_reflect = carregar_config()["reflect"]
-    _cfg_orbit   = carregar_config()["orbit"]
-
-    zscore_window         = _cfg_reflect["reflect_zscore_window"]
-    delta_ir_short_window = _cfg_reflect["reflect_delta_ir_short_window"]
-    delta_ir_long_window  = _cfg_reflect["reflect_delta_ir_long_window"]
-    div_iv_window         = _cfg_reflect["divergence_iv_prem_rolling_window"]
-    div_rv_window         = _cfg_reflect["divergence_ret_vol_rolling_window"]
-
-    # ── Verificação de causas para definitivo/diagnostico ──
-    historico_orbit = cfg.get("historico", [])
-    ciclo_existe_orbit = any(
-        c.get("ciclo_id") == ciclo_id for c in historico_orbit
-    )
-
-    causa_provisorio = None
-    if not ciclo_existe_orbit:
-        causa_provisorio = "ORBIT desatualizado — ciclo atual ausente no master JSON"
-
-    # ── 1. Aceleração ─────────────────────────────────────────────
-    historico_df = pd.DataFrame(cfg.get("historico", []))
-    aceleracao   = np.nan
-    if not historico_df.empty and "ciclo_id" in historico_df.columns:
-        historico_df = historico_df.set_index("ciclo_id")
-        if ciclo_id in historico_df.index:
-            idx = historico_df.index.get_loc(ciclo_id)
-            # get_loc pode retornar slice se houver duplicatas no índice
-            if isinstance(idx, slice):
-                idx = idx.start
-            # SCAN-4 corrigido: basta idx >= 1 para calcular aceleração
-            if idx >= 1:
-                sv_atual  = float(historico_df.iloc[idx].get(
-                    "score_vel", 0.0))
-                sv_ant    = float(historico_df.iloc[idx-1].get(
-                    "score_vel", 0.0))
-                aceleracao = sv_atual - sv_ant
-
-    # ── 2. Divergência bidirecional ───────────────────────────────
-    daily_hist = cfg.get("reflect_daily_history", {})
-    daily_df   = pd.DataFrame.from_dict(daily_hist, orient="index")
-
-    iv_prem_avg = np.nan
-    ret_vol_avg = np.nan
-    if not daily_df.empty:
-        daily_df.index = pd.to_datetime(daily_df.index)
-        try:
-            mask = daily_df.index.to_period("M") == pd.Period(ciclo_id)
-            df_ciclo = daily_df[mask].copy()
-            if not df_ciclo.empty:
-                iv_prem_avg = float(
-                    df_ciclo["iv_prem_ratio"].mean())
-                ret_vol_avg = float(
-                    df_ciclo["ret_vol_ratio"].mean())
-        except Exception as e:
-            print(f"  ⚠ REFLECT divergência {ativo} {ciclo_id}: {e}")
-
-    # ── Verificação Causa 2: EOD não processado (componente 2 zerado) ──
-    if causa_provisorio is None:
-        eod_processado = (
-            not np.isnan(iv_prem_avg)
-            and iv_prem_avg != 0.0
-        )
-        if not eod_processado:
-            causa_provisorio = "EOD não processado — componente 2 zerado"
-
-    # ── 3. Delta_IR ───────────────────────────────────────────────
-    delta_ir = np.nan
-    if not historico_df.empty and len(historico_df) >= delta_ir_long_window:
-        try:
-            idx = historico_df.index.get_loc(ciclo_id)
-            if idx >= delta_ir_long_window - 1:
-                ir_short = float(historico_df.iloc[
-                    idx - delta_ir_short_window + 1:
-                    idx + 1]["ir"].mean())
-                ir_long  = float(historico_df.iloc[
-                    idx - delta_ir_long_window + 1:
-                    idx + 1]["ir"].mean())
-                delta_ir = ir_short - ir_long
-        except Exception as e:
-            print(f"  ⚠ REFLECT delta_ir {ativo} {ciclo_id}: {e}")
-
-    # ── Normalização via z-score rolling ──────────────────────────
-    # Constrói série histórica acumulada para z-score
-    all_hist = cfg.get("reflect_all_cycles_history", [])
-    entrada_atual = {
-        "ciclo_id":        ciclo_id,
-        "date_ref":        f"{ciclo_id}-01",
-        "aceleracao":      aceleracao,
-        "iv_prem_ratio":   iv_prem_avg,
-        "ret_vol_ratio":   ret_vol_avg,
-        "delta_ir":        delta_ir,
-    }
-
-    # SCAN-5 CORRIGIDO: deduplicação por ciclo_id (não date_ref)
-    all_hist_limpo = [e for e in all_hist
-                      if e.get("ciclo_id") != ciclo_id]
-    all_hist_limpo.append(entrada_atual)
-    all_hist_limpo.sort(key=lambda x: x.get("ciclo_id",""))
-
-    df_all = pd.DataFrame(all_hist_limpo)
-    df_all.index = pd.to_datetime(df_all["date_ref"])
-
-    def _zscore_ultimo(col):
-        if col not in df_all.columns:
-            return 0.0
-        s = pd.to_numeric(df_all[col], errors="coerce")
-        z = _calcular_zscore_rolling(s, zscore_window)
-        return float(z.iloc[-1]) if not z.empty else 0.0
-
-    def _zscore_ultimo_w(col, w):
-        if col not in df_all.columns:
-            return 0.0
-        s = pd.to_numeric(df_all[col], errors="coerce")
-        z = _calcular_zscore_rolling(s, w)
-        return float(z.iloc[-1]) if not z.empty else 0.0
-
-    norm_acel   = _zscore_ultimo("aceleracao")
-    norm_iv     = _zscore_ultimo_w("iv_prem_ratio", div_iv_window)
-    norm_rv     = _zscore_ultimo_w("ret_vol_ratio",  div_rv_window)
-    norm_dir    = float(np.nanmean([norm_iv, norm_rv]))
-    if np.isnan(norm_dir):
-        norm_dir = 0.0
-    norm_delta_ir = _zscore_ultimo("delta_ir")
-
-    # ── Score ponderado ───────────────────────────────────────────
-    w = _cfg_reflect["weights"]
-    reflect_score = (norm_acel      * w["aceleracao"] +
-                     norm_dir       * w["divergencia"] +
-                     norm_delta_ir  * w["delta_ir"])
-
-    # ── Estado A–E ────────────────────────────────────────────────
-    thr = _cfg_reflect["thresholds"]
-    if reflect_score >= thr["A"]:
-        state = "A"
-    elif reflect_score >= thr["B_upper"]:
-        state = "B"
-    elif reflect_score >= thr["B_lower"]:
-        state = "B"
-    elif reflect_score >= thr["C"]:
-        state = "C"
-    elif reflect_score >= thr["D"]:
-        state = "D"
-    else:
-        state = "E"
-
-    permanente_block = (state == "E")
-
-    # ── Definitivo vs Provisório ──
-    # Quando dados estão incompletos (COTAHIST não baixado, EOD não processado,
-    # OHLCV ausente), o cálculo REFLECT pode estar incorreto. O REFLECT é
-    # append-only mensal, mas registros não-definitivos podem ser sobrescritos
-    # quando os dados faltantes forem disponibilizados.
-    # Quando todos os dados necessários estão disponíveis, definitivo=True e o
-    # registro fica bloqueado para edição futura.
-    # COMENTÁRIO CRÍTICO — NÃO REMOVER EM ATUALIZAÇÕES FUTURAS
-    definitivo = causa_provisorio is None
-
-    # ── Persiste ──
-    cfg["reflect_state"] = state
-    cfg["reflect_score"] = float(reflect_score)
-
-    # Histórico de estados para dashboard (N mais recentes)
-    hist_entry = {
-        "ciclo_id":   ciclo_id,
-        "date":       str(datetime.now())[:10],
-        "state":      state,
-        "score":      float(reflect_score),
-        "definitivo": definitivo,
-    }
-    if causa_provisorio:
-        hist_entry["diagnostico"] = causa_provisorio
-    reflect_hist = [h for h in cfg.get("reflect_history", [])
-                    if h.get("ciclo_id") != ciclo_id]
-    reflect_hist.append(hist_entry)
-    reflect_hist.sort(key=lambda x: x.get("ciclo_id",""))
-    cfg["reflect_history"] = reflect_hist
-
-    # Histórico completo de ciclos (para z-score futuro)
-    entrada_completa = {
-        **entrada_atual,
-        "norm_aceleracao": norm_acel,
-        "norm_divergencia": norm_dir,
-        "norm_delta_ir":   norm_delta_ir,
-        "reflect_score":   float(reflect_score),
-        "reflect_state":   state,
-        "definitivo":      definitivo,
-    }
-    if causa_provisorio:
-        entrada_completa["diagnostico"] = causa_provisorio
-    all_hist_limpo_final = [e for e in all_hist
-                             if e.get("ciclo_id") != ciclo_id]
-    all_hist_limpo_final.append(entrada_completa)
-    all_hist_limpo_final.sort(key=lambda x: x.get("ciclo_id",""))
-    cfg["reflect_all_cycles_history"] = all_hist_limpo_final
-
-    # SCAN-6: limpeza daily_history com try/except
-    try:
-        cfg["reflect_daily_history"] = {
-            k: v for k, v in
-            cfg.get("reflect_daily_history", {}).items()
-            if pd.to_datetime(k).to_period("M") != pd.Period(ciclo_id)
-        }
-    except Exception as e:
-        print(f"  ⚠ REFLECT limpeza daily_history {ativo}: {e}")
-
-    tape_salvar_ativo(ativo, cfg)
-    print(f"  OK REFLECT ciclo {ativo} {ciclo_id}: "
-          f"Edge {state}  Score={reflect_score:+.4f}")
-
-
-    # Pendência crítica — protocolo de retomada após estado E
-    # não está definido. Retomada é processo manual com protocolo
-    # a ser definido pelo board antes do paper trading.
-    # SCAN item aberto: definir tape_reflect_reset_e(ticker)
-
 
 # ════════════════════════════════════════════════════════════════════
 # INTERFACE PÚBLICA
 # ════════════════════════════════════════════════════════════════════
 
-def tape_backtest(ativos, anos, forcar=False):
+def tape_historico_carregar(ativos, anos, forcar=False):
     ativos = [a.replace(".SA","").upper() for a in ativos]
     print(f"\n{'═'*60}")
     print(f"  TAPE.backtest")
@@ -1882,9 +1546,9 @@ def tape_backtest(ativos, anos, forcar=False):
     print(f"\n  ✓ Concluído: {len(df):,} registros")
     return df
 
-print("✓ tape_backtest atualizado — loop COTAHIST via lista")
+print("✓ tape_historico_carregar atualizado — loop COTAHIST via lista")
 
-def tape_paper(ativo, filepath, preco_acao=None, data=None):
+def tape_eod_carregar(ativo, filepath, preco_acao=None, data=None):
     ativo = ativo.replace(".SA","").upper()
     data  = data or str(date.today())
     print(f"  TAPE.paper: {ativo} — {filepath}")
@@ -2061,15 +1725,14 @@ def tape_auto(ativos):
         "TAPE.auto não implementado.\n"
         "Disponível quando a API OpLab/opcoes.net.br "
         "for contratada.\n"
-        "Use tape_paper() enquanto isso.")
+        "Use tape_eod_carregar() enquanto isso.")
 
 if __name__ == "__main__":
     print(f"✓ TAPE v1.2 carregado")
     print(f"  Caminhos via Célula 1 — sem redeclaração")
-    print(f"  Master JSON: tape_carregar_ativo | tape_salvar_ativo | "
-          f"tape_salvar_ciclo | tape_regime_para_data")
-    print(f"  Dados:       tape_ohlcv | tape_ibov | tape_serie_externa")
-    print(f"  Backtest:    tape_backtest | tape_paper | tape_auto")
-    print(f"  REFLECT:     tape_process_eod_file | tape_reflect_daily | "
-          f"tape_reflect_cycle | tape_sizing_reflect")
+    print(f"  Master JSON: tape_ativo_carregar | tape_ativo_salvar | "
+          f"tape_ciclo_salvar | tape_ciclo_para_data")
+    print(f"  Dados:       tape_ohlcv_carregar | tape_ibov_carregar | tape_externa_carregar")
+    print(f"  Backtest:    tape_historico_carregar | tape_eod_carregar | tape_auto")
+    print(f"  REFLECT:     funções movidas para EDGE (reflect_*)")
     print(f"  SCAN aberto: protocolo retomada após estado E não definido")

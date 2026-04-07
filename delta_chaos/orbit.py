@@ -11,9 +11,9 @@ from delta_chaos.init import (
     OHLCV_DIR, EXTERNAS_DIR,
 )
 from delta_chaos.tape import (
-    tape_carregar_ativo, tape_salvar_ciclo,
-    tape_ohlcv, tape_ibov, tape_serie_externa,
-    tape_regime_para_data,
+    tape_ciclo_salvar,
+    tape_ohlcv_carregar, tape_ibov_carregar, tape_externa_carregar,
+    tape_ciclo_para_data,
     _obter_selic,
 )
 
@@ -414,7 +414,7 @@ class ORBIT:
     """
     ORBIT v3.4
     Dados via TAPE — sem acesso direto ao Drive
-    Master JSON por ativo via tape_carregar_ativo / tape_salvar_ciclo
+    Master JSON por ativo via tape_ativo_carregar / tape_ciclo_salvar
     tape_reflect_cycle removido — responsabilidade do EDGE
     """
 
@@ -424,21 +424,21 @@ class ORBIT:
         print(f"  ORBIT v3.4 — {len(self.ativos)} ativos")
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
-    def rodar(self, df_tape, anos, modo="pipeline", externas_dict=None):
-        df_cache, ciclos_faltantes = self._carregar_cache(anos)
+    def orbit_rodar(self, df_tape, anos, modo="pipeline", externas_dict=None):
+        df_cache, ciclos_faltantes = self.orbit_cache_carregar(anos)
 
         # Cache completo — retorna sem processar
         if not ciclos_faltantes:
             return df_cache
 
-        ibov_close = tape_ibov(anos)
+        ibov_close = tape_ibov_carregar(anos)
         if ibov_close.empty:
             print("  ✗ IBOV indisponível")
             return pd.DataFrame()
 
         ohlcv_ativos = {}
         for ativo in self.ativos:
-            df_ohlcv = tape_ohlcv(ativo, anos)
+            df_ohlcv = tape_ohlcv_carregar(ativo, anos)
             if not df_ohlcv.empty:
                 ohlcv_ativos[ativo] = df_ohlcv
             else:
@@ -472,11 +472,10 @@ class ORBIT:
         with _tqdm(ciclos, desc="ORBIT v4.0",
                    unit="ciclo", ncols=None) as pbar:
             for ciclo_id in ciclos:
-                pbar.set_description(f"ORBIT {ciclo_id}")
                 data_ref = self._data_ref(ciclo_id)
 
                 for ativo in ohlcv_ativos:
-                    cfg = tape_carregar_ativo(ativo)
+                    cfg = tape_ativo_carregar(ativo)
 
                     df_ohlcv = ohlcv_ativos[ativo]
                     df_ate   = df_ohlcv[
@@ -489,7 +488,7 @@ class ORBIT:
                     ibov_al = ibov_close.reindex(
                         df_ate.index, method="ffill")
 
-                    resultado = self._processar_ativo(
+                    resultado = self.orbit_ativo_processar(
                         ativo, cfg, df_ate,
                         ibov_al, ciclo_id,
                         score_hist, vol_hist)
@@ -497,7 +496,7 @@ class ORBIT:
                     if resultado:
                         rows.append(resultado)
                         # Salva ciclo no master JSON
-                        tape_salvar_ciclo(ativo, resultado)
+                        tape_ciclo_salvar(ativo, resultado)
                         pbar.set_postfix(
                             ciclo  = ciclo_id,
                             ativo  = ativo,
@@ -518,7 +517,7 @@ class ORBIT:
 
         return df_regimes
 
-    def _processar_ativo(self, ativo, cfg, df_ohlcv,
+    def orbit_ativo_processar(self, ativo, cfg, df_ohlcv,
                           ibov_close, ciclo_id,
                           score_hist_global=None,
                           vol_hist_global=None):
@@ -669,8 +668,8 @@ class ORBIT:
                   if "s6" in pesos_at else 0.0,
         }
 
-    def regime_para_data(self, ativo, data):
-        return tape_regime_para_data(ativo, data)
+    def orbit_regime_para_data(self, ativo, data):
+        return tape_ciclo_para_data(ativo, data)
 
     def _relatorio(self, df_regimes):
         ciclos = sorted(df_regimes["ciclo_id"].unique())
@@ -732,7 +731,7 @@ class ORBIT:
             return date(ano+1,1,1)-timedelta(days=1)
         return date(ano,mes+1,1)-timedelta(days=1)
 
-    def _carregar_cache(self, anos):
+    def orbit_cache_carregar(self, anos):
         necessarios = set()
         for ano in anos:
             for mes in range(1,13):
@@ -742,7 +741,7 @@ class ORBIT:
         rows = []
         ciclos_existentes = set()
         for ativo in self.ativos:
-            dados = tape_carregar_ativo(ativo)
+            dados = tape_ativo_carregar(ativo)
             historico = dados.get("historico", [])
             for c in historico:
                 ciclos_existentes.add(c["ciclo_id"])

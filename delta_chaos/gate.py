@@ -7,7 +7,7 @@ from datetime import datetime
 # DELTA CHAOS — GATE v2.0
 # Alterações em relação à v1.0:
 # MIGRADO (P2): imports explícitos de init, tape, edge — sem escopo global
-# MIGRADO (P3): TICKER=input() → executar_gate(ticker: str) -> str
+# MIGRADO (P3): TICKER=input() → gate_executar(ticker: str) -> str
 # MIGRADO (P4): raise SystemExit → raise ValueError (não mata FastAPI)
 # MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
 # MANTIDO: 8 etapas, lógica de backtest interno, decisão OPERAR/MONITORAR/EXCLUÍDO
@@ -16,7 +16,7 @@ from datetime import datetime
 from delta_chaos.init import (
     carregar_config, ATIVOS_DIR, BOOK_DIR, GREGAS_DIR, CONFIG_PATH
 )
-from delta_chaos.tape import tape_carregar_ativo, tape_inicializar_ativo, tape_salvar_ativo
+from delta_chaos.tape import tape_ativo_carregar, tape_ativo_inicializar, tape_ativo_salvar
 from delta_chaos.edge import EDGE
 
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
@@ -30,7 +30,7 @@ except ImportError:
 
 
 
-def executar_gate(ticker: str) -> str:
+def gate_executar(ticker: str) -> str:
     """
     Executa GATE completo para o ticker informado.
     Retorna: "OPERAR" | "MONITORAR" | "EXCLUÍDO"
@@ -52,12 +52,12 @@ def executar_gate(ticker: str) -> str:
     IR_GATE_E1 = 0.10
     IR_GATE_E4 = 0.20
     DD_GATE_E7 = 3.0
-    # TICKER recebido como argumento de executar_gate()
+    # TICKER recebido como argumento de gate_executar()
 
     sep  = "═" * 60
     sep2 = "─" * 60
 
-    tape_inicializar_ativo(TICKER)
+    tape_ativo_inicializar(TICKER)
 
     # Lê apenas TP, STOP e estrategias antes do backtest
     with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json")) as f:
@@ -99,7 +99,7 @@ def executar_gate(ticker: str) -> str:
     if not e0_estrategia:
         emit_log(f"✗ GATE 0 FALHOU — configure estrategias no master JSON", level='error')
         msg_erro = f"GATE bloqueado em {TICKER}: estrategias não configuradas no master JSON"
-        dados = tape_carregar_ativo(TICKER)
+        dados = tape_ativo_carregar(TICKER)
         if "historico_config" not in dados:
             dados["historico_config"] = []
         dados["historico_config"].append({
@@ -109,7 +109,7 @@ def executar_gate(ticker: str) -> str:
             "valor_novo": "FALHA",
             "motivo":    msg_erro,
         })
-        tape_salvar_ativo(TICKER, dados)
+        tape_ativo_salvar(TICKER, dados)
         raise ValueError(msg_erro)
 
     historico = pd.DataFrame(dados["historico"])
@@ -174,7 +174,7 @@ def executar_gate(ticker: str) -> str:
     if not e0_passou:
         emit_log(f"✗ GATE 0 FALHOU — corrigir antes de avançar", level='error')
         msg_erro = f"GATE bloqueado em {TICKER}: cobertura mínima insuficiente (E0)"
-        dados = tape_carregar_ativo(TICKER)
+        dados = tape_ativo_carregar(TICKER)
         if "historico_config" not in dados:
             dados["historico_config"] = []
         dados["historico_config"].append({
@@ -184,7 +184,7 @@ def executar_gate(ticker: str) -> str:
             "valor_novo": "FALHA",
             "motivo":    msg_erro,
         })
-        tape_salvar_ativo(TICKER, dados)
+        tape_ativo_salvar(TICKER, dados)
         raise ValueError(msg_erro)
 
     # ── ETAPA 1 — Diagnóstico de regime ───────────────────────────────
@@ -266,7 +266,7 @@ def executar_gate(ticker: str) -> str:
                 if len(valido[valido["pnl"] < 0]) > 0 \
                 else 80.0
             # Lê estado atual usando carregador robusto
-            dados = tape_carregar_ativo(TICKER)
+        dados = tape_ativo_carregar(TICKER)
 
             for pnl_orig in pnls_orig:
                 if pnl_orig > 0:
@@ -462,5 +462,5 @@ if __name__ == "__main__":
     import sys
     t = (sys.argv[1] if len(sys.argv) > 1
          else input("Ticker para análise GATE: ").strip().upper())
-    resultado = executar_gate(t)
+    resultado = gate_executar(t)
     print(f"\n  Resultado final: {resultado}")

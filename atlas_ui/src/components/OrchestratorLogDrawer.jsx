@@ -143,18 +143,24 @@ export default function OrchestratorLogDrawer({ isRunning }) {
         console.log("[ORCH-WS] WebSocket conectado em /ws/events");
       };
 
-      wsRef.current.onmessage = (event) => {
-        try {
-          let msg = event.data;
-          let data = null;
+       wsRef.current.onmessage = (event) => {
+         try {
+           let msg = event.data;
+           let data = null;
 
-           try {
-             data = JSON.parse(msg);
-             msg = data.data?.message || data.message || data.msg || msg;
-           } catch { }
+            try {
+              data = JSON.parse(msg);
+              msg = data.data?.message || data.message || data.msg || msg;
+            } catch { }
 
-          // ── Tentar processar como evento estruturado do Delta Chaos ──
-          if (data && data.type && data.type.startsWith("dc_")) {
+           // ── Terminal logs: atualizar mensagem em tempo real ──
+           if (data && (data.type === "terminal_log" || data.type === "terminal_error")) {
+             setMensagem(data.data?.message || msg);
+             return;
+           }
+
+           // ── Tentar processar como evento estruturado do Delta Chaos ──
+           if (data && data.type && data.type.startsWith("dc_")) {
             const mod = data.data?.modulo;
             const status = data.data?.status;
             const tk = data.data?.ticker;
@@ -260,22 +266,16 @@ export default function OrchestratorLogDrawer({ isRunning }) {
           return;
 
 
-          if (data && data.type === "status_transition") {
-            const tk = data.ticker;
-            setMensagem(`${tk}: ${data.status_anterior} → ${data.status_novo}`);
-            return;
-          }
+           if (data && data.type === "status_transition") {
+             const tk = data.ticker;
+             setMensagem(`${tk}: ${data.status_anterior} → ${data.status_novo}`);
+             return;
+           }
 
-          // ── Terminal logs: atualizar mensagem em tempo real ──
-          if (data && data.type === "terminal_log") {
-            setMensagem(data.data?.message || msg);
-            return;
-          }
-
-          // ── Fallback: apenas texto legível (não JSON) ──
-          if (msg && msg.trim() && !msg.trim().startsWith("{")) {
-            setMensagem(msg.trim().substring(0, 120));
-          }
+           // ── Fallback: apenas texto legível (não JSON) ──
+           if (msg && msg.trim() && !msg.trim().startsWith("{")) {
+             setMensagem(msg.trim().substring(0, 120));
+           }
         } catch (e) {
           console.error("WS parse error:", e);
         }

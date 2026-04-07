@@ -7,9 +7,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 from pathlib import Path
 from atlas_backend.core.dc_runner import (
-    run_eod, run_orbit, run_tune, run_gate,
-    run_reflect_daily, run_orbit_update, run_gate_eod,
-    run_backtest_gate, run_orchestrator
+    dc_eod, dc_orbit_backtest, dc_tune, dc_gate_backtest,
+    dc_reflect_daily, dc_orbit_update, dc_gate_eod,
+    dc_gate_backtest, dc_orchestrator
 )
 from atlas_backend.core.delta_chaos_reader import list_ativos
 from atlas_backend.core.paths import get_paths
@@ -81,7 +81,7 @@ async def eod_executar(payload: EodPayload):
     _validar_confirm(payload.confirm, payload.description)
     xlsx_dir = _resolver_xlsx_dir(payload.xlsx_dir)
     try:
-        result = await run_eod(xlsx_dir=xlsx_dir)
+        result = await dc_eod(xlsx_dir=xlsx_dir)
         return {"status": result["status"], "output": result["output"]}
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -96,7 +96,7 @@ async def orbit(payload: TickerPayload):
     _validar_confirm(payload.confirm, payload.description)
     _validar_ticker(payload.ticker)
     try:
-        result = await run_orbit(
+        result = await dc_orbit_backtest(
             ticker=payload.ticker,
             anos=payload.anos
         )
@@ -115,7 +115,7 @@ async def tune(payload: TickerPayload):
     _validar_confirm(payload.confirm, payload.description)
     _validar_ticker(payload.ticker)
     try:
-        result = await run_tune(ticker=payload.ticker)
+        result = await dc_tune(ticker=payload.ticker)
         return {"status": result["status"], "output": result["output"]}
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -130,7 +130,7 @@ async def gate(payload: TickerPayload):
     _validar_confirm(payload.confirm, payload.description)
     _validar_ticker(payload.ticker)
     try:
-        result = await run_gate(ticker=payload.ticker)
+        result = await dc_gate_backtest(ticker=payload.ticker)
         return {
             "status": result["status"],
             "output": result["output"],
@@ -159,16 +159,16 @@ async def onboarding(payload: OnboardingPayload):
 
     try:
         from atlas_backend.core.terminal_stream import emit_log
-        from atlas_backend.core.dc_runner import run_orbit, run_tune, run_gate
+        from atlas_backend.core.dc_runner import dc_orbit_backtest, dc_tune, dc_gate_backtest
 
         emit_log(f"[ONBOARDING] Iniciando {ticker}", level="info")
 
         # Ano dinâmico para ORBIT
         ano_atual = datetime.now().year
         anos_orbit = list(range(2002, ano_atual + 1))
-        await run_orbit(ticker=ticker, anos=anos_orbit)
-        await run_tune(ticker=ticker)
-        await run_gate(ticker=ticker)
+        await dc_orbit_backtest(ticker=ticker, anos=anos_orbit)
+        await dc_tune(ticker=ticker)
+        await dc_gate_backtest(ticker=ticker)
 
         emit_log(f"[ONBOARDING] {ticker} concluído", level="info")
         return {"status": "OK", "ticker": ticker}
@@ -184,11 +184,11 @@ async def orchestrator_run(payload: dict):
     Gerente de Integridade de Dados - v2.6 (refatorado conforme SPEC)
     Ciclo de manutenção ativo: fluxo diário + mensal conforme SPEC
     """
-    from atlas_backend.core.dc_runner import run_orchestrator
+    from atlas_backend.core.dc_runner import dc_orchestrator
 
     tickers = list_ativos()
     if not tickers:
         return {"status": "OK", "digest": {}, "output": "Nenhum ativo para processar"}
 
-    result = await run_orchestrator(tickers)
+    result = await dc_orchestrator(tickers)
     return {"status": "OK", "digest": result, "output": f"Processados {len(result)} ativos"}

@@ -9,7 +9,7 @@ import os
 # ════════════════════════════════════════════════════════════════════
 
 from .init import carregar_config, BOOK_DIR
-from delta_chaos.tape import tape_carregar_ativo
+from delta_chaos.tape import tape_ativo_carregar
 
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
 try:
@@ -24,7 +24,7 @@ except ImportError:
 # DELTA CHAOS — BOOK v1.2
 # Alterações em relação à v1.1:
 # ADICIONADO: seção REFLECT no dashboard() — estado e histórico por ativo
-# ADICIONADO: import tape_carregar_ativo para leitura do estado REFLECT
+# ADICIONADO: import tape_ativo_carregar para leitura do estado REFLECT
 # MANTIDO: toda a lógica de Operacao, persistência e métricas
 # ════════════════════════════════════════════════════════════════════
 
@@ -358,7 +358,7 @@ class BOOK:
         reflect_info = {}
         for ativo in todos_ativos:
             try:
-                cfg   = tape_carregar_ativo(ativo)
+                cfg   = tape_ativo_carregar(ativo)
                 state = cfg.get("reflect_state", "?")
                 hist  = cfg.get("reflect_history", [])
                 score = cfg.get("reflect_score", 0.0)

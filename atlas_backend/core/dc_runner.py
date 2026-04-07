@@ -360,7 +360,7 @@ def _emitir_status_transition(ticker: str, antes: str, depois: str, ciclo: str =
 # Orquestrador — lógica de sequência completa
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run_orchestrator(tickers: list) -> dict:
+async def dc_orchestrator(tickers: list) -> dict:
     """
     Sequencia todos os modos do Delta Chaos para cada ticker.
     
@@ -401,7 +401,7 @@ async def run_orchestrator(tickers: list) -> dict:
         if xlsx_path:
             emit_log(f"[ORQUESTRADOR] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
             try:
-                await run_reflect_daily(ticker, xlsx_path)
+                await dc_reflect_daily(ticker, xlsx_path)
             except Exception as e:
                 emit_log(f"[ORQUESTRADOR] {ticker}: reflect_daily erro — {e}", level="error")
 
@@ -426,7 +426,7 @@ async def run_orchestrator(tickers: list) -> dict:
 
         # 4. gate_eod
         try:
-            gate_result = await run_gate_eod(ticker)
+            gate_result = await dc_gate_eod(ticker)
             gate_output = gate_result.get("output", "")
             
             if "BLOQUEADO" in gate_output:
@@ -485,7 +485,7 @@ async def run_orchestrator(tickers: list) -> dict:
             try:
                 status_antes = _ler_status(ticker)
                 bloco_mensal["status_anterior"] = status_antes
-                orbit_result = await run_orbit_update(ticker)
+                orbit_result = await dc_orbit_update(ticker)
                 if orbit_result["status"] != "OK":
                     bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
                     ticker_digest["bloco_mensal"] = bloco_mensal
@@ -501,7 +501,7 @@ async def run_orchestrator(tickers: list) -> dict:
 
             # 6. backtest_gate
             try:
-                gate_result = await run_backtest_gate(ticker)
+                gate_result = await dc_gate_backtest(ticker)
                 if gate_result["status"] != "OK":
                     bloco_mensal["gate"] = f"erro: {gate_result['output']}"
                     ticker_digest["bloco_mensal"] = bloco_mensal
@@ -522,7 +522,7 @@ async def run_orchestrator(tickers: list) -> dict:
             # 7. tune se elegível
             if _tune_elegivel(ticker):
                 try:
-                    await run_tune(ticker)
+                    await dc_tune(ticker)
                     bloco_mensal["tune"] = "executado"
                     emit_log(f"[ORQUESTRADOR] {ticker}: TUNE executado", level="info")
                 except Exception as e:
@@ -543,7 +543,7 @@ async def run_orchestrator(tickers: list) -> dict:
 # Modos atômicos — um subprocess por função
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run_eod(xlsx_dir: str) -> dict:
+async def dc_eod(xlsx_dir: str) -> dict:
     _validar_caminho(xlsx_dir)
     script = _get_dc_script()
     return await _stream_subprocess(
@@ -554,7 +554,7 @@ async def run_eod(xlsx_dir: str) -> dict:
         modulo=None  # EOD não é um módulo principal do fluxo TAPE→ORBIT→FIRE
     )
 
-async def run_orbit(ticker: str, anos: Optional[list] = None) -> dict:
+async def dc_orbit_backtest(ticker: str, anos: Optional[list] = None) -> dict:
     """Onboarding: modo pesado — COTAHIST + ORBIT completo (backtest_dados)."""
     script = _get_dc_script()
     args = ["-m", "delta_chaos.edge", "--modo", "backtest_dados", "--ticker", ticker]
@@ -568,7 +568,7 @@ async def run_orbit(ticker: str, anos: Optional[list] = None) -> dict:
         modulo="ORBIT"
     )
 
-async def run_tune(ticker: str) -> dict:
+async def dc_tune(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "tune", "--ticker", ticker],
@@ -578,7 +578,7 @@ async def run_tune(ticker: str) -> dict:
         modulo=None  # TUNE é configuração, não módulo do fluxo principal
     )
 
-async def run_gate(ticker: str) -> dict:
+async def dc_gate_backtest(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "backtest_gate", "--ticker", ticker],
@@ -588,7 +588,7 @@ async def run_gate(ticker: str) -> dict:
         modulo="GATE"
     )
 
-async def run_backtest_gate(ticker: str) -> dict:
+async def dc_gate_backtest(ticker: str) -> dict:
     """Executa GATE via backtest completo (8 etapas) para atualização mensal."""
     script = _get_dc_script()
     return await _stream_subprocess(
@@ -599,27 +599,20 @@ async def run_backtest_gate(ticker: str) -> dict:
         modulo="GATE"
     )
 
-async def run_reflect(ticker: str) -> dict:
-    """DEPRECATED — usar run_reflect_daily ou run_orbit_update."""
-    raise NotImplementedError(
-        "run_reflect foi descontinuado. "
-        "Use run_reflect_daily(ticker, xlsx_path) para EOD diário "
-        "ou run_orbit_update(ticker) para atualização mensal."
-    )
-
-async def run_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
+async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
     script = _get_dc_script()
-    args = ["-m", "delta_chaos.edge", "--modo", "orbit", "--ticker", ticker]
+        args = ["-m", "delta_chaos.edge", "--modo", "orbit_update", "--ticker", ticker]
     if anos:
         args += ["--anos", ",".join(str(a) for a in anos)]
     return await _stream_subprocess(
         args=args,
         cwd=script.parent,
         action_name="dc_orbit_update",
-        action_payload={"ticker": ticker, "anos": anos}
+        action_payload={"ticker": ticker, "anos": anos},
+        modulo="ORBIT"
     )
 
-async def run_reflect_daily(ticker: str, xlsx_path: str) -> dict:
+async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "reflect_daily",
@@ -629,7 +622,7 @@ async def run_reflect_daily(ticker: str, xlsx_path: str) -> dict:
         action_payload={"ticker": ticker, "xlsx_path": xlsx_path}
     )
 
-async def run_gate_eod(ticker: str) -> dict:
+async def dc_gate_eod(ticker: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "gate_eod", "--ticker", ticker],
