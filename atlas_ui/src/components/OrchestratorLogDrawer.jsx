@@ -278,10 +278,10 @@ export default function OrchestratorLogDrawer({ isRunning }) {
             return;
           }
 
-          // ── Fallback: qualquer texto recebido ──
-          if (msg && msg.trim()) {
-            setMensagem(msg.trim().substring(0, 120));
-          }
+           // ── Fallback: apenas texto legível (não JSON) ──
+           if (msg && msg.trim() && !msg.trim().startsWith("{")) {
+             setMensagem(msg.trim().substring(0, 120));
+           }
         } catch (e) {
           console.error("WS parse error:", e);
         }
