@@ -190,21 +190,21 @@ class EDGE:
       print(f"\n  [1/3] TAPE")
       df_tape = tape_backtest(
           ativos=self.ativos, anos=anos, forcar=False)
-       if df_tape.empty:
-           print("  ✗ TAPE vazio. Abortando.")
-           return pd.DataFrame()
-       print(f"  ✓ TAPE: {len(df_tape)} registros")
+      if df_tape.empty:
+          print("  ✗ TAPE vazio. Abortando.")
+          return pd.DataFrame()
+      print(f"  ✓ TAPE: {len(df_tape)} registros")
       df_selic = _obter_selic(min(anos), max(anos))
 
       # [2/3] ORBIT
       print(f"\n  [2/3] ORBIT v3.4")
       df_regimes = self.orbit.rodar(
           df_tape, anos, modo=modo_orbit)
-       if df_regimes.empty:
-           print("  ✗ ORBIT vazio. Abortando.")
-           return pd.DataFrame()
+      if df_regimes.empty:
+          print("  ✗ ORBIT vazio. Abortando.")
+          return pd.DataFrame()
 
-       print(f"  ✓ ORBIT: regimes calculados")
+      print(f"  ✓ ORBIT: regimes calculados")
 
       df_regimes["ciclo_id"] = \
           df_regimes["ciclo_id"].astype(str)
