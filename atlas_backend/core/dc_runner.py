@@ -500,6 +500,10 @@ async def dc_orchestrator(tickers: list) -> dict:
 
             ticker_digest["bloco_mensal"] = bloco_mensal
 
+            # Após bloco mensal executado, marcar GATE como completo (verde)
+            emit_dc_event("dc_module_complete", "GATE", "ok",
+                          ticker=ticker, descricao="Bloco mensal executado — GATE atualizado")
+
         digest[ticker] = ticker_digest
 
     emit_log(f"[ORQUESTRADOR] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
