@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 const MODULOS = [
   { id: "TAPE", label: "TAPE", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "ORBIT", label: "ORBIT", icon: "●", iconOk: "✓", iconErr: "✗" },
-  { id: "FIRE", label: "FIRE", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "REFLECT", label: "REFLECT", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "GATE", label: "GATE", icon: "●", iconOk: "✓", iconErr: "✗" },
 ];
@@ -92,11 +91,8 @@ function parseMessage(msg) {
   if (upper.includes("TAPE") && !upper.includes("ORBIT")) {
     return { modulo: "TAPE", erro: false };
   }
-  if (upper.includes("ORBIT") && !upper.includes("FIRE") && !upper.includes("GATE")) {
+  if (upper.includes("ORBIT") && !upper.includes("GATE")) {
     return { modulo: "ORBIT", erro: false };
-  }
-  if (upper.includes("FIRE")) {
-    return { modulo: "FIRE", erro: false };
   }
   if (upper.includes("GATE") && !upper.includes("REFLECT")) {
     return { modulo: "GATE", erro: false };
@@ -248,9 +244,6 @@ export default function OrchestratorLogDrawer({ isRunning }) {
 
               if (bm.gate === "ok") next.GATE = "ok";
               else if (typeof bm.gate === "string" && bm.gate.startsWith("erro")) next.GATE = "erro";
-
-              if (bm.tune === "executado") next.FIRE = "ok";
-              else if (typeof bm.tune === "string" && bm.tune.startsWith("erro")) next.FIRE = "erro";
 
               return next;
             });
