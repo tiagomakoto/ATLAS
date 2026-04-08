@@ -367,6 +367,9 @@ async def dc_daily(tickers: list) -> dict:
     """
     digest = {}
     
+    # ═══ NOVO: Lista de eventos críticos para fallback na resposta da API ═══
+    _eventos_criticos = []
+    
     # ── DEBUG: limitar a um único ativo para testes ──
     if DEBUG_TICKER:
         if DEBUG_TICKER in tickers:
@@ -394,6 +397,16 @@ async def dc_daily(tickers: list) -> dict:
             # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══
             emit_dc_event("dc_module_complete", "GATE", "error",
                           ticker=ticker, descricao="onboarding incompleto — aguardando GATE")
+            # ═══ NOVO: Adicionar à lista de eventos críticos para fallback na API ═══
+            _eventos_criticos.append({
+                "type": "dc_module_complete",
+                "data": {
+                    "modulo": "GATE",
+                    "status": "error",
+                    "ticker": ticker,
+                    "descricao": "onboarding incompleto — aguardando GATE"
+                }
+            })
             # ═══ FIM NOVO ═══
             ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
             digest[ticker] = ticker_digest
@@ -534,7 +547,13 @@ async def dc_daily(tickers: list) -> dict:
                       ticker=ticker, digest=ticker_digest)
 
     emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
-    return digest
+    
+    # ═══ NOVO: Retornar digest + eventos críticos para fallback na API ═══
+    return {
+        "digest": digest,
+        "eventos": _eventos_criticos
+    }
+    # ═══ FIM NOVO ═══
 
 
 # ─────────────────────────────────────────────────────────────────────────────

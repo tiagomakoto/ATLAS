@@ -251,10 +251,18 @@ async def daily_run(payload: dict):
 
     tickers = list_ativos()
     if not tickers:
-        return {"status": "OK", "digest": {}, "output": "Nenhum ativo para processar"}
+        return {"status": "OK", "digest": {}, "eventos": [], "output": "Nenhum ativo para processar"}
 
     result = await dc_daily(tickers)
-    return {"status": "OK", "digest": result, "output": f"Processados {len(result)} ativos"}
+    
+    # ═══ NOVO: Extrair digest e eventos do resultado ═══
+    return {
+        "status": "OK",
+        "digest": result.get("digest", result),
+        "eventos": result.get("eventos", []),
+        "output": f"Processados {len(result.get('digest', result))} ativos"
+    }
+    # ═══ FIM NOVO ═══
 
 
 @router.post("/tune/aplicar")
