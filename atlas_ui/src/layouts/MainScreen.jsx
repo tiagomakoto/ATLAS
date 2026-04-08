@@ -86,9 +86,9 @@ const VisaoGeral = ({
             }
           }
         }
-        // Sinalizar conclusão — reseta orchestratorAtivo
+        // Sinalizar conclusão — reseta dailyAtivo
         updateFromEvent({
-          type: "orchestrator_done",
+          type: "daily_done",
           data: {
             items: [],
             timestamp: new Date().toISOString()
@@ -97,7 +97,7 @@ const VisaoGeral = ({
         // Fallback para formato antigo (v2.5.2)
         if (data.digest) {
           updateFromEvent({
-            type: "orchestrator_done",
+            type: "daily_done",
             data: {
               items: data.digest,
               timestamp: new Date().toISOString()
@@ -105,14 +105,14 @@ const VisaoGeral = ({
           });
         }
       } else {
-        updateFromEvent({ type: "orchestrator_error" });
+        updateFromEvent({ type: "daily_error" });
       }
 
       setUltimaRun(new Date().toLocaleString("pt-BR"));
       await fetchData(); 
     } catch (e) { 
       console.error(e); 
-      updateFromEvent({ type: "orchestrator_error" });
+      updateFromEvent({ type: "daily_error" });
     }
     finally { setCarregando(false); }
   }
@@ -130,7 +130,7 @@ const VisaoGeral = ({
     await fetchData();
   }
 
-  const rodando = carregando || state.orchestratorAtivo;
+  const rodando = carregando || state.dailyAtivo;
 
   const tunesPendentes = (Array.isArray(state.digestItems) ? state.digestItems : Object.values(state.digestItems || {}))
     .filter(i => i.tipo === "aprovacao_pendente" && i.modulo === "TUNE")
@@ -186,7 +186,7 @@ const VisaoGeral = ({
       <OrchestratorLogDrawer isRunning={rodando} />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
-      {state.orchestratorAtivo && (
+      {state.dailyAtivo && (
         <OrchestratorProgress
           cicloNovo={state.cicloNovo}
           ativoAtual={Object.keys(state.digestPorAtivo || {}).pop() || ""}

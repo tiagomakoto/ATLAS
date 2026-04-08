@@ -10,7 +10,7 @@ export const useSystemStore = create((set) => ({
   regime: null,
   alert: null,
   // v2.5.2 — campos do Orquestrador
-  orchestratorAtivo: false,
+  dailyAtivo: false,
   progresso: null,
   digestItems: [],
   digestTimestamp: null,
@@ -49,25 +49,25 @@ export const useSystemStore = create((set) => ({
       case "alert":
         return { alert: event };
       // v2.5.2 — eventos do Orquestrador
-      case "orchestrator_start":
+      case "daily_start":
         return {
-          orchestratorAtivo: true,
+          dailyAtivo: true,
           progresso: null,
           digestPorAtivo: {},
           cicloNovo: false,
           statusTransitions: []
         };
-      case "orchestrator_progress":
+      case "daily_progress":
         return { progresso: event.data || null };
-      case "orchestrator_done":
+      case "daily_done":
         return {
-          orchestratorAtivo: false,
+          dailyAtivo: false,
           progresso: null,
           digestItems: event.data?.items || [],
           digestTimestamp: event.data?.timestamp || new Date().toISOString(),
         };
-       case "orchestrator_error":
-         return { orchestratorAtivo: false, progresso: null };
+       case "daily_error":
+         return { dailyAtivo: false, progresso: null };
        case "status_transition":
         return {
           statusTransitions: [...state.statusTransitions, event]
