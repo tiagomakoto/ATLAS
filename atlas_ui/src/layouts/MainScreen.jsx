@@ -62,6 +62,10 @@ const VisaoGeral = ({
     // #3 FIX: Atualizar tabela de ativos no início do ciclo
     await fetchData();
 
+    // ═══ NOVO: Pequeno delay para WebSocket do drawer conectar antes da API ═══
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // ═══ FIM NOVO ═══
+
     try {
       const res = await fetch(`${API_BASE}/delta-chaos/daily/run`, {
         method: "POST",
