@@ -17,9 +17,9 @@ import Header from "../components/Header";
 import OrchestratorProgress from "../components/OrchestratorProgress";
 import OrchestratorLogDrawer from "../components/OrchestratorLogDrawer";
 import DigestPanel from "../components/DigestPanel";
-import TuneApprovalCard from "../components/TuneApprovalCard";
+import TuneApprovalCard from "../components/GestaoView/TuneApprovalCard";
 import StatusTransitionCard from "../components/StatusTransitionCard";
-import ManutencaoView from "../components/ManutencaoView";
+import GestaoView from "../components/GestaoView";
 import { useSystemStore } from "../store/systemStore";
 
 const API_BASE = "http://localhost:8000";
@@ -276,7 +276,7 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
   const internalTabs = [
     { id: "visao_geral", label: "Visão Geral" },
     { id: "ativo",       label: "Ativo" },
-    { id: "manutencao",  label: "Manutenção" },
+    { id: "gestao",      label: "Gestão" },
   ];
 
   return (
@@ -410,8 +410,8 @@ export default function MainScreen({ state, analytics, activeTicker, onTickerCha
                 />
               )}
 
-              {internalTab === "manutencao" && (
-                <ManutencaoView />
+              {internalTab === "gestao" && (
+                <GestaoView />
               )}
             </>
           )}

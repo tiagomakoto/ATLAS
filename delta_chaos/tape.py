@@ -498,8 +498,13 @@ def tape_ciclo_salvar(ticker: str, resultado: dict) -> None:
         {}
     )
     if registro_existente.get("definitivo", True):
-        pass
+        # Substituir existente (definitivo ou sem campo)
+        dados["historico"] = [
+            c for c in dados["historico"]
+            if c.get("ciclo_id") != ciclo_id
+        ]
     else:
+        # Remover não-definitivo e adicionar novo
         dados["historico"] = [
             c for c in dados["historico"]
             if c.get("ciclo_id") != ciclo_id
@@ -562,7 +567,7 @@ def tape_ciclo_para_data(ticker: str, data: str) -> dict:
 # OHLCV — download e cache via yfinance
 # ════════════════════════════════════════════════════════════════════
 
-def tape_ohlcv_carregar_carregar(ativo: str, anos: list) -> pd.DataFrame:
+def tape_ohlcv_carregar(ativo: str, anos: list) -> pd.DataFrame:
     ativo      = ativo.replace(".SA","").upper()
     cache_path = os.path.join(OHLCV_DIR, f"{ativo}.parquet")
     ano_ini    = min(anos) - 2
@@ -609,7 +614,7 @@ def tape_ohlcv_carregar_carregar(ativo: str, anos: list) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def tape_ibov_carregar_carregar(anos: list) -> pd.Series:
+def tape_ibov_carregar(anos: list) -> pd.Series:
     cache_path = os.path.join(OHLCV_DIR, "IBOV.parquet")
     ano_ini    = min(anos) - 2
     ano_fim    = max(anos)
@@ -695,7 +700,7 @@ def tape_externa_carregar(nome: str, anos: list) -> pd.Series:
 # SÉRIES EXTERNAS — função de alto nível para carregar todas as ativas
 # ════════════════════════════════════════════════════════════════════
 
-def tape_externas_carregar_carregar(ativos: list, anos: list) -> dict:
+def tape_externas_carregar(ativos: list, anos: list) -> dict:
     """
     Identifica séries externas ativas na configuração dos ativos,
     baixa e cacheia via tape_externa_carregar().
@@ -1092,8 +1097,6 @@ def _baixar_cotahist(ano, forcar=False):
             print(f"  ✗ COTAHIST {ano}-{mes:02d}: {e} — pulando")
 
     return txts_mensais
-
-print("✓ _baixar_cotahist atualizado — suporte a mensais para ano corrente")
 
 def _ler_cotahist(txt_path, ativos, anos=None):
     registros = []
@@ -1545,8 +1548,6 @@ def tape_historico_carregar(ativos, anos, forcar=False):
     df = pd.concat(frames, ignore_index=True)
     print(f"\n  ✓ Concluído: {len(df):,} registros")
     return df
-
-print("✓ tape_historico_carregar atualizado — loop COTAHIST via lista")
 
 def tape_eod_carregar(ativo, filepath, preco_acao=None, data=None):
     ativo = ativo.replace(".SA","").upper()

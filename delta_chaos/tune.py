@@ -138,6 +138,8 @@ def executar_tune(ticker: str) -> dict:
     print(f"  ✓ Warmup: {n_antes} → {n_depois} ciclos "
           f"(descartados {n_antes - n_depois} ciclos < {ANO_WARMUP})")
 
+    # Deduplicar ciclos por ciclo_id (manter último)
+    historico_c = historico_c.drop_duplicates(subset="ciclo_id", keep="last")
     regime_idx_c = historico_c.set_index("ciclo_id").to_dict("index")
     print(f"  ✓ {len(historico_c)} ciclos em uso")
 

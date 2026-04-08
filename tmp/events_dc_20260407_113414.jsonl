@@ -1,0 +1,3 @@
+{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-07T11:34:16.130326", "run_id": "dc_20260407_113414"}
+{"modulo": "TAPE", "status": "done", "timestamp": "2026-04-07T11:34:16.207077", "run_id": "dc_20260407_113414", "registros": 6527}
+{"modulo": "ORBIT", "status": "start", "timestamp": "2026-04-07T11:34:17.655655", "run_id": "dc_20260407_113414"}

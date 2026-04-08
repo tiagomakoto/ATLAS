@@ -266,7 +266,7 @@ def gate_executar(ticker: str) -> str:
                 if len(valido[valido["pnl"] < 0]) > 0 \
                 else 80.0
             # Lê estado atual usando carregador robusto
-        dados = tape_ativo_carregar(TICKER)
+            dados = tape_ativo_carregar(TICKER)
 
             for pnl_orig in pnls_orig:
                 if pnl_orig > 0:

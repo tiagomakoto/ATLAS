@@ -11,7 +11,7 @@ from delta_chaos.init import (
     OHLCV_DIR, EXTERNAS_DIR,
 )
 from delta_chaos.tape import (
-    tape_ciclo_salvar,
+    tape_ativo_carregar, tape_ciclo_salvar,
     tape_ohlcv_carregar, tape_ibov_carregar, tape_externa_carregar,
     tape_ciclo_para_data,
     _obter_selic,

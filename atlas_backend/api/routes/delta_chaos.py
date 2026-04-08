@@ -11,8 +11,9 @@ from atlas_backend.core.dc_runner import (
     dc_reflect_daily, dc_orbit_update, dc_gate_eod,
     dc_gate_backtest, dc_orchestrator
 )
-from atlas_backend.core.delta_chaos_reader import list_ativos
+from atlas_backend.core.delta_chaos_reader import list_ativos, get_ativo, update_ativo
 from atlas_backend.core.paths import get_paths
+from atlas_backend.core.relatorios import gerar_relatorio, marcar_aplicado
 
 router = APIRouter(prefix="/delta-chaos", tags=["delta-chaos"])
 
@@ -111,12 +112,74 @@ async def tune(payload: TickerPayload):
     """
     Roda TUNE para o ticker informado.
     Calcula e registra — não aplica automaticamente.
+    Gera relatório .md em relatorios/ e atualiza index.json.
     """
     _validar_confirm(payload.confirm, payload.description)
     _validar_ticker(payload.ticker)
     try:
         result = await dc_tune(ticker=payload.ticker)
-        return {"status": result["status"], "output": result["output"]}
+        
+        if result.get("status") == "OK":
+            # Gerar relatório após TUNE bem-sucedido
+            from atlas_backend.core.relatorios import gerar_relatorio
+            from atlas_backend.core.delta_chaos_reader import get_ativo
+            from datetime import date
+            
+            dados = get_ativo(payload.ticker)
+            historico = dados.get("historico", [])
+            ciclo = historico[-1].get("ciclo_id", date.today().strftime("%Y-%m")) if historico else date.today().strftime("%Y-%m")
+            
+            tp_atual = dados.get("take_profit", 0.0)
+            stop_atual = dados.get("stop_loss", 0.0)
+            
+            # Extrair valores sugeridos do output do TUNE
+            output = result.get("output", "")
+            import re
+            match = re.search(r"TP=([\d.]+)\s+STOP=([\d.]+)", output)
+            if match:
+                tp_sugerido = float(match.group(1))
+                stop_sugerido = float(match.group(2))
+            else:
+                tp_sugerido = tp_atual
+                stop_sugerido = stop_atual
+            
+            delta_tp = tp_sugerido - tp_atual
+            delta_stop = stop_sugerido - stop_atual
+            
+            # Determinar recomendação baseada no delta
+            if abs(delta_tp) < 0.05 and abs(delta_stop) < 0.1:
+                recomendacao = "MANTER"
+            elif delta_tp > 0 and delta_stop > 0:
+                recomendacao = "APLICAR"
+            else:
+                recomendacao = "REVISAR"
+            
+            params = {
+                "tp_atual": tp_atual,
+                "stop_atual": stop_atual,
+                "tp_sugerido": tp_sugerido,
+                "stop_sugerido": stop_sugerido,
+                "delta_tp": delta_tp,
+                "delta_stop": delta_stop,
+                "recomendacao": recomendacao,
+                "detalhes": {}
+            }
+            
+            relatorio = gerar_relatorio(
+                ticker=payload.ticker,
+                ciclo=ciclo,
+                tipo="TUNE",
+                params=params
+            )
+            
+            return {
+                "status": "OK",
+                "output": result.get("output", ""),
+                "relatorio": relatorio
+            }
+        
+        return {"status": result.get("status"), "output": result.get("output")}
+        
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -192,3 +255,100 @@ async def orchestrator_run(payload: dict):
 
     result = await dc_orchestrator(tickers)
     return {"status": "OK", "digest": result, "output": f"Processados {len(result)} ativos"}
+
+
+@router.post("/tune/aplicar")
+async def tune_aplicar(payload: dict):
+    """
+    Aplica parâmetros TUNE aprovados pelo CEO.
+    
+    Recebe:
+        ticker: str
+        tp: float (take_profit)
+        stop: float (stop_loss)
+    
+    Retorna:
+        status: "ok"
+    """
+    ticker = payload.get("ticker", "").strip().upper()
+    tp = float(payload.get("tp"))
+    stop = float(payload.get("stop"))
+    
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise HTTPException(status_code=400, detail=f"Ticker inválido: {ticker}")
+    
+    if tp <= 0 or stop <= 0:
+        raise HTTPException(status_code=400, detail="TP e STOP devem ser positivos")
+    
+    try:
+        from atlas_backend.core.terminal_stream import emit_log
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+        from atlas_backend.core.relatorios import marcar_aplicado
+        import tempfile
+        import json
+        import os
+        
+        # 1. Ler valor anterior do master JSON
+        dados = get_ativo(ticker)
+        tp_atual = dados.get("take_profit", 0.0)
+        stop_atual = dados.get("stop_loss", 0.0)
+        valor_anterior = f"TP={tp_atual} STOP={stop_atual}"
+        
+        # 2. Gravar novos valores com escrita atômica
+        path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+        path_tmp = path_ativo.with_suffix(".tmp")
+        
+        dados["take_profit"] = tp
+        dados["stop_loss"] = stop
+        dados["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        with open(path_tmp, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+        os.replace(path_tmp, path_ativo)
+        
+        # 3. Registrar em historico_config[]
+        valor_novo = f"TP={tp} STOP={stop}"
+        registro = {
+            "data": datetime.now().strftime("%Y-%m-%d"),
+            "modulo": "TUNE v1.0",
+            "parametro": "tune_aplicado",
+            "valor_anterior": valor_anterior,
+            "valor_novo": valor_novo,
+            "motivo": f"TUNE aprovado pelo CEO — TP={tp*100:.1f}% STOP={stop*100:.1f}%"
+        }
+        
+        # Atualizar historico_config no master JSON
+        with open(path_ativo, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+        
+        if "historico_config" not in dados:
+            dados["historico_config"] = []
+        
+        dados["historico_config"].append(registro)
+        dados["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        with open(path_tmp, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+        os.replace(path_tmp, path_ativo)
+        
+        # 4. Marcar relatório como aplicado (se houver)
+        # O ID do relatório é extraído do último registro de TUNE no historico_config
+        tunes = [c for c in dados.get("historico_config", []) if "TUNE" in c.get("modulo", "")]
+        if tunes:
+            # Busca o último relatório não aplicado no index.json
+            from atlas_backend.core.relatorios import obter_todos_relatorios
+            index = obter_todos_relatorios()
+            for rel in reversed(index):
+                if (rel.get("ticker") == ticker and 
+                    rel.get("tipo") == "TUNE" and 
+                    not rel.get("aplicado", False)):
+                    marcar_aplicado(rel["id"])
+                    break
+        
+        emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
+        return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
+        
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

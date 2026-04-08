@@ -1,0 +1,1 @@
+{"modulo": "UNKNOWN", "status": "error", "timestamp": "2026-04-06T23:19:00.458421", "run_id": "dc_20260406_231857", "erro": "DataFrame index must be unique for orient='index'."}

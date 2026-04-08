@@ -1,0 +1,6 @@
+{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-07T21:45:36.136022", "run_id": "dc_20260407_214534"}
+{"modulo": "TAPE", "status": "done", "timestamp": "2026-04-07T21:45:36.230141", "run_id": "dc_20260407_214534", "registros": 6527}
+{"modulo": "ORBIT", "status": "start", "timestamp": "2026-04-07T21:45:37.326637", "run_id": "dc_20260407_214534"}
+{"modulo": "ORBIT", "status": "done", "timestamp": "2026-04-07T21:46:06.140398", "run_id": "dc_20260407_214534"}
+{"modulo": "REFLECT", "status": "start", "timestamp": "2026-04-07T21:46:06.140968", "run_id": "dc_20260407_214534"}
+{"modulo": "REFLECT", "status": "error", "timestamp": "2026-04-07T21:46:06.200669", "run_id": "dc_20260407_214534", "erro": "name 'score_reflect' is not defined"}
