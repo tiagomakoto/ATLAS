@@ -391,6 +391,10 @@ async def dc_daily(tickers: list) -> dict:
         )
         if not gate_ok:
             emit_log(f"[DAILY] {ticker}: onboarding incompleto — aguardando GATE", level="warning")
+            # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══
+            emit_dc_event("dc_module_complete", "GATE", "error",
+                          ticker=ticker, descricao="onboarding incompleto — aguardando GATE")
+            # ═══ FIM NOVO ═══
             ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
             digest[ticker] = ticker_digest
             continue
