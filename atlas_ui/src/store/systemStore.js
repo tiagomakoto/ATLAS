@@ -55,6 +55,7 @@ export const useSystemStore = create((set) => ({
           dailyAtivo: true,
           dailyConcluido: false,
           progresso: null,
+          modules: {},  // ← limpa todas as luzes ao iniciar
           digestPorAtivo: {},
           cicloNovo: false,
           statusTransitions: []
@@ -69,13 +70,21 @@ export const useSystemStore = create((set) => ({
           digestItems: event.data?.items || [],
           digestTimestamp: event.data?.timestamp || new Date().toISOString(),
         };
-       case "daily_error":
-         return { dailyAtivo: false, progresso: null };
-       case "status_transition":
-        return {
-          statusTransitions: [...state.statusTransitions, event]
-        };
-      default:
+        case "daily_error":
+          return { dailyAtivo: false, progresso: null };
+        case "status_transition":
+         return {
+           statusTransitions: [...state.statusTransitions, event]
+         };
+       // #3 FIX: Handler para atualizar digest por ativo durante o ciclo
+       case "daily_ativo_complete":
+         return {
+           digestPorAtivo: {
+             ...state.digestPorAtivo,
+             [event.data?.ticker]: event.data?.digest || {}
+           }
+         };
+       default:
         return state;
     }
   }),

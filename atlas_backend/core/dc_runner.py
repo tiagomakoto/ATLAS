@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = None   # None = roda todos
+DEBUG_TICKER = "PETR4"   # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -72,8 +72,10 @@ async def _stream_subprocess(
     TMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── Emitir evento de início do módulo ──
-    if modulo:
-        emit_dc_event("dc_module_start", modulo, "running", **action_payload)
+    # REMOVIDO: O _watch_events já emite dc_module_start ao ler do JSONL do subprocess
+    # Emitir manualmente causava duplicação de eventos no frontend
+    # if modulo:
+    #     emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
 
@@ -380,6 +382,20 @@ async def dc_daily(tickers: list) -> dict:
         emit_log(f"[DAILY] Processando {ticker}...", level="info")
         ticker_digest = {"ticker": ticker}
 
+        # ═══ NOVO: Verificar se ativo tem GATE aprovado no historico_config ═══
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+        dados = get_ativo(ticker)
+        gate_ok = any(
+            "GATE" in c.get("modulo", "") or c.get("parametro") == "gate_inicial"
+            for c in dados.get("historico_config", [])
+        )
+        if not gate_ok:
+            emit_log(f"[DAILY] {ticker}: onboarding incompleto — aguardando GATE", level="warning")
+            ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
+            digest[ticker] = ticker_digest
+            continue
+        # ═══ FIM NOVO ═══
+
         # [DIÁRIO]
         # 1. verificar dados disponíveis
         dados_ok = await _verificar_dados(ticker, date.today().year, date.today().month)
@@ -509,6 +525,10 @@ async def dc_daily(tickers: list) -> dict:
 
         digest[ticker] = ticker_digest
 
+        # #3 FIX: Emitir evento quando cada ativo termina - permite atualizar UI durante ciclo
+        emit_dc_event("daily_ativo_complete", "DAILY", "ok",
+                      ticker=ticker, digest=ticker_digest)
+
     emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
     return digest
 
@@ -553,16 +573,6 @@ async def dc_tune(ticker: str) -> dict:
     )
 
 async def dc_gate_backtest(ticker: str) -> dict:
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "backtest_gate", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_gate",
-        action_payload={"ticker": ticker},
-        modulo="GATE"
-    )
-
-async def dc_gate_backtest(ticker: str) -> dict:
     """Executa GATE via backtest completo (8 etapas) para atualização mensal."""
     script = _get_dc_script()
     return await _stream_subprocess(
@@ -583,7 +593,7 @@ async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
         cwd=script.parent,
         action_name="dc_orbit_update",
         action_payload={"ticker": ticker, "anos": anos},
-        modulo=None
+        modulo="ORBIT"
     )
 
 async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
@@ -602,5 +612,6 @@ async def dc_gate_eod(ticker: str) -> dict:
         args=["-m", "delta_chaos.edge", "--modo", "gate_eod", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_gate_eod",
-        action_payload={"ticker": ticker}
+        action_payload={"ticker": ticker},
+        modulo="GATE"
     )

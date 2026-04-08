@@ -149,65 +149,81 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
               msg = data.data?.message || data.message || data.msg || msg;
             } catch { }
 
-           // ── Terminal logs: atualizar mensagem em tempo real ──
-           if (data && (data.type === "terminal_log" || data.type === "terminal_error")) {
-             setMensagem(data.data?.message || msg);
-             return;
-           }
-
-           // ── Tentar processar como evento estruturado do Delta Chaos ──
-           if (data && data.type && data.type.startsWith("dc_")) {
-            const mod = data.data?.modulo;
-            const status = data.data?.status;
-            const tk = data.data?.ticker;
-
-            // Quando TAPE inicia, limpar status anterior e mostrar ticker
-            if (data.type === "dc_module_start" && mod === "TAPE") {
-              setModuloStatus({});
-              setModuloAtual(null);
-              if (tk) {
-                setTicker(tk);
-                setTickerTransition(true);
+            // ── Terminal logs: atualizar mensagem em tempo real ──
+            if (data && (data.type === "terminal_log" || data.type === "terminal_error")) {
+              const logMsg = data.data?.message || msg;
+              
+              // #1 FIX: Detectar início de novo ativo no loop e limpar luzes
+              if (logMsg.includes("[DAILY] Processando")) {
+                setModuloStatus({});
+                setModuloAtual(null);
               }
-              setMensagem(`${mod} iniciado`);
+              
+              setMensagem(logMsg);
               return;
             }
 
-            // Complete: só atualizar status
-            if (data.type === "dc_module_complete") {
-              setModuloStatus(prev => ({
-                ...prev,
-                [mod]: status === "ok" ? "ok" : "erro"
-              }));
-              setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
-              setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"}`);
-              return;
-            }
+             // ── Tentar processar como evento estruturado do Delta Chaos ──
+            if (data && data.type && data.type.startsWith("dc_")) {
+              // Evento tem formato: { type: "dc_module_...", data: { modulo, status, ticker, ... } }
+              const mod = data.data?.modulo;
+              const status = data.data?.status;
+              const tk = data.data?.ticker;
 
-            // Start: atualizar módulo atual — mas não sobrescrever "erro" com "rodando"
-            if (data.type === "dc_module_start") {
-              setModuloAtual(mod);
-              setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
-              // Só marcar como "rodando" se não estiver em erro
-              setModuloStatus(prev => {
-                if (prev[mod] === "erro") return prev;
-                return { ...prev, [mod]: "rodando" };
-              });
-              const desc = data.data?.descricao;
-              setMensagem(desc || `${mod} iniciado`);
-              return;
-            }
+             // ═════════════════════════════════════════════════════════════
+             // dc_module_start — any module (TAPE, ORBIT, GATE, REFLECT)
+             // ═════════════════════════════════════════════════════════════
+             if (data.type === "dc_module_start") {
+               setModuloAtual(mod);  // Define qual módulo está rodando → luz azul
+               setModuloStatus(prev => {
+                 if (prev[mod] === "erro") return prev;  // Não sobrescrever erro
+                 return { ...prev, [mod]: "rodando" };   // Status = rodando → azul
+               });
+               
+               // Se é TAPE, mostrar ticker
+               if (mod === "TAPE" && tk) {
+                 setTicker(tk);
+                 setTickerTransition(true);
+               }
+               
+               setMensagem(`${mod} iniciado`);
+               return;
+             }
 
+             // ═════════════════════════════════════════════════════════════
+             // dc_module_complete — any module
+             // ═════════════════════════════════════════════════════════════
+              if (data.type === "dc_module_complete") {
+               setModuloStatus(prev => ({
+                 ...prev,
+                 [mod]: status === "ok" ? "ok" : "erro"
+               }));
+               setModuloAtual(null);  // Limpar para permitir próximo módulo ficar azul
+               setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
+               setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
+               return;
+             }
+
+            // Error: marcar como erro
             if (data.type === "dc_module_error") {
               setModuloStatus(prev => ({ ...prev, [mod]: "erro" }));
-              setMensagem(`${mod} erro`);
+              setMensagem(`${mod} erro — ${data.data?.descricao || ""}`);
               return;
             }
 
+            // Workflow complete: finalize
             if (data.type === "dc_workflow_complete") {
               setModuloAtual(null);
               setProgresso(100);
-              setMensagem("Concluído");
+              setMensagem("Ciclo concluído");
+              return;
+            }
+
+            // #3 FIX: Handler para daily_ativo_complete - atualizar digest por ativo
+            if (data.type === "daily_ativo_complete") {
+              const tk = data.data?.ticker;
+              const digest = data.data?.digest;
+              setMensagem(`${tk} processado`);
               return;
             }
           }
@@ -297,6 +313,27 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
       clearTimeout(timeoutRef.current);
       // O WebSocket será fechado pelo handleClose ou quando o componente desmontar
     };
+  }, [isRunning]);
+
+  // #1 FIX: Reset lights when process restarts (detect false → true transition)
+  const prevIsRunningRef = useRef(isRunning);
+  useEffect(() => {
+    const wasRunning = prevIsRunningRef.current;
+    const isNowRunning = isRunning;
+
+    // Limpar luzes quando isRunning muda de false para true
+    // Não依赖 visible porque visible pode ser false no momento do clique
+    if (isNowRunning && !wasRunning) {
+      // Processo acabou de iniciar (transição false → true) - limpar luzes
+      setModuloStatus({});
+      setModuloAtual(null);
+      setProgresso(0);
+      setTicker("");
+      setTickerTransition(false);
+      setMensagem("Iniciando ciclo...");
+    }
+
+    prevIsRunningRef.current = isNowRunning;
   }, [isRunning]);
 
   const handleClose = () => {
@@ -434,7 +471,7 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
         alignItems: "center",
         gap: 8
       }}>
-        {ticker && (
+        {ticker && !isFinished && (
           <span style={{
             color: "var(--atlas-blue)",
             fontSize: 10,

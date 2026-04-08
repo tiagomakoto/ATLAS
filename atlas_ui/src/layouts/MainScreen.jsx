@@ -59,6 +59,8 @@ const VisaoGeral = ({
   async function handleCheckStatus() {
     setCarregando(true);
     updateFromEvent({ type: "daily_start" });
+    // #3 FIX: Atualizar tabela de ativos no início do ciclo
+    await fetchData();
 
     try {
       const res = await fetch(`${API_BASE}/delta-chaos/daily/run`, {

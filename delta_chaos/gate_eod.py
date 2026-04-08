@@ -9,6 +9,14 @@
 from delta_chaos.init import carregar_config, ATIVOS_DIR
 from delta_chaos.tape import tape_ativo_carregar
 
+# ── Emit events para ATLAS (JSONL) ───────────────────────────────────────
+try:
+    from delta_chaos.edge import emit_event
+except ImportError:
+    # Fallback se edge.py não disponível
+    def emit_event(modulo, status, **kwargs):
+        print(f"[EVENT] {modulo}: {status}")
+
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
@@ -45,6 +53,10 @@ def _emoji(parecer: str) -> str:
 
 def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
     ticker = ticker.replace(".SA", "").upper()
+    
+    # ═══ Emitir evento de início para ATLAS frontend ═══
+    emit_event("GATE", "start", ticker=ticker, acao="gate_eod")
+    
     dados  = tape_ativo_carregar(ticker)
     hoje   = date.today().strftime("%Y-%m-%d")
     avisos    = []
@@ -226,6 +238,9 @@ def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
             for a in avisos:
                 print(f"    ~ {a}")
         print(f"  {sep2}\n")
+
+    # ═══ Emitir evento de conclusão para ATLAS frontend ═══
+    emit_event("GATE", "done", ticker=ticker, parecer=parecer)
 
     return parecer
 
