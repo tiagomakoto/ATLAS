@@ -503,6 +503,9 @@ class ORBIT:
                             regime = resultado["regime"],
                             ir     = f"{resultado['ir']:+.3f}")
                         continue
+                
+                # Atualiza progresso após processar cada ciclo
+                pbar.update(1)
 
         if not rows:
             print("  ✗ ORBIT sem resultados")
