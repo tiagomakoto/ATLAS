@@ -58,10 +58,10 @@ const VisaoGeral = ({
 
   async function handleCheckStatus() {
     setCarregando(true);
-    updateFromEvent({ type: "orchestrator_start" });
+    updateFromEvent({ type: "daily_start" });
 
     try {
-      const res = await fetch(`${API_BASE}/delta-chaos/orchestrator/run`, {
+      const res = await fetch(`${API_BASE}/delta-chaos/daily/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: "manual" })

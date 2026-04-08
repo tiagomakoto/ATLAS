@@ -348,7 +348,7 @@ async def _verificar_dados(ticker: str, ano: int, mes: int) -> dict:
 # Orquestrador — lógica de sequência completa
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def dc_orchestrator(tickers: list) -> dict:
+async def dc_daily(tickers: list) -> dict:
     """
     Sequencia todos os modos do Delta Chaos para cada ticker.
     

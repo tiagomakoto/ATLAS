@@ -9,7 +9,7 @@ from pathlib import Path
 from atlas_backend.core.dc_runner import (
     dc_eod, dc_orbit_backtest, dc_tune, dc_gate_backtest,
     dc_reflect_daily, dc_orbit_update, dc_gate_eod,
-    dc_gate_backtest, dc_orchestrator
+    dc_gate_backtest, dc_daily
 )
 from atlas_backend.core.delta_chaos_reader import list_ativos, get_ativo, update_ativo
 from atlas_backend.core.paths import get_paths
@@ -241,19 +241,19 @@ async def onboarding(payload: OnboardingPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/orchestrator/run")
-async def orchestrator_run(payload: dict):
+@router.post("/daily/run")
+async def daily_run(payload: dict):
     """
     Gerente de Integridade de Dados - v2.6 (refatorado conforme SPEC)
     Ciclo de manutenção ativo: fluxo diário + mensal conforme SPEC
     """
-    from atlas_backend.core.dc_runner import dc_orchestrator
+    from atlas_backend.core.dc_runner import dc_daily
 
     tickers = list_ativos()
     if not tickers:
         return {"status": "OK", "digest": {}, "output": "Nenhum ativo para processar"}
 
-    result = await dc_orchestrator(tickers)
+    result = await dc_daily(tickers)
     return {"status": "OK", "digest": result, "output": f"Processados {len(result)} ativos"}
 
 
