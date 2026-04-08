@@ -209,20 +209,24 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         sv_ant = float(historico_df.iloc[idx-1].get("score_vel", 0.0))
         aceleracao = sv_atual - sv_ant
 
-    # Componentes de divergência (média rolling)
+    # Componentes de divergência (média rolling) — com fallback
     daily_hist = cfg.get("reflect_daily_history", {})
-    datas_ordenadas = sorted(daily_hist.keys())
-    if len(datas_ordenadas) < div_iv_window:
-        raise ValueError("reflect_daily_history muito curto para calcular divergência")
+    divergencia_disponivel = False
+    iv_media = None
+    rv_media = None
 
-    # Pegar últimos N dias
-    ultimas_datas = datas_ordenadas[-max(div_iv_window, div_rv_window):]
-    iv_ratios = [daily_hist[d]["iv_prem_ratio"] for d in ultimas_datas]
-    ret_vol_ratios = [daily_hist[d]["ret_vol_ratio"] for d in ultimas_datas]
-
-    # Médias rolling
-    iv_media = sum(iv_ratios[-div_iv_window:]) / div_iv_window
-    rv_media = sum(ret_vol_ratios[-div_rv_window:]) / div_rv_window
+    if daily_hist:
+        daily_df = pd.DataFrame.from_dict(daily_hist, orient="index")
+        daily_df.index = pd.to_datetime(daily_df.index)
+        try:
+            mask = daily_df.index.to_period("M") == pd.Period(ciclo_id)
+            df_ciclo = daily_df[mask].copy()
+            if not df_ciclo.empty:
+                iv_media = float(df_ciclo["iv_prem_ratio"].mean())
+                rv_media = float(df_ciclo["ret_vol_ratio"].mean())
+                divergencia_disponivel = True
+        except Exception:
+            pass
 
     # Delta IR (curto vs longo)
     delta_ir = 0.0
@@ -231,12 +235,36 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         ir_longo = historico_df.iloc[idx - delta_ir_long_window]["ir"]
         delta_ir = ir_curto - ir_longo
 
-    # Score final REFLECT
-    score_reflect = (
-        aceleracao * 0.4 +
-        iv_media * 0.3 +
-        rv_media * 0.3 +
-        delta_ir * 0.1
+    # Pesos base da config
+    w_base = carregar_config()["reflect"]["weights"]
+    # Esperado: {"aceleracao": 0.33, "divergencia": 0.33, "delta_ir": 0.33}
+
+    # Definir pesos efetivos conforme disponibilidade da divergência
+    if divergencia_disponivel:
+        w = {
+            "aceleracao":  w_base["aceleracao"],
+            "divergencia": w_base["divergencia"],
+            "delta_ir":    w_base["delta_ir"]
+        }
+        fonte_divergencia = "eod_diario"
+    else:
+        # Renormaliza: divergência = 0.00, restante dividido entre aceleração e delta_IR
+        total = w_base["aceleracao"] + w_base["delta_ir"]
+        w = {
+            "aceleracao":  w_base["aceleracao"] / total,
+            "divergencia": 0.0,
+            "delta_ir":    w_base["delta_ir"] / total
+        }
+        fonte_divergencia = "ausente_renormalizado"
+        # Se não há dados de divergência, setar médias para 0.0 para não quebrar score
+        iv_media = 0.0
+        rv_media = 0.0
+
+    # Score final REFLECT com pesos efetivos
+    reflect_score = (
+        aceleracao * w["aceleracao"] +
+        (iv_media * 0.5 + rv_media * 0.5) * w["divergencia"] +  # média simples dos dois
+        delta_ir * w["delta_ir"]
     )
 
     # Salvar no master JSON
@@ -248,8 +276,10 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         "iv_media": iv_media,
         "rv_media": rv_media,
         "delta_ir": delta_ir,
-        "score_reflect": score_reflect,
-        "data_calc": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "score_reflect": reflect_score,
+        "data_calc": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "fonte_divergencia": fonte_divergencia,
+        "divergencia_disponivel": divergencia_disponivel
     }
     tape_ativo_salvar(ativo, cfg)
 
@@ -343,199 +373,199 @@ class EDGE:
             raise NotImplementedError("EDGE.real — Fase 3.")
 
     def _executar_backtest(self, anos, modo_orbit):
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.backtest — {anos[0]}→{anos[-1]}")
-      print(f"  {'═'*55}")
+        print(f"\n  {'═'*55}")
+        print(f"  EDGE.backtest — {anos[0]}→{anos[-1]}")
+        print(f"  {'═'*55}")
 
-      self.book._ativo_atual = "_".join(self.ativos)
+        self.book._ativo_atual = "_".join(self.ativos)
 
-      # Limpa BOOK antes de backtest
-      for ext in ["json", "parquet"]:
-          p = os.path.join(BOOK_DIR, f"book_backtest.{ext}")
-          if os.path.exists(p):
-              os.remove(p)
-              print(f"  ✓ {os.path.basename(p)} removido")
+        # Limpa BOOK antes de backtest
+        for ext in ["json", "parquet"]:
+            p = os.path.join(BOOK_DIR, f"book_backtest.{ext}")
+            if os.path.exists(p):
+                os.remove(p)
+                print(f"  ✓ {os.path.basename(p)} removido")
 
-      # Limpa histórico REFLECT dos ativos — evita z-score
-      # contaminado por backtest anterior
-      for ticker in self.ativos:
-           cfg = tape_ativo_carregar(ticker)
-           cfg["reflect_all_cycles_history"] = []
-           cfg["reflect_history"]            = []
-           cfg["reflect_daily_history"]      = {}
-           cfg["reflect_state"]              = "B"
-           cfg["reflect_score"]              = 0.0
-           tape_ativo_salvar(ticker, cfg)
-          print(f"  ✓ REFLECT limpo — {ticker}")
+        # Limpa histórico REFLECT dos ativos — evita z-score
+        # contaminado por backtest anterior
+        for ticker in self.ativos:
+            cfg = tape_ativo_carregar(ticker)
+            cfg["reflect_all_cycles_history"] = []
+            cfg["reflect_history"]            = []
+            cfg["reflect_daily_history"]      = {}
+            cfg["reflect_state"]              = "B"
+            cfg["reflect_score"]              = 0.0
+            tape_ativo_salvar(ticker, cfg)
+            print(f"  ✓ REFLECT limpo — {ticker}")
 
-      # [1/3] TAPE
-      print(f"\n  [1/3] TAPE")
-            df_tape = tape_historico_carregar(
-          ativos=self.ativos, anos=anos, forcar=False)
-      if df_tape.empty:
-          print("  ✗ TAPE vazio. Abortando.")
-          return pd.DataFrame()
-      print(f"  ✓ TAPE: {len(df_tape)} registros")
-      df_selic = _obter_selic(min(anos), max(anos))
+        # [1/3] TAPE
+        print(f"\n  [1/3] TAPE")
+        df_tape = tape_historico_carregar(
+            ativos=self.ativos, anos=anos, forcar=False)
+        if df_tape.empty:
+            print("  ✗ TAPE vazio. Abortando.")
+            return pd.DataFrame()
+        print(f"  ✓ TAPE: {len(df_tape)} registros")
+        df_selic = _obter_selic(min(anos), max(anos))
 
-      # Carregar séries externas (responsabilidade do TAPE)
-       externas = tape_externas_carregar(self.ativos, anos)
+        # Carregar séries externas (responsabilidade do TAPE)
+        externas = tape_externas_carregar(self.ativos, anos)
 
-      # [2/3] ORBIT
-      print(f"\n  [2/3] ORBIT v3.4")
-      df_regimes = self.orbit.orbit_rodar(
-          df_tape, anos, modo=modo_orbit, externas_dict=externas)
-      if df_regimes.empty:
-          print("  ✗ ORBIT vazio. Abortando.")
-          return pd.DataFrame()
+        # [2/3] ORBIT
+        print(f"\n  [2/3] ORBIT v3.4")
+        df_regimes = self.orbit.orbit_rodar(
+            df_tape, anos, modo=modo_orbit, externas_dict=externas)
+        if df_regimes.empty:
+            print("  ✗ ORBIT vazio. Abortando.")
+            return pd.DataFrame()
 
-      print(f"  ✓ ORBIT: regimes calculados")
+        print(f"  ✓ ORBIT: regimes calculados")
 
-      df_regimes["ciclo_id"] = \
-          df_regimes["ciclo_id"].astype(str)
-      regime_idx = df_regimes.set_index(
-          ["ciclo_id","ativo"]).to_dict("index")
+        df_regimes["ciclo_id"] = \
+            df_regimes["ciclo_id"].astype(str)
+        regime_idx = df_regimes.set_index(
+            ["ciclo_id","ativo"]).to_dict("index")
 
-      # Config dos ativos carregada uma vez
-       configs_ativos = {
-           ativo: tape_ativo_carregar(ativo)
-           for ativo in self.ativos
-       }
+        # Config dos ativos carregada uma vez
+        configs_ativos = {
+            ativo: tape_ativo_carregar(ativo)
+            for ativo in self.ativos
+        }
 
-      # [3/3] FIRE
-      print(f"\n  [3/3] FIRE")
-      datas = sorted(df_tape["data"].unique())
+        # [3/3] FIRE
+        print(f"\n  [3/3] FIRE")
+        datas = sorted(df_tape["data"].unique())
 
-      reflect_ciclos_processados = set()
+        reflect_ciclos_processados = set()
 
-      with _tqdm(total=len(datas), desc="FIRE",
-                unit="pregão", ncols=None) as pbar:
-          for data in datas:
-              data_str = str(data)[:10]
-              ciclo_id = data_str[:7]
+        with _tqdm(total=len(datas), desc="FIRE",
+                  unit="pregão", ncols=None) as pbar:
+            for data in datas:
+                data_str = str(data)[:10]
+                ciclo_id = data_str[:7]
 
-              df_dia = df_tape[
-                  df_tape["data"] == data].copy()
+                df_dia = df_tape[
+                    df_tape["data"] == data].copy()
 
-              self.fire.verificar(
-                  df_dia, data_str, df_selic,
-                  cfg_global=self._cfg_global if hasattr(self, '_cfg_global') else None,
-                  configs_ativos=configs_ativos)
+                self.fire.verificar(
+                    df_dia, data_str, df_selic,
+                    cfg_global=self._cfg_global if hasattr(self, '_cfg_global') else None,
+                    configs_ativos=configs_ativos)
 
-              for ativo in self.ativos:
-                  cfg_ativo = configs_ativos[ativo]
+                for ativo in self.ativos:
+                    cfg_ativo = configs_ativos[ativo]
 
-                  raw = regime_idx.get((ciclo_id, ativo), {})
-                  sizing_orbit = float(raw.get("sizing", 0.0))
+                    raw = regime_idx.get((ciclo_id, ativo), {})
+                    sizing_orbit = float(raw.get("sizing", 0.0))
 
-                  # Modula sizing do ORBIT pelo REFLECT
-                   reflect_mult = reflect_sizing_calcular(ativo)
-                  sizing_modulado  = sizing_orbit * reflect_mult
+                    # Modula sizing do ORBIT pelo REFLECT
+                    reflect_mult = reflect_sizing_calcular(ativo)
+                    sizing_modulado  = sizing_orbit * reflect_mult
 
-                  orbit_data = {
-                      "ciclo":  str(raw.get("ciclo_id", ciclo_id)),
-                      "regime": raw.get("regime", "DESCONHECIDO"),
-                      "ir":     float(raw.get("ir", 0.0)),
-                      "sizing": sizing_modulado,
-                  }
+                    orbit_data = {
+                        "ciclo":  str(raw.get("ciclo_id", ciclo_id)),
+                        "regime": raw.get("regime", "DESCONHECIDO"),
+                        "ir":     float(raw.get("ir", 0.0)),
+                        "sizing": sizing_modulado,
+                    }
 
-                  if not self.book.posicoes_por_ativo(ativo):
-                      self.fire.abrir(
-                          ativo      = ativo,
-                          data       = data_str,
-                          df_dia     = df_dia,
-                          orbit_data = orbit_data,
-                          df_selic   = df_selic,
-                          cfg        = cfg_ativo,
-                      )
+                    if not self.book.posicoes_por_ativo(ativo):
+                        self.fire.abrir(
+                            ativo      = ativo,
+                            data       = data_str,
+                            df_dia     = df_dia,
+                            orbit_data = orbit_data,
+                            df_selic   = df_selic,
+                            cfg        = cfg_ativo,
+                        )
 
-              # REFLECT de ciclo — uma vez por ciclo mensal
-              if ciclo_id not in reflect_ciclos_processados:
-                  for ativo in self.ativos:
-                       reflect_cycle_calcular(ativo, ciclo_id)
-                       # Recarrega config após atualização do REFLECT
-                       configs_ativos[ativo] = tape_ativo_carregar(ativo)
-                  reflect_ciclos_processados.add(ciclo_id)
+                # REFLECT de ciclo — uma vez por ciclo mensal
+                if ciclo_id not in reflect_ciclos_processados:
+                    for ativo in self.ativos:
+                        reflect_cycle_calcular(ativo, ciclo_id)
+                        # Recarrega config após atualização do REFLECT
+                        configs_ativos[ativo] = tape_ativo_carregar(ativo)
+                    reflect_ciclos_processados.add(ciclo_id)
 
-              pbar.update(1)
-              pbar.set_postfix(
-                  abertas  = len(self.book.posicoes_abertas),
-                  fechadas = sum(
-                      1 for op in self.book._ops
-                      if op.core.motivo_saida),
-              )
+                pbar.update(1)
+                pbar.set_postfix(
+                    abertas  = len(self.book.posicoes_abertas),
+                    fechadas = sum(
+                        1 for op in self.book._ops
+                        if op.core.motivo_saida),
+                )
 
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.backtest concluído")
-      print(f"  {'═'*55}")
-      self.book.dashboard()
-      return self.book.df()
+        print(f"\n  {'═'*55}")
+        print(f"  EDGE.backtest concluído")
+        print(f"  {'═'*55}")
+        self.book.dashboard()
+        return self.book.df()
 
     def executar_eod(self,
                      xlsx_dir=None,
                      capital=None):
-      """
-      Fluxo completo de paper trading diário.
-      Substitui chamada manual à Célula EOD.
+        """
+        Fluxo completo de paper trading diário.
+        Substitui chamada manual à Célula EOD.
 
-      Etapas:
-        1. Arquiva xlsx do dia em opcoes_historico/
-        2. GATE EOD por ativo — exclui bloqueados
-        3. _executar_paper() nos aprovados
-      """
-      import shutil
-      from datetime import date
+        Etapas:
+          1. Arquiva xlsx do dia em opcoes_historico/
+          2. GATE EOD por ativo — exclui bloqueados
+          3. _executar_paper() nos aprovados
+        """
+        import shutil
+        from datetime import date
 
-      xlsx_dir  = xlsx_dir or OPCOES_HOJE_DIR
-      data_hoje = str(date.today())
-      hist_dir  = os.path.join(
-          DRIVE_BASE, "opcoes_historico")
-      os.makedirs(hist_dir, exist_ok=True)
+        xlsx_dir  = xlsx_dir or OPCOES_HOJE_DIR
+        data_hoje = str(date.today())
+        hist_dir  = os.path.join(
+            DRIVE_BASE, "opcoes_historico")
+        os.makedirs(hist_dir, exist_ok=True)
 
-      print(f"\n  {'═'*55}")
-      print(f"  EDGE.executar_eod — {data_hoje}")
-      print(f"  {'═'*55}")
+        print(f"\n  {'═'*55}")
+        print(f"  EDGE.executar_eod — {data_hoje}")
+        print(f"  {'═'*55}")
 
-      # 1. Arquiva xlsx do dia
-      print(f"\n  [1/3] Arquivando snapshots...")
-      for ativo in self.ativos:
-          src = os.path.join(
-              xlsx_dir, f"{ativo}.xlsx")
-          dst = os.path.join(
-              hist_dir,
-              f"{data_hoje} {ativo}.xlsx")
-          if os.path.exists(src):
-              shutil.copy2(src, dst)
-              print(f"  ✓ {data_hoje} "
-                    f"{ativo}.xlsx → opcoes_historico/")
-          else:
-              print(f"  ⚠ Não encontrado: "
-                    f"{ativo}.xlsx")
+        # 1. Arquiva xlsx do dia
+        print(f"\n  [1/3] Arquivando snapshots...")
+        for ativo in self.ativos:
+            src = os.path.join(
+                xlsx_dir, f"{ativo}.xlsx")
+            dst = os.path.join(
+                hist_dir,
+                f"{data_hoje} {ativo}.xlsx")
+            if os.path.exists(src):
+                shutil.copy2(src, dst)
+                print(f"  ✓ {data_hoje} "
+                      f"{ativo}.xlsx → opcoes_historico/")
+            else:
+                print(f"  ⚠ Não encontrado: "
+                      f"{ativo}.xlsx")
 
-      # 2. GATE EOD por ativo
-      print(f"\n  [2/3] GATE EOD...")
-      aprovados = []
-      for ativo in self.ativos:
-          parecer = gate_eod_verificar(ativo, verbose=True)
-          if parecer in ("BLOQUEADO",
-                          "GATE VENCIDO"):
-              print(f"  → {ativo} excluído "
-                    f"({parecer})\n")
-          else:
-              aprovados.append(ativo)
+        # 2. GATE EOD por ativo
+        print(f"\n  [2/3] GATE EOD...")
+        aprovados = []
+        for ativo in self.ativos:
+            parecer = gate_eod_verificar(ativo, verbose=True)
+            if parecer in ("BLOQUEADO",
+                            "GATE VENCIDO"):
+                print(f"  → {ativo} excluído "
+                      f"({parecer})\n")
+            else:
+                aprovados.append(ativo)
 
-      if not aprovados:
-          print(f"\n  Nenhum ativo aprovado "
-                f"pelo GATE EOD hoje.")
-          print(f"  {'═'*55}\n")
-          return self.book.df()
+        if not aprovados:
+            print(f"\n  Nenhum ativo aprovado "
+                  f"pelo GATE EOD hoje.")
+            print(f"  {'═'*55}\n")
+            return self.book.df()
 
-      print(f"\n  Aprovados: {aprovados}")
+        print(f"\n  Aprovados: {aprovados}")
 
-      # 3. Paper trading — apenas aprovados
-      print(f"\n  [3/3] EDGE paper...")
-      self.ativos = aprovados
-      return self._executar_paper(xlsx_dir)
+        # 3. Paper trading — apenas aprovados
+        print(f"\n  [3/3] EDGE paper...")
+        self.ativos = aprovados
+        return self._executar_paper(xlsx_dir)
 
 
     def _executar_paper(self, xlsx_dir=None):
@@ -584,7 +614,7 @@ class EDGE:
             except Exception:
                 print(f"  ⚠ Preço inválido para {ativo}")
                 continue
-            df_p = tape_eod_carregar(ativo=ativo, filepath=xlsx,
+            df_p = tape_eod_carregar(
                 ativo=ativo, filepath=xlsx,
                 preco_acao=preco, data=data_hoje)
             if not df_p.empty:
@@ -605,7 +635,7 @@ class EDGE:
         for ativo in self.ativos:
             cfg_ativo = configs_ativos[ativo]
 
-             orbit_data   = self.orbit.orbit_regime_para_data(ativo, data_hoje)
+            orbit_data   = self.orbit.orbit_regime_para_data(ativo, data_hoje)
             sizing_orbit = float(orbit_data.get("sizing", 0.0))
 
             # Modula sizing pelo REFLECT
@@ -635,7 +665,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--modo",
-        choices=["backtest_dados", "backtest_gate", "eod", "tune", "orbit", "reflect_daily", "gate_eod"],
+        choices=["backtest_dados", "backtest_gate", "eod", "tune", "orbit_update", "reflect_daily", "gate_eod"],
         required=True,
         help="Rotina a executar"
     )
@@ -719,12 +749,13 @@ if __name__ == "__main__":
                 print("  ✗ TAPE vazio. Abortando.")
                 emit_event("TAPE", "error", erro="TAPE vazio")
                 sys.exit(1)
+            # Carregar séries externas (dentro do fluxo TAPE)
+            externas = tape_externas_carregar([args.ticker], anos)
             print(f"  ✓ TAPE: {len(df_tape)} registros")
             emit_event("TAPE", "done", registros=len(df_tape))
             # ORBIT
             emit_event("ORBIT", "start")
             cfg_ativo = tape_ativo_carregar(args.ticker)
-             externas = tape_externas_carregar([args.ticker], anos)
             orbit = ORBIT(universo={args.ticker: cfg_ativo})
             orbit.orbit_rodar(df_tape, anos, modo="mensal", externas_dict=externas)
             if orbit.df_regimes is None or orbit.df_regimes.empty:
@@ -754,6 +785,8 @@ if __name__ == "__main__":
                 cfg_ativo = tape_ativo_carregar(ticker)
                 df_ohlcv = tape_ohlcv_carregar(ticker, anos)
                 df_ibov = tape_ibov_carregar(anos)
+                # Carregar séries externas (dentro do fluxo TAPE)
+                externas = tape_externas_carregar([ticker], anos)
                 if df_ohlcv.empty:
                     print(f"  ✗ TAPE: dados OHLCV indisponíveis para {ticker}")
                     emit_event("TAPE", "error", erro="OHLCV vazio")
@@ -764,9 +797,6 @@ if __name__ == "__main__":
                 print(f"  ✗ TAPE erro: {e}")
                 emit_event("TAPE", "error", erro=str(e))
                 sys.exit(1)
-
-            # ── Carregar séries externas (responsabilidade do TAPE) ──
-             externas = tape_externas_carregar([ticker], anos)
 
             # ── ORBIT: calcular regimes ──
             print(f"\n  [2/3] ORBIT")

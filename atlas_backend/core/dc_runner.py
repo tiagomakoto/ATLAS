@@ -321,12 +321,6 @@ def _verificar_tp_stop(ticker: str, posicao: dict, xlsx_path: str) -> dict:
         return {"fechar": False, "motivo": f"erro: {str(e)}", "pnl": 0.0}
 
 
-def _ler_status(ticker: str) -> str:
-    """Chama get_ativo(ticker)['status'] via delta_chaos_reader."""
-    from atlas_backend.core.delta_chaos_reader import get_ativo
-    return get_ativo(ticker).get("status", "N/A")
-
-
 def _tune_elegivel(ticker: str) -> bool:
     """Verifica se TUNE é elegível (>= 126 dias úteis desde último TUNE)."""
     try:
@@ -348,12 +342,6 @@ async def _verificar_dados(ticker: str, ano: int, mes: int) -> dict:
     """Verifica dados disponíveis (simplificado - retorna True para tudo)."""
     # TODO: implementar verificação real via tape_verificar_dados() quando modo existir
     return {"cotahist": True, "selic": True, "ohlcv": True}
-
-
-def _emitir_status_transition(ticker: str, antes: str, depois: str, ciclo: str = ""):
-    """Emite evento WebSocket estruturado tipo status_transition."""
-    emit_dc_event("status_transition", "ORQUESTRADOR", status="ok",
-                  ticker=ticker, status_anterior=antes, status_novo=depois, ciclo=ciclo)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -473,7 +461,7 @@ async def dc_orchestrator(tickers: list) -> dict:
         # [MENSAL — se ciclo mudou]
         if _ciclo_mudou(ticker):
             emit_log(f"[ORQUESTRADOR] {ticker}: ciclo mudou — executando bloco mensal", level="info")
-            bloco_mensal = {"orbit": None, "gate": None, "tune": None, "status_anterior": None, "status_novo": None}
+            bloco_mensal = {"orbit": None, "tune": None}
 
             # 5. orbit
             if not dados_ok.get("cotahist", False):
@@ -483,8 +471,6 @@ async def dc_orchestrator(tickers: list) -> dict:
                 continue
 
             try:
-                status_antes = _ler_status(ticker)
-                bloco_mensal["status_anterior"] = status_antes
                 orbit_result = await dc_orbit_update(ticker)
                 if orbit_result["status"] != "OK":
                     bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
@@ -499,27 +485,7 @@ async def dc_orchestrator(tickers: list) -> dict:
                 digest[ticker] = ticker_digest
                 continue
 
-            # 6. backtest_gate
-            try:
-                gate_result = await dc_gate_backtest(ticker)
-                if gate_result["status"] != "OK":
-                    bloco_mensal["gate"] = f"erro: {gate_result['output']}"
-                    ticker_digest["bloco_mensal"] = bloco_mensal
-                    digest[ticker] = ticker_digest
-                    continue
-                bloco_mensal["gate"] = "ok"
-                status_depois = _ler_status(ticker)
-                bloco_mensal["status_novo"] = status_depois
-                if status_antes != status_depois:
-                    _emitir_status_transition(ticker, status_antes, status_depois)
-                emit_log(f"[ORQUESTRADOR] {ticker}: gate ok — {status_antes} → {status_depois}", level="info")
-            except Exception as e:
-                bloco_mensal["gate"] = f"erro: {str(e)}"
-                ticker_digest["bloco_mensal"] = bloco_mensal
-                digest[ticker] = ticker_digest
-                continue
-
-            # 7. tune se elegível
+            # 6. tune se elegível
             if _tune_elegivel(ticker):
                 try:
                     await dc_tune(ticker)
@@ -601,7 +567,7 @@ async def dc_gate_backtest(ticker: str) -> dict:
 
 async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
     script = _get_dc_script()
-        args = ["-m", "delta_chaos.edge", "--modo", "orbit_update", "--ticker", ticker]
+    args = ["-m", "delta_chaos.edge", "--modo", "orbit_update", "--ticker", ticker]
     if anos:
         args += ["--anos", ",".join(str(a) for a in anos)]
     return await _stream_subprocess(
@@ -609,7 +575,7 @@ async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
         cwd=script.parent,
         action_name="dc_orbit_update",
         action_payload={"ticker": ticker, "anos": anos},
-        modulo="ORBIT"
+        modulo=None
     )
 
 async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
