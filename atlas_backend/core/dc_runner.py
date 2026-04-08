@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = "VALE3"  # None = roda todos
+DEBUG_TICKER = "PRIO3"  # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -479,6 +479,9 @@ async def dc_daily(tickers: list) -> dict:
                     continue
                 bloco_mensal["orbit"] = "ok"
                 emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
+                # Emitir evento para ORBIT
+                emit_dc_event("dc_module_complete", "ORBIT", "ok",
+                              ticker=ticker, descricao="ORBIT atualizado")
             except Exception as e:
                 bloco_mensal["orbit"] = f"erro: {str(e)}"
                 ticker_digest["bloco_mensal"] = bloco_mensal
