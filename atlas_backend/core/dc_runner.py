@@ -187,7 +187,7 @@ async def _stream_subprocess(
             emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
         
         if tem_erro and returncode == 0:
-            emit_log("[ORQUESTRADOR] ⚠ Processo completou mas com warnings", level="warning")
+            emit_log("[DAILY] ⚠ Processo completou mas com warnings", level="warning")
 
         log_action(
             action=action_name,
@@ -369,15 +369,15 @@ async def dc_orchestrator(tickers: list) -> dict:
     if DEBUG_TICKER:
         if DEBUG_TICKER in tickers:
             tickers = [DEBUG_TICKER]
-            emit_log(f"[ORQUESTRADOR] ⚠ MODO DEBUG — processando apenas {DEBUG_TICKER}", level="warning")
+            emit_log(f"[DAILY] ⚠ MODO DEBUG — processando apenas {DEBUG_TICKER}", level="warning")
         elif DEBUG_TICKER not in tickers:
-            emit_log(f"[ORQUESTRADOR] ⚠ DEBUG_TICKER={DEBUG_TICKER} não encontrado em ativos", level="warning")
+            emit_log(f"[DAILY] ⚠ DEBUG_TICKER={DEBUG_TICKER} não encontrado em ativos", level="warning")
     
-    emit_log("[ORQUESTRADOR] 🚀 Iniciando ciclo de manutenção...", level="info")
-    emit_log(f"[ORQUESTRADOR] Verificando {len(tickers)} ativos...", level="info")
+    emit_log("[DAILY] 🚀 Iniciando ciclo de manutenção...", level="info")
+    emit_log(f"[DAILY] Verificando {len(tickers)} ativos...", level="info")
 
     for ticker in tickers:
-        emit_log(f"[ORQUESTRADOR] Processando {ticker}...", level="info")
+        emit_log(f"[DAILY] Processando {ticker}...", level="info")
         ticker_digest = {"ticker": ticker}
 
         # [DIÁRIO]
@@ -387,11 +387,11 @@ async def dc_orchestrator(tickers: list) -> dict:
         # 2. reflect_daily se xlsx presente
         xlsx_path = _detectar_xlsx(ticker)
         if xlsx_path:
-            emit_log(f"[ORQUESTRADOR] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
+            emit_log(f"[DAILY] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
             try:
                 await dc_reflect_daily(ticker, xlsx_path)
             except Exception as e:
-                emit_log(f"[ORQUESTRADOR] {ticker}: reflect_daily erro — {e}", level="error")
+                emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
 
         # 3. posição aberta?
         posicao = _ler_posicao_aberta(ticker)
@@ -401,12 +401,12 @@ async def dc_orchestrator(tickers: list) -> dict:
                 resultado = _verificar_tp_stop(ticker, posicao, xlsx_path)
                 if resultado["fechar"]:
                     ticker_digest["posicao"] = {"aberta": True, "acao": "fechar", **resultado}
-                    emit_log(f"[ORQUESTRADOR] {ticker}: {resultado['motivo']}", level="info")
+                    emit_log(f"[DAILY] {ticker}: {resultado['motivo']}", level="info")
                     digest[ticker] = ticker_digest
                     continue
                 else:
                     ticker_digest["posicao"]["pnl"] = resultado["pnl"]
-            emit_log(f"[ORQUESTRADOR] {ticker}: posição aberta — mantendo", level="info")
+            emit_log(f"[DAILY] {ticker}: posição aberta — mantendo", level="info")
             digest[ticker] = ticker_digest
             continue
 
@@ -426,30 +426,30 @@ async def dc_orchestrator(tickers: list) -> dict:
                 if precisa_bloco_mensal:
                     emit_dc_event("dc_module_complete", "GATE", "error",
                                   ticker=ticker, descricao="GATE EOD = BLOQUEADO — dados incompletos")
-                    emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — rodando bloco mensal", level="info")
+                    emit_log(f"[DAILY] {ticker}: BLOQUEADO — rodando bloco mensal", level="info")
                 else:
                     emit_dc_event("dc_module_complete", "GATE", "error",
                                   ticker=ticker, descricao="GATE EOD = BLOQUEADO")
-                    emit_log(f"[ORQUESTRADOR] {ticker}: BLOQUEADO — pulando", level="info")
+                    emit_log(f"[DAILY] {ticker}: BLOQUEADO — pulando", level="info")
                     digest[ticker] = ticker_digest
                     continue
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
                 emit_dc_event("dc_module_complete", "GATE", "ok",
                               ticker=ticker, descricao="GATE EOD = OPERAR")
-                emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = OPERAR", level="info")
+                emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
             elif "MONITORAR" in gate_output:
                 ticker_digest["gate_eod"] = "MONITORAR"
                 emit_dc_event("dc_module_complete", "GATE", "ok",
                               ticker=ticker, descricao="GATE EOD = MONITORAR")
-                emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod = MONITORAR", level="info")
+                emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
                 digest[ticker] = ticker_digest
                 continue
             else:
                 ticker_digest["gate_eod"] = gate_output.strip()
         except Exception as e:
             ticker_digest["gate_eod"] = f"erro: {str(e)}"
-            emit_log(f"[ORQUESTRADOR] {ticker}: gate_eod erro — {e}", level="error")
+            emit_log(f"[DAILY] {ticker}: gate_eod erro — {e}", level="error")
             digest[ticker] = ticker_digest
             continue
 
@@ -460,7 +460,7 @@ async def dc_orchestrator(tickers: list) -> dict:
 
         # [MENSAL — se ciclo mudou]
         if _ciclo_mudou(ticker):
-            emit_log(f"[ORQUESTRADOR] {ticker}: ciclo mudou — executando bloco mensal", level="info")
+            emit_log(f"[DAILY] {ticker}: ciclo mudou — executando bloco mensal", level="info")
             bloco_mensal = {"orbit": None, "tune": None}
 
             # 5. orbit
@@ -478,7 +478,7 @@ async def dc_orchestrator(tickers: list) -> dict:
                     digest[ticker] = ticker_digest
                     continue
                 bloco_mensal["orbit"] = "ok"
-                emit_log(f"[ORQUESTRADOR] {ticker}: orbit update ok", level="info")
+                emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
             except Exception as e:
                 bloco_mensal["orbit"] = f"erro: {str(e)}"
                 ticker_digest["bloco_mensal"] = bloco_mensal
@@ -490,10 +490,10 @@ async def dc_orchestrator(tickers: list) -> dict:
             #     try:
             #         await dc_tune(ticker)
             #         bloco_mensal["tune"] = "executado"
-            #         emit_log(f"[ORQUESTRADOR] {ticker}: TUNE executado", level="info")
+            #         emit_log(f"[DAILY] {ticker}: TUNE executado", level="info")
             #     except Exception as e:
             #         bloco_mensal["tune"] = f"erro: {str(e)}"
-            #         emit_log(f"[ORQUESTRADOR] {ticker}: TUNE erro — {e}", level="error")
+            #         emit_log(f"[DAILY] {ticker}: TUNE erro — {e}", level="error")
             # else:
             #     bloco_mensal["tune"] = "pulado — não elegível"
             bloco_mensal["tune"] = "executado via Gestão"
@@ -506,7 +506,7 @@ async def dc_orchestrator(tickers: list) -> dict:
 
         digest[ticker] = ticker_digest
 
-    emit_log(f"[ORQUESTRADOR] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
+    emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
     return digest
 
 
