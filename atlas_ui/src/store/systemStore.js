@@ -11,6 +11,7 @@ export const useSystemStore = create((set) => ({
   alert: null,
   // v2.5.2 — campos do Orquestrador
   dailyAtivo: false,
+  dailyConcluido: false,
   progresso: null,
   digestItems: [],
   digestTimestamp: null,
@@ -52,6 +53,7 @@ export const useSystemStore = create((set) => ({
       case "daily_start":
         return {
           dailyAtivo: true,
+          dailyConcluido: false,
           progresso: null,
           digestPorAtivo: {},
           cicloNovo: false,
@@ -62,6 +64,7 @@ export const useSystemStore = create((set) => ({
       case "daily_done":
         return {
           dailyAtivo: false,
+          dailyConcluido: true,
           progresso: null,
           digestItems: event.data?.items || [],
           digestTimestamp: event.data?.timestamp || new Date().toISOString(),

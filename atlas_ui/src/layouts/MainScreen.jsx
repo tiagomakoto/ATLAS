@@ -183,7 +183,7 @@ const VisaoGeral = ({
       </div>
 
       {/* BLOCO 1.5 — Log Drawer do Orquestrador */}
-      <OrchestratorLogDrawer isRunning={rodando} />
+      <OrchestratorLogDrawer isRunning={rodando} isFinished={state.dailyConcluido} />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
       {state.dailyAtivo && (

@@ -689,3 +689,32 @@
 {"timestamp": "2026-04-08T11:45:32.886444", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 48}}
 {"timestamp": "2026-04-08T12:37:52.579840", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "VALE3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
 {"timestamp": "2026-04-08T12:38:18.837209", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 49}}
+{"timestamp": "2026-04-08T13:45:30.622358", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T13:45:46.847486", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 45}}
+{"timestamp": "2026-04-08T13:55:32.246732", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T13:55:47.860058", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 45}}
+{"timestamp": "2026-04-08T14:02:47.811097", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:03:02.904978", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 49}}
+{"timestamp": "2026-04-08T14:52:06.857477", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:52:27.059580", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 49}}
+{"timestamp": "2026-04-08T14:53:29.410072", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 29}}
+{"timestamp": "2026-04-08T14:53:56.558242", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 57}}
+{"timestamp": "2026-04-08T14:53:59.076461", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "ITUB4"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:54:27.758292", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "ITUB4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 58}}
+{"timestamp": "2026-04-08T14:54:30.266466", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "VALE3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:55:01.858649", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 63}}
+{"timestamp": "2026-04-08T14:55:04.366251", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BOVA11"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:55:23.953115", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "BOVA11", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 51}}
+{"timestamp": "2026-04-08T14:55:26.461417", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:55:53.117870", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "BBAS3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 57}}
+{"timestamp": "2026-04-08T14:55:55.627912", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBDC4"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:56:17.810373", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "BBDC4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 50}}
+{"timestamp": "2026-04-08T14:56:20.318882", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 28}}
+{"timestamp": "2026-04-08T14:56:38.380970", "user": "CEO", "action": "dc_orbit_update", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 50}}
+{"timestamp": "2026-04-08T15:42:22.104099", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 27}}
+{"timestamp": "2026-04-08T15:42:24.647311", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "ITUB4"}, "response": {"status": "OK", "returncode": 0, "linhas": 27}}
+{"timestamp": "2026-04-08T15:42:27.175668", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "VALE3"}, "response": {"status": "OK", "returncode": 0, "linhas": 25}}
+{"timestamp": "2026-04-08T15:42:29.683868", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BOVA11"}, "response": {"status": "OK", "returncode": 0, "linhas": 27}}
+{"timestamp": "2026-04-08T15:42:32.214166", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK", "returncode": 0, "linhas": 26}}
+{"timestamp": "2026-04-08T15:42:34.251044", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBDC4"}, "response": {"status": "OK", "returncode": 0, "linhas": 27}}
+{"timestamp": "2026-04-08T15:42:36.887637", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK", "returncode": 0, "linhas": 26}}

@@ -109,7 +109,7 @@ function parseMessage(msg) {
   return { modulo: null, erro: false };
 }
 
-export default function OrchestratorLogDrawer({ isRunning }) {
+export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
   const [visible, setVisible] = useState(false);
   const [moduloAtual, setModuloAtual] = useState(null);
   const [moduloStatus, setModuloStatus] = useState({});
@@ -441,7 +441,7 @@ export default function OrchestratorLogDrawer({ isRunning }) {
             padding: "2px 6px",
             border: "1px solid var(--atlas-blue)",
             borderRadius: 2,
-            animation: tickerTransition ? "pulse 1s infinite" : "none"
+            animation: (tickerTransition && !isFinished) ? "pulse 1s infinite" : "none"
           }}>
             {ticker}
           </span>

@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — ORBIT v4.0
+# DELTA CHAOS — ORBIT
 # Alterações em relação à v3.4:
 # MIGRADO (P2): imports explícitos de init e tape — sem escopo global
 # MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
@@ -469,7 +469,7 @@ class ORBIT:
 
         rows       = []
 
-        with _tqdm(ciclos, desc="ORBIT v4.0",
+        with _tqdm(ciclos, desc="ORBIT",
                    unit="ciclo", ncols=None) as pbar:
             for ciclo_id in ciclos:
                 data_ref = self._data_ref(ciclo_id)

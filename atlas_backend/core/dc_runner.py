@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = "PRIO3"  # None = roda todos
+DEBUG_TICKER = None   # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
