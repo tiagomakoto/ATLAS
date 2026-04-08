@@ -109,7 +109,7 @@ function parseMessage(msg) {
   return { modulo: null, erro: false };
 }
 
-export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
+export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEvents }) {
   const [visible, setVisible] = useState(false);
   const [moduloAtual, setModuloAtual] = useState(null);
   const [moduloStatus, setModuloStatus] = useState({});
@@ -122,8 +122,88 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished }) {
   const moduloAtualRef = useRef(moduloAtual);
   moduloAtualRef.current = moduloAtual;
 
+  // ═══ NOVO: Processar eventos vindos da API (fallback via props) ═══
   useEffect(() => {
-    if (isRunning && !visible) {
+    if (drawerEvents && Array.isArray(drawerEvents)) {
+      drawerEvents.forEach(evento => processarEventoDC(evento));
+    }
+  }, [drawerEvents]);
+
+  // Função interna para processar eventos DC (recebe do WebSocket OU das props)
+  const processarEventoDC = (data) => {
+    // Terminal logs
+    if (data && (data.type === "terminal_log" || data.type === "terminal_error")) {
+      const logMsg = data.data?.message || data.message || "";
+      if (logMsg.includes("[DAILY] Processando")) {
+        setModuloStatus({});
+        setModuloAtual(null);
+      }
+      setMensagem(logMsg);
+      return;
+    }
+
+    // DC module events
+    if (data && data.type && data.type.startsWith("dc_")) {
+      const mod = data.data?.modulo;
+      const status = data.data?.status;
+      const tk = data.data?.ticker;
+
+      if (data.type === "dc_module_start") {
+        setModuloAtual(mod);
+        setModuloStatus(prev => {
+          if (prev[mod] === "erro") return prev;
+          return { ...prev, [mod]: "rodando" };
+        });
+        if (mod === "TAPE" && tk) {
+          setTicker(tk);
+          setTickerTransition(true);
+        }
+        setMensagem(`${mod} iniciado`);
+        return;
+      }
+
+      if (data.type === "dc_module_complete") {
+        setModuloStatus(prev => ({
+          ...prev,
+          [mod]: status === "ok" ? "ok" : "erro"
+        }));
+        setModuloAtual(null);
+        setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
+        setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
+        return;
+      }
+
+      if (data.type === "dc_module_error") {
+        setModuloStatus(prev => ({ ...prev, [mod]: "erro" }));
+        setMensagem(`${mod} erro — ${data.data?.descricao || ""}`);
+        return;
+      }
+
+      if (data.type === "dc_workflow_complete") {
+        setModuloAtual(null);
+        setProgresso(100);
+        setMensagem("Ciclo concluído");
+        return;
+      }
+
+      if (data.type === "daily_ativo_complete") {
+        const tk = data.data?.ticker;
+        setMensagem(`${tk} processado`);
+        return;
+      }
+    }
+  };
+
+  // ═══ FIM ═══
+
+  useEffect(() => {
+    // ═══ CORRIGIDO: sempre conectar quando isRunning muda para true ═══
+    if (isRunning) {
+      // Sempre conectar quando o processo inicia
+      // Fechar conexão anterior se existir
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
       setVisible(true);
       setMensagem("Iniciando...");
       setModuloStatus({});

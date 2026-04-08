@@ -33,7 +33,24 @@ const VisaoGeral = ({
   const [book, setBook] = useState({ posicoes_abertas: [] });
   const [ultimaRun, setUltimaRun] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const [drawerEventos, setDrawerEventos] = useState([]);  // ═══ NOVO: acumular eventos do DAILY
   const updateFromEvent = useSystemStore((s) => s.updateFromEvent);
+
+  // ═══ NOVO: Callback para Drawer processar eventos da API (fallback) ═══
+  const handleDrawerEvent = (event) => {
+    // Passa evento para o Drawer processar (luzes + mensagens)
+    // Mas também atualiza o Store para o ReadingPanel funcionar
+    updateFromEvent(event);
+    // ═══ NOVO: Adicionar evento à lista para passar via props ao Drawer ═══
+    setDrawerEventos(prev => [...prev, event]);
+  };
+  
+  // ═══ NOVO: Limpar drawerEventos quando inicia novo ciclo ═══
+  useEffect(() => {
+    if (state.dailyAtivo) {
+      setDrawerEventos([]);
+    }
+  }, [state.dailyAtivo]);
 
   useEffect(() => { fetchData(); }, [bookFonte]);
 
@@ -79,7 +96,10 @@ const VisaoGeral = ({
         // v2.6 — processar eventos estruturados por ativo
         if (data.eventos && Array.isArray(data.eventos)) {
           for (const ev of data.eventos) {
-            updateFromEvent(ev);
+            // ═══ NOVO: Passar evento para o Drawer via callback (fallback) ═══
+            handleDrawerEvent(ev);
+            // ═══ FIM NOVO ═══
+            
             // Emitir status_transition se houver
             if (ev.bloco_mensal && ev.bloco_mensal.status_anterior !== ev.bloco_mensal.status_novo) {
               updateFromEvent({
@@ -189,7 +209,11 @@ const VisaoGeral = ({
       </div>
 
       {/* BLOCO 1.5 — Log Drawer do Orquestrador */}
-      <OrchestratorLogDrawer isRunning={rodando} isFinished={state.dailyConcluido} />
+      <OrchestratorLogDrawer 
+        isRunning={rodando} 
+        isFinished={state.dailyConcluido}
+        drawerEvents={drawerEventos}  // ═══ NOVO: passar eventos via props
+      />
 
       {/* BLOCO 2 — Progress (só quando rodando) */}
       {state.dailyAtivo && (
