@@ -485,17 +485,18 @@ async def dc_orchestrator(tickers: list) -> dict:
                 digest[ticker] = ticker_digest
                 continue
 
-            # 6. tune se elegível
-            if _tune_elegivel(ticker):
-                try:
-                    await dc_tune(ticker)
-                    bloco_mensal["tune"] = "executado"
-                    emit_log(f"[ORQUESTRADOR] {ticker}: TUNE executado", level="info")
-                except Exception as e:
-                    bloco_mensal["tune"] = f"erro: {str(e)}"
-                    emit_log(f"[ORQUESTRADOR] {ticker}: TUNE erro — {e}", level="error")
-            else:
-                bloco_mensal["tune"] = "pulado — não elegível"
+            # 6. TUNE REMOVIDO do Check Status — executado apenas na Gestão via endpoint
+            # if _tune_elegivel(ticker):
+            #     try:
+            #         await dc_tune(ticker)
+            #         bloco_mensal["tune"] = "executado"
+            #         emit_log(f"[ORQUESTRADOR] {ticker}: TUNE executado", level="info")
+            #     except Exception as e:
+            #         bloco_mensal["tune"] = f"erro: {str(e)}"
+            #         emit_log(f"[ORQUESTRADOR] {ticker}: TUNE erro — {e}", level="error")
+            # else:
+            #     bloco_mensal["tune"] = "pulado — não elegível"
+            bloco_mensal["tune"] = "executado via Gestão"
 
             ticker_digest["bloco_mensal"] = bloco_mensal
 
