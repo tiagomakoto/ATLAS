@@ -509,6 +509,7 @@ async def dc_daily(tickers: list) -> dict:
             # Regime do ciclo (do último historico)
             historico_antes = dados_antes.get("historico", [])
             regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
+            reflect_antes = dados_antes.get("reflect_state", "B")  # v2.8: capturar reflect antes
             # ═══ FIM ═══
 
             try:
@@ -524,6 +525,7 @@ async def dc_daily(tickers: list) -> dict:
                 status_depois = dados_depois.get("status", "SEM_EDGE")
                 historico_depois = dados_depois.get("historico", [])
                 regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
+                reflect_depois = dados_depois.get("reflect_state", "B")  # v2.8: capturar reflect depois
                 
                 # orbit = regime, status = status do ativo
                 bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
@@ -531,6 +533,8 @@ async def dc_daily(tickers: list) -> dict:
                 bloco_mensal["orbit_depois"] = regime_depois
                 bloco_mensal["status_antes"] = status_antes
                 bloco_mensal["status_depois"] = status_depois
+                bloco_mensal["reflect_antes"] = reflect_antes  # v2.8
+                bloco_mensal["reflect_depois"] = reflect_depois  # v2.8
                 # ═══ FIM ═══
                 
                 emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")

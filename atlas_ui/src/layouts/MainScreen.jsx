@@ -14,7 +14,6 @@ import PosicoesTable from "../components/PosicoesTable";
 import AtivoView from "../components/AtivoView";
 import Tooltip from "../components/Tooltip";
 import Header from "../components/Header";
-import OrchestratorProgress from "../components/OrchestratorProgress";
 import OrchestratorLogDrawer from "../components/OrchestratorLogDrawer";
 import DigestPanel from "../components/DigestPanel";
 import TuneApprovalCard from "../components/GestaoView/TuneApprovalCard";
@@ -218,15 +217,6 @@ const VisaoGeral = ({
         isFinished={state.dailyConcluido}
         drawerEvents={drawerEventos}  // ═══ NOVO: passar eventos via props
       />
-
-      {/* BLOCO 2 — Progress (só quando rodando) */}
-      {state.dailyAtivo && (
-        <OrchestratorProgress
-          cicloNovo={state.cicloNovo}
-          ativoAtual={Object.keys(state.digestPorAtivo || {}).pop() || ""}
-          progresso={state.progresso}
-        />
-      )}
 
       {/* BLOCO 3 — Digest por ativo (após run) */}
       {(Object.keys(state.digestPorAtivo || {}).length > 0) && (

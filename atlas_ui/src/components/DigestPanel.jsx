@@ -45,6 +45,28 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     if (status === "MONITORAR") return "var(--atlas-amber)";
     return "var(--atlas-text-secondary)"; // SEM_EDGE, etc
   };
+
+  // ═══ NOVO: Cor baseada no REFLECT state ═══
+  const corReflet = (state) => {
+    if (!state) return "var(--atlas-text-secondary)";
+    if (state === "A") return "var(--atlas-green)";
+    if (state === "B") return "var(--atlas-blue)";
+    if (state === "C") return "var(--atlas-amber)";
+    if (state === "D") return "var(--atlas-red)";
+    if (state === "E") return "var(--atlas-red)";
+    return "var(--atlas-text-secondary)";
+  };
+
+  // ═══ NOVO: Ícone baseado no REFLECT state ═══
+  const iconeReflet = (state) => {
+    if (!state) return "·";
+    if (state === "A") return "✓";
+    if (state === "B") return "~";
+    if (state === "C") return "~";
+    if (state === "D") return "✗";
+    if (state === "E") return "✗";
+    return "·";
+  };
   
   // ═══ Helper para renderizar regime (ORBIT) com cores ═══
   const renderOrbitAntesDepois = (orbitStr, orbitAntes, orbitDepois) => {
@@ -79,26 +101,6 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
   };
   // ═══ FIM ═══
 
-  const statusGeral = (evento) => {
-    const erros = evento.erros || [];
-    if (erros.length > 0) return "erro";
-    const bloco = evento.bloco_mensal;
-    if (bloco) {
-      if (bloco.orbit?.startsWith("erro")) return "erro";
-      if (bloco.gate?.startsWith("erro")) return "erro";
-    }
-    if (evento.gate_eod === "BLOQUEADO") return "alerta";
-    if (evento.gate_eod === "MONITORAR") return "alerta";
-    return "ok";
-  };
-
-  const iconeGeral = (st) => ({ ok: "✓", alerta: "⚠", erro: "✗" }[st] || "·");
-  const corGeral = (st) => ({
-    ok: "var(--atlas-green)",
-    alerta: "var(--atlas-amber)",
-    erro: "var(--atlas-red)"
-  }[st] || "var(--atlas-text-secondary)");
-
   return (
     <div style={{
       padding: 12,
@@ -112,14 +114,13 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
         textTransform: "uppercase",
         letterSpacing: 1, marginBottom: 10, fontSize: 9
       }}>
-        Check Status — {timestamp
+        Resumo por Ativo — {timestamp
           ? new Date(timestamp).toLocaleString("pt-BR")
           : "—"}
       </div>
 
       {tickers.map((ticker) => {
         const ev = digestPorAtivo[ticker];
-        const st = statusGeral(ev);
 
         return (
           <div key={ticker} style={{
@@ -137,47 +138,6 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                 fontWeight: "bold", fontSize: 11
               }}>
                 {ticker}
-              </span>
-              <span style={{ color: corGeral(st), fontSize: 11 }}>
-                {iconeGeral(st)} {st}
-              </span>
-            </div>
-
-            {/* reflect_daily */}
-            <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
-              <span style={{ color: cor(ev.reflect_daily), width: 10 }}>
-                {icone(ev.reflect_daily)}
-              </span>
-              <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
-                reflect_daily
-              </span>
-              <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
-                {ev.reflect_daily}
-              </span>
-            </div>
-
-            {/* gate_eod */}
-            <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
-              <span style={{
-                color: ev.gate_eod === "OPERAR" ? "var(--atlas-green)"
-                  : ev.gate_eod === "MONITORAR" ? "var(--atlas-amber)"
-                  : ev.gate_eod === "BLOQUEADO" ? "var(--atlas-red)"
-                  : "var(--atlas-text-secondary)",
-                width: 10
-              }}>
-                {ev.gate_eod === "OPERAR" ? "✓"
-                  : ev.gate_eod === "MONITORAR" ? "~"
-                  : ev.gate_eod === "BLOQUEADO" ? "✗"
-                  : "·"}
-              </span>
-              <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
-                gate_eod
-              </span>
-              <span style={{
-                color: ev.gate_eod === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-text-secondary)",
-                fontSize: 9
-              }}>
-                {ev.gate_eod}
               </span>
             </div>
 
@@ -204,13 +164,13 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
             {/* bloco_mensal */}
             {ev.bloco_mensal && (
               <div style={{ paddingLeft: 12, marginTop: 4 }}>
-                {/* orbit */}
+                {/* regime */}
                 <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
                   <span style={{ color: cor(ev.bloco_mensal.orbit), width: 10 }}>
                     {icone(ev.bloco_mensal.orbit)}
                   </span>
                   <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
-                    orbit
+                    regime
                   </span>
                   {/* ═══ Item 3: Mostrar antes -> depois com cores (regime) ═══ */}
                   {renderOrbitAntesDepois(
@@ -221,7 +181,39 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                   {/* ═══ FIM ═══ */}
                 </div>
 
-                {/* status - NOVO */}
+                {/* reflect - REORDENADO: antes de status */}
+                {ev.bloco_mensal.reflect_antes && (
+                  <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
+                    <span style={{ 
+                      color: cor(ev.bloco_mensal.reflect_depois || ev.bloco_mensal.reflect_antes), 
+                      width: 10 
+                    }}>
+                      {icone(ev.bloco_mensal.reflect_depois || ev.bloco_mensal.reflect_antes)}
+                    </span>
+                    <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
+                      reflect
+                    </span>
+                    <span style={{ fontSize: 9 }}>
+                      {ev.bloco_mensal.reflect_antes && ev.bloco_mensal.reflect_depois ? (
+                        <span>
+                          <span style={{ color: corReflet(ev.bloco_mensal.reflect_antes) }}>
+                            {ev.bloco_mensal.reflect_antes}
+                          </span>
+                          {" -> "}
+                          <span style={{ color: corReflet(ev.bloco_mensal.reflect_depois), fontWeight: "bold" }}>
+                            {ev.bloco_mensal.reflect_depois}
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--atlas-text-secondary)" }}>
+                          {ev.bloco_mensal.reflect_antes || "—"}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                {/* status - REORDENADO: depois de reflect */}
                 {ev.bloco_mensal.status_antes && (
                   <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
                     <span style={{ color: cor(ev.bloco_mensal.status), width: 10 }}>
@@ -241,21 +233,6 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                     {/* ═══ FIM ═══ */}
                   </div>
                 )}
-
-                {/* reflect_cycle - ═══ Item 1: REMOVER ═══ */}
-                {/*
-                <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
-                  <span style={{ color: cor(ev.bloco_mensal.reflect_cycle), width: 10 }}>
-                    {icone(ev.bloco_mensal.reflect_cycle)}
-                  </span>
-                  <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
-                    reflect_cycle
-                  </span>
-                  <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
-                    {ev.bloco_mensal.reflect_cycle}
-                  </span>
-                </div>
-                */}
 
                 {/* gate - ═══ Item 1: REMOVER ═══ */}
                 {/*

@@ -109,7 +109,9 @@ def update_module_md(md_path: Path, code_file: str) -> list:
     new_content = content
     review_fields = []
     
-    new_version = increment_version("1.0")
+    version_match = re.search(r"^version:\s*(.+)$", content, re.MULTILINE)
+    current_version = version_match.group(1).strip() if version_match else "1.0"
+    new_version = increment_version(current_version)
     new_content = re.sub(
         r"^version:\s*.+$",
         f"version: {new_version}",
