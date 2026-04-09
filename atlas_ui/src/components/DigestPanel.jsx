@@ -78,12 +78,6 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     );
   };
   // ═══ FIM ═══
-        {" -> "}
-        <span style={{ color: corOrbit(depois), fontWeight: "bold" }}>{depois}</span>
-      </span>
-    );
-  };
-  // ═══ FIM ═══
 
   const statusGeral = (evento) => {
     const erros = evento.erros || [];
