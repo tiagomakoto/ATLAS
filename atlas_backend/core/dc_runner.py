@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = "PETR4"   # None = roda todos
+DEBUG_TICKER = None   # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -385,13 +385,10 @@ async def dc_daily(tickers: list) -> dict:
         emit_log(f"[DAILY] Processando {ticker}...", level="info")
         ticker_digest = {"ticker": ticker}
 
-        # ═══ NOVO: Verificar se ativo tem GATE aprovado no historico_config ═══
+        # ═══ NOVO: Verificar se ativo tem historico_config (onboarding feito) ═══
         from atlas_backend.core.delta_chaos_reader import get_ativo
         dados = get_ativo(ticker)
-        gate_ok = any(
-            "GATE" in c.get("modulo", "") or c.get("parametro") == "gate_inicial"
-            for c in dados.get("historico_config", [])
-        )
+        gate_ok = dados.get("historico_config", False)  # ← BOOLEANO: true se tem registros
         if not gate_ok:
             emit_log(f"[DAILY] {ticker}: onboarding incompleto — aguardando GATE", level="warning")
             # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══
