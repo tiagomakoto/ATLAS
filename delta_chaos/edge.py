@@ -12,7 +12,10 @@ from datetime import datetime
 # =====================================================================
 # [ATLAS-STATUS-LOGIC] — DO NOT DELETE — Lógica de Status do Sistema
 # ---------------------------------------------------------------------
-# Status válidos: SEM_EDGE | OPERAR | MONITORAR | SUSPENSO
+# Status válidos: SEM_EDGE | OPERAR | MONITORAR | SUSPENSO | BLOQUEADO
+#
+#   BLOQUEADO  — Ativo sem onboarding. Nunca executou ORBIT+TUNE+GATE.
+#                É necessário rodar o onboarding completo para ativar.
 #
 #   SEM_EDGE   — Backtest com dados suficientes mas sem IR capturável
 #                em nenhum regime. Sem estratégia viável.
@@ -32,7 +35,7 @@ from datetime import datetime
 #                Retoma quando REFLECT recuperar por 2-3 ciclos.
 #
 # Regras de determinação (ver bloco "Determinar status" em get_ativo):
-#   1. Sem histórico OU lock ativo → SUSPENSO
+#   1. Sem histórico (sem historico_config) → BLOQUEADO
 #   2. Quedas REFLECT consecutivas >= 2 (D ou E) → SUSPENSO
 #   3. GATE 8/8 + IR > 0 + REFLECT em A/B → OPERAR
 #   4. GATE com resultado válido (não 8/8) → MONITORAR

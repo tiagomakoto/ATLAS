@@ -19,6 +19,8 @@ export const useSystemStore = create((set) => ({
   digestPorAtivo: {},
   cicloNovo: false,
   statusTransitions: [],
+  // v2.7 — dados completos dos ativos (para tabela Ativos Parametrizados)
+  ativosParametrizados: [],
 
   updateFromEvent: (event) => set((state) => {
     switch (event.type) {
@@ -58,7 +60,8 @@ export const useSystemStore = create((set) => ({
           modules: {},  // ← limpa todas as luzes ao iniciar
           digestPorAtivo: {},
           cicloNovo: false,
-          statusTransitions: []
+          statusTransitions: [],
+          ativosParametrizados: []  // v2.7: limpa dados dos ativos ao iniciar daily
         };
       case "daily_progress":
         return { progresso: event.data || null };
@@ -76,15 +79,27 @@ export const useSystemStore = create((set) => ({
          return {
            statusTransitions: [...state.statusTransitions, event]
          };
-       // #3 FIX: Handler para atualizar digest por ativo durante o ciclo
-       case "daily_ativo_complete":
-         return {
-           digestPorAtivo: {
-             ...state.digestPorAtivo,
-             [event.data?.ticker]: event.data?.digest || {}
-           }
-         };
-       default:
+        // #3 FIX: Handler para atualizar digest por ativo durante o ciclo
+        case "daily_ativo_complete":
+          return {
+            digestPorAtivo: {
+              ...state.digestPorAtivo,
+              [event.data?.ticker]: event.data?.digest || {}
+            }
+          };
+        // v2.7: Handler para carregar dados completos dos ativos
+        case "ativos_parametrizados_loaded":
+          return { ativosParametrizados: event.data || [] };
+        // v2.7: Handler para atualizar ativo específico durante daily
+        case "daily_ativo_updated":
+          const tickerAtualizado = event.data?.ticker;
+          const dadosAtualizados = event.data?.dados;
+          if (!tickerAtualizado || !dadosAtualizados) return state;
+          const novosAtivos = state.ativosParametrizados.map(a =>
+            a.ticker === tickerAtualizado ? { ...a, ...dadosAtualizados } : a
+          );
+          return { ativosParametrizados: novosAtivos };
+        default:
         return state;
     }
   }),

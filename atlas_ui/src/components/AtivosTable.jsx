@@ -1,6 +1,7 @@
 // atlas_ui/src/components/AtivosTable.jsx
 import React from "react";
 import Tooltip from "./Tooltip";
+import { useSystemStore } from "../store/systemStore";
 
 const statusColors = {
   OPERAR: "var(--atlas-green)",
@@ -30,7 +31,10 @@ const getRegimeColor = (regime) => {
   return "var(--atlas-text-secondary)";
 };
 
-export default function AtivosTable({ ativos }) {
+export default function AtivosTable() {
+  const ativosParametrizados = useSystemStore(s => s.ativosParametrizados);
+  const ativos = ativosParametrizados || [];
+  
   if (!ativos || ativos.length === 0) {
     return (
       <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--atlas-text-secondary)", padding: 8 }}>

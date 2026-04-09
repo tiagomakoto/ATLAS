@@ -406,7 +406,7 @@ async def dc_daily(tickers: list) -> dict:
             })
             # ═══ FIM NOVO ═══
             # ═══ Item 4: Adicionar gate_eod no digest para ativos bloqueados ═══
-            ticker_digest["gate_eod"] = "GATE inexistente. Rodar backtest."
+            ticker_digest["gate_eod"] = "BLOQUEADO — onboarding não realizado"
             # ═══ FIM ═══
             ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
             digest[ticker] = ticker_digest
@@ -568,7 +568,15 @@ async def dc_daily(tickers: list) -> dict:
         emit_dc_event("daily_ativo_complete", "DAILY", "ok",
                       ticker=ticker, digest=ticker_digest)
 
-    emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(digest)} ativos processados", level="info")
+        # v2.7: Reler arquivo JSON do ativo (foi atualizado pelo edge.py) e enviar para o store
+        try:
+            dados_atualizados = get_ativo(ticker)
+            emit_dc_event("daily_ativo_updated", "DAILY", "ok",
+                          ticker=ticker, dados=dados_atualizados)
+        except Exception as e:
+            emit_log(f"[DAILY] {ticker}: erro ao reler arquivo JSON — {e}", level="warning")
+
+    emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(tickers)} ativos processados", level="info")
     
     # ═══ NOVO: Retornar digest + eventos críticos para fallback na API ═══
     return {

@@ -81,7 +81,11 @@ def emit_dc_event(event_type: str, modulo: str, status: Optional[str] = None, **
     }
 
     # ── Debug: log do evento emitido ──
-    print(f"[DC-EVENT] type={event_type} | modulo={modulo} | status={status} | data={data}")
+    import json
+    data_str = json.dumps(data, default=str) if isinstance(data, dict) else str(data)
+    if len(data_str) > 500:
+        data_str = data_str[:500] + "...(truncated)"
+    print(f"[DC-EVENT] type={event_type} | modulo={modulo} | status={status} | data={data_str}")
 
     emit_event(event)
 

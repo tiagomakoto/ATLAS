@@ -66,7 +66,11 @@ const VisaoGeral = ({
           return r.ok ? { ticker: t, ...(await r.json()) } : null;
         })
       );
-      setListaAtivos(detalhes.filter(Boolean));
+      const ativosFiltrados = detalhes.filter(Boolean);
+      setListaAtivos(ativosFiltrados);
+      
+      // v2.7: Atualizar store com dados completos dos ativos
+      updateFromEvent({ type: "ativos_parametrizados_loaded", data: ativosFiltrados });
 
       const resBook = await fetch(`${API_BASE}/ativos/book?fonte=${bookFonte}`);
       if (resBook.ok) setBook(await resBook.json());
@@ -255,7 +259,7 @@ const VisaoGeral = ({
       {/* BLOCO 5 — Ativos Parametrizados */}
       <section>
         <div style={sectionLabel}>Ativos Parametrizados</div>
-        <AtivosTable ativos={listaAtivos} />
+        <AtivosTable />
       </section>
 
       {/* BLOCO 6 — Posições Abertas */}
