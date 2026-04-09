@@ -161,6 +161,50 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
               </div>
             )}
 
+            {/* xlsx eod */}
+            {ev.xlsx && (
+              <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
+                <span style={{
+                  color: ev.xlsx === "ok" ? "var(--atlas-green)" : "var(--atlas-amber)",
+                  width: 10
+                }}>
+                  {ev.xlsx === "ok" ? "✓" : "✗"}
+                </span>
+                <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
+                  xlsx eod
+                </span>
+                <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
+                  {ev.xlsx === "ok" ? "encontrado" : "não encontrado"}
+                </span>
+              </div>
+            )}
+
+            {/* tp/stop */}
+            {ev.posicao && ev.posicao.tp_stop_status && (
+              <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
+                <span style={{
+                  color: ev.posicao.tp_stop_status === "ok"
+                    ? "var(--atlas-green)"
+                    : "var(--atlas-red)",
+                  width: 10
+                }}>
+                  {ev.posicao.tp_stop_status === "ok" ? "✓" : "✗"}
+                </span>
+                <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
+                  tp/stop
+                </span>
+                <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
+                  {ev.posicao.tp_stop_status === "ok"
+                    ? "ok - mantendo"
+                    : ev.posicao.tp_stop_status === "fechar"
+                      ? `fechar — ${ev.posicao.motivo || "tp/stop atingido"}`
+                      : ev.posicao.tp_stop_status === "sem_xlsx"
+                        ? "xlsx indisponível"
+                        : "—"}
+                </span>
+              </div>
+            )}
+
             {/* bloco_mensal */}
             {ev.bloco_mensal && (
               <div style={{ paddingLeft: 12, marginTop: 4 }}>

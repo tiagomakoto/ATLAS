@@ -285,6 +285,21 @@ def _ler_posicao_aberta(ticker: str) -> Optional[dict]:
         return None
 
 
+def _atualizar_ativo_store(ticker: str) -> None:
+    """
+    Lê o arquivo JSON do ativo atualizado e envia para o store do frontend.
+    Esta função deve ser chamada antes de cada 'continue' no fluxo.
+    """
+    try:
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+        dados_atualizados = get_ativo(ticker)
+        emit_dc_event("daily_ativo_updated", "DAILY", "ok",
+                      ticker=ticker, dados=dados_atualizados)
+        emit_log(f"[DAILY] {ticker}: ativo atualizado no store", level="debug")
+    except Exception as e:
+        emit_log(f"[DAILY] {ticker}: erro ao reler arquivo JSON — {e}", level="warning")
+
+
 def _verificar_tp_stop(ticker: str, posicao: dict, xlsx_path: str) -> dict:
     """Lê preço atual do xlsx e calcula pnl vs take_profit/stop_loss."""
     try:
@@ -383,7 +398,7 @@ async def dc_daily(tickers: list) -> dict:
 
     for ticker in tickers:
         emit_log(f"[DAILY] Processando {ticker}...", level="info")
-        ticker_digest = {"ticker": ticker}
+        ticker_digest = {"ticker": ticker, "xlsx": None}
 
         # ═══ NOVO: Verificar se ativo tem historico_config (onboarding feito) ═══
         from atlas_backend.core.delta_chaos_reader import get_ativo
@@ -417,35 +432,7 @@ async def dc_daily(tickers: list) -> dict:
         # 1. verificar dados disponíveis
         dados_ok = await _verificar_dados(ticker, date.today().year, date.today().month)
 
-        # 2. reflect_daily se xlsx presente
-        xlsx_path = _detectar_xlsx(ticker)
-        if xlsx_path:
-            emit_log(f"[DAILY] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
-            try:
-                await dc_reflect_daily(ticker, xlsx_path)
-            except Exception as e:
-                emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
-
-        # 3. posição aberta?
-        posicao = _ler_posicao_aberta(ticker)
-        if posicao:
-            ticker_digest["posicao"] = {"aberta": True, "acao": "manter"}
-            if xlsx_path:
-                resultado = _verificar_tp_stop(ticker, posicao, xlsx_path)
-                if resultado["fechar"]:
-                    ticker_digest["posicao"] = {"aberta": True, "acao": "fechar", **resultado}
-                    emit_log(f"[DAILY] {ticker}: {resultado['motivo']}", level="info")
-                    digest[ticker] = ticker_digest
-                    continue
-                else:
-                    ticker_digest["posicao"]["pnl"] = resultado["pnl"]
-            emit_log(f"[DAILY] {ticker}: posição aberta — mantendo", level="info")
-            digest[ticker] = ticker_digest
-            continue
-
-        ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
-
-        # 4. gate_eod
+        # 2. GATE EOD (primeiro - verifica se está atualizado)
         try:
             gate_result = await dc_gate_eod(ticker)
             gate_output = gate_result.get("output", "")
@@ -460,24 +447,91 @@ async def dc_daily(tickers: list) -> dict:
                     emit_dc_event("dc_module_complete", "GATE", "error",
                                   ticker=ticker, descricao="GATE EOD = BLOQUEADO — dados incompletos")
                     emit_log(f"[DAILY] {ticker}: BLOQUEADO — rodando bloco mensal", level="info")
+                    
+                    # ═══ BLOCO MENSAL (TAPE → ORBIT → REFLECT → GATE) ═══
+                    if _ciclo_mudou(ticker):
+                        emit_log(f"[DAILY] {ticker}: ciclo mudou — executando bloco mensal", level="info")
+                        bloco_mensal = {"orbit": None, "tune": None}
+
+                        # 5. orbit
+                        if not dados_ok.get("cotahist", False):
+                            bloco_mensal["orbit"] = "postergado — COTAHIST indisponível"
+                            ticker_digest["bloco_mensal"] = bloco_mensal
+                            digest[ticker] = ticker_digest
+                            continue
+
+                        # Capturar status E regime ANTES do ORBIT
+                        dados_antes = get_ativo(ticker)
+                        status_antes = dados_antes.get("status", "SEM_EDGE")
+                        historico_antes = dados_antes.get("historico", [])
+                        regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
+                        reflect_antes = dados_antes.get("reflect_state", "B")
+
+                        try:
+                            orbit_result = await dc_orbit_update(ticker)
+                            if orbit_result["status"] != "OK":
+                                bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
+                                ticker_digest["bloco_mensal"] = bloco_mensal
+                                digest[ticker] = ticker_digest
+                                continue
+                            
+                            # Capturar status E regime DEPOIS do ORBIT
+                            dados_depois = get_ativo(ticker)
+                            status_depois = dados_depois.get("status", "SEM_EDGE")
+                            historico_depois = dados_depois.get("historico", [])
+                            regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
+                            reflect_depois = dados_depois.get("reflect_state", "B")
+                            
+                            bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
+                            bloco_mensal["orbit_antes"] = regime_antes
+                            bloco_mensal["orbit_depois"] = regime_depois
+                            bloco_mensal["status_antes"] = status_antes
+                            bloco_mensal["status_depois"] = status_depois
+                            bloco_mensal["reflect_antes"] = reflect_antes
+                            bloco_mensal["reflect_depois"] = reflect_depois
+                            
+                            emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
+                            # REMOVIDO: O watcher já emite dc_module_complete automaticamente
+                        except Exception as e:
+                            bloco_mensal["orbit"] = f"erro: {str(e)}"
+                            ticker_digest["bloco_mensal"] = bloco_mensal
+                            digest[ticker] = ticker_digest
+                            continue
+
+                        bloco_mensal["tune"] = "executado via Gestão"
+                        ticker_digest["bloco_mensal"] = bloco_mensal
+
+                    # Após bloco mensal executado, rodar GATE novamente
+                    try:
+                        gate_result = await dc_gate_eod(ticker)
+                        gate_output = gate_result.get("output", "")
+                        if "OPERAR" in gate_output:
+                            ticker_digest["gate_eod"] = "OPERAR"
+                            # REMOVIDO: O watcher já emite dc_module_complete automaticamente
+                        elif "MONITORAR" in gate_output:
+                            ticker_digest["gate_eod"] = "MONITORAR"
+                            # REMOVIDO: O watcher já emite dc_module_complete automaticamente
+                        else:
+                            ticker_digest["gate_eod"] = gate_output.strip()
+                    except Exception as e:
+                        emit_log(f"[DAILY] {ticker}: erro ao revalidar GATE — {e}", level="error")
                 else:
                     emit_dc_event("dc_module_complete", "GATE", "error",
                                   ticker=ticker, descricao="GATE EOD = BLOQUEADO")
                     emit_log(f"[DAILY] {ticker}: BLOQUEADO — pulando", level="info")
+                    ticker_digest["xlsx"] = "pulado"
+                    ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
                     digest[ticker] = ticker_digest
+                    _atualizar_ativo_store(ticker)
                     continue
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
-                emit_dc_event("dc_module_complete", "GATE", "ok",
-                              ticker=ticker, descricao="GATE EOD = OPERAR")
+                # REMOVIDO: O watcher já emite dc_module_complete automaticamente
                 emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
             elif "MONITORAR" in gate_output:
                 ticker_digest["gate_eod"] = "MONITORAR"
-                emit_dc_event("dc_module_complete", "GATE", "ok",
-                              ticker=ticker, descricao="GATE EOD = MONITORAR")
+                # REMOVIDO: O watcher já emite dc_module_complete automaticamente
                 emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
-                digest[ticker] = ticker_digest
-                continue
             else:
                 ticker_digest["gate_eod"] = gate_output.strip()
         except Exception as e:
@@ -488,97 +542,76 @@ async def dc_daily(tickers: list) -> dict:
 
         # Se gate_eod = OPERAR → aguarda CEO, fim do fluxo diário
         if ticker_digest.get("gate_eod") == "OPERAR":
+            ticker_digest["xlsx"] = "pulado"
+            ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
             digest[ticker] = ticker_digest
+            _atualizar_ativo_store(ticker)
             continue
 
-        # [MENSAL — se ciclo mudou]
-        if _ciclo_mudou(ticker):
-            emit_log(f"[DAILY] {ticker}: ciclo mudou — executando bloco mensal", level="info")
-            bloco_mensal = {"orbit": None, "tune": None}
-
-            # 5. orbit
-            if not dados_ok.get("cotahist", False):
-                bloco_mensal["orbit"] = "postergado — COTAHIST indisponível"
-                ticker_digest["bloco_mensal"] = bloco_mensal
-                digest[ticker] = ticker_digest
-                continue
-
-            # ═══ Item 3: Capturar status E regime ANTES do ORBIT ═══
-            dados_antes = get_ativo(ticker)
-            status_antes = dados_antes.get("status", "SEM_EDGE")
-            # Regime do ciclo (do último historico)
-            historico_antes = dados_antes.get("historico", [])
-            regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
-            reflect_antes = dados_antes.get("reflect_state", "B")  # v2.8: capturar reflect antes
-            # ═══ FIM ═══
-
+        # 3. XLSX EOD (depois do GATE estar atualizado)
+        xlsx_path = _detectar_xlsx(ticker)
+        if xlsx_path:
+            emit_log(f"[DAILY] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
+            emit_dc_event("dc_module_complete", "XLSX", "ok",
+                          ticker=ticker, descricao="XLSX EOD encontrado")
             try:
-                orbit_result = await dc_orbit_update(ticker)
-                if orbit_result["status"] != "OK":
-                    bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
-                    ticker_digest["bloco_mensal"] = bloco_mensal
+                await dc_reflect_daily(ticker, xlsx_path)
+            except Exception as e:
+                emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
+                emit_dc_event("dc_module_complete", "XLSX", "erro",
+                              ticker=ticker, descricao=f"reflect_daily erro: {e}")
+        else:
+            emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
+            emit_dc_event("dc_module_complete", "XLSX", "erro",
+                          ticker=ticker, descricao="XLSX EOD não encontrado")
+
+        # Preencher campo xlsx no digest
+        ticker_digest["xlsx"] = "ok" if xlsx_path else "não encontrado"
+
+        # 4. posição/TP-STOP (depois do XLSX)
+        posicao = _ler_posicao_aberta(ticker)
+        if posicao:
+            ticker_digest["posicao"] = {"aberta": True, "acao": "manter"}
+            if xlsx_path:
+                resultado = _verificar_tp_stop(ticker, posicao, xlsx_path)
+                if resultado["fechar"]:
+                    ticker_digest["posicao"] = {
+                        "aberta": True,
+                        "acao": "fechar",
+                        "tp_stop_status": "fechar",
+                        "xlsx_lido": True,
+                        "motivo": resultado.get("motivo", ""),
+                        "pnl": resultado.get("pnl", 0)
+                    }
+                    emit_dc_event("dc_module_complete", "TP_STOP", "erro",
+                                  ticker=ticker, descricao=f"TP/STOP atingido: {resultado.get('motivo', '')}")
+                    emit_log(f"[DAILY] {ticker}: {resultado['motivo']}", level="info")
                     digest[ticker] = ticker_digest
                     continue
-                
-                # ═══ Item 3: Capturar status E regime DEPOIS do ORBIT ═══
-                dados_depois = get_ativo(ticker)
-                status_depois = dados_depois.get("status", "SEM_EDGE")
-                historico_depois = dados_depois.get("historico", [])
-                regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
-                reflect_depois = dados_depois.get("reflect_state", "B")  # v2.8: capturar reflect depois
-                
-                # orbit = regime, status = status do ativo
-                bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
-                bloco_mensal["orbit_antes"] = regime_antes
-                bloco_mensal["orbit_depois"] = regime_depois
-                bloco_mensal["status_antes"] = status_antes
-                bloco_mensal["status_depois"] = status_depois
-                bloco_mensal["reflect_antes"] = reflect_antes  # v2.8
-                bloco_mensal["reflect_depois"] = reflect_depois  # v2.8
-                # ═══ FIM ═══
-                
-                emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
-                # Emitir evento para ORBIT
-                emit_dc_event("dc_module_complete", "ORBIT", "ok",
-                              ticker=ticker, descricao="ORBIT atualizado")
-            except Exception as e:
-                bloco_mensal["orbit"] = f"erro: {str(e)}"
-                ticker_digest["bloco_mensal"] = bloco_mensal
-                digest[ticker] = ticker_digest
-                continue
+                else:
+                    ticker_digest["posicao"]["pnl"] = resultado.get("pnl", 0)
+                    ticker_digest["posicao"]["tp_stop_status"] = "ok"
+                    ticker_digest["posicao"]["xlsx_lido"] = True
+                    emit_dc_event("dc_module_complete", "TP_STOP", "ok",
+                                  ticker=ticker, descricao="Posição OK - mantendo")
+            else:
+                ticker_digest["posicao"]["tp_stop_status"] = "sem_xlsx"
+                ticker_digest["posicao"]["xlsx_lido"] = False
+                emit_dc_event("dc_module_complete", "TP_STOP", "erro",
+                              ticker=ticker, descricao="XLSX não disponível - não foi possível verificar TP/STOP")
+                emit_log(f"[DAILY] {ticker}: posição aberta mas XLSX não disponível para verificação", level="warning")
+            emit_log(f"[DAILY] {ticker}: posição aberta — mantendo", level="info")
+            digest[ticker] = ticker_digest
+            _atualizar_ativo_store(ticker)
+            continue
 
-            # 6. TUNE REMOVIDO do Check Status — executado apenas na Gestão via endpoint
-            # if _tune_elegivel(ticker):
-            #     try:
-            #         await dc_tune(ticker)
-            #         bloco_mensal["tune"] = "executado"
-            #         emit_log(f"[DAILY] {ticker}: TUNE executado", level="info")
-            #     except Exception as e:
-            #         bloco_mensal["tune"] = f"erro: {str(e)}"
-            #         emit_log(f"[DAILY] {ticker}: TUNE erro — {e}", level="error")
-            # else:
-            #     bloco_mensal["tune"] = "pulado — não elegível"
-            bloco_mensal["tune"] = "executado via Gestão"
-
-            ticker_digest["bloco_mensal"] = bloco_mensal
-
-            # Após bloco mensal executado, marcar GATE como completo (verde)
-            emit_dc_event("dc_module_complete", "GATE", "ok",
-                          ticker=ticker, descricao="Bloco mensal executado — GATE atualizado")
+        ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
 
         digest[ticker] = ticker_digest
 
         # #3 FIX: Emitir evento quando cada ativo termina - permite atualizar UI durante ciclo
         emit_dc_event("daily_ativo_complete", "DAILY", "ok",
                       ticker=ticker, digest=ticker_digest)
-
-        # v2.7: Reler arquivo JSON do ativo (foi atualizado pelo edge.py) e enviar para o store
-        try:
-            dados_atualizados = get_ativo(ticker)
-            emit_dc_event("daily_ativo_updated", "DAILY", "ok",
-                          ticker=ticker, dados=dados_atualizados)
-        except Exception as e:
-            emit_log(f"[DAILY] {ticker}: erro ao reler arquivo JSON — {e}", level="warning")
 
     emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(tickers)} ativos processados", level="info")
     

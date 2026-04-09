@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODULOS = [
+  { id: "GATE", label: "GATE", icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "XLSX", label: "XLSX EOD", icon: "●", iconOk: "✓", iconErr: "✗" },
+  { id: "TP_STOP", label: "TP / STOP", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "TAPE", label: "TAPE", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "ORBIT", label: "ORBIT", icon: "●", iconOk: "✓", iconErr: "✗" },
   { id: "REFLECT", label: "REFLECT", icon: "●", iconOk: "✓", iconErr: "✗" },
-  { id: "GATE", label: "GATE", icon: "●", iconOk: "✓", iconErr: "✗" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -440,7 +442,22 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
     return m.icon;
   };
 
-  const getColor = (status) => {
+  const getColor = (status, modulo) => {
+    // Cores customizadas para XLSX
+    if (modulo === "XLSX") {
+      if (status === "ok") return "var(--atlas-green)";
+      if (status === "erro") return "var(--atlas-amber)";  // Amarelo para "não encontrado"
+      if (status === "rodando") return "var(--atlas-blue)";
+      return "var(--atlas-text-secondary)";
+    }
+    // Cores customizadas para TP_STOP
+    if (modulo === "TP_STOP") {
+      if (status === "ok") return "var(--atlas-green)";
+      if (status === "erro") return "var(--atlas-red)";  // Vermelho para TP/STOP atingido ou sem XLSX
+      if (status === "rodando") return "var(--atlas-blue)";
+      return "var(--atlas-text-secondary)";
+    }
+    // Cores padrão para outros módulos
     if (status === "ok") return "var(--atlas-green)";
     if (status === "erro") return "var(--atlas-red)";
     if (status === "rodando") return "var(--atlas-blue)";
@@ -504,11 +521,13 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
         padding: "12px 14px",
         borderBottom: "1px solid var(--atlas-border)"
       }}>
-        {MODULOS.map(mod => {
-          const status = getStatus(mod.id);
+        {/* Grupo 1: TAPE, ORBIT, REFLECT, GATE */}
+        {["TAPE", "ORBIT", "REFLECT", "GATE"].map(modId => {
+          const mod = MODULOS.find(m => m.id === modId);
+          const status = getStatus(modId);
           return (
             <div
-              key={mod.id}
+              key={modId}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -521,19 +540,99 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
               }}
             >
               <span style={{
-                color: getColor(status),
+                color: getColor(status, modId),
                 fontSize: 10,
                 animation: status === "rodando" ? "pulse 1s infinite" : "none"
               }}>
-                {getIcon(mod.id, status)}
+                {getIcon(modId, status)}
               </span>
               <span style={{
                 fontFamily: "monospace",
                 fontSize: 9,
-                color: getColor(status),
+                color: getColor(status, modId),
                 textTransform: "uppercase"
               }}>
-                {mod.label}
+                {mod?.label || modId}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Espaço entre grupos (espaço triplo) */}
+        <div style={{ width: 24 }} />
+
+        {/* Grupo 2: XLSX EOD */}
+        {["XLSX"].map(modId => {
+          const mod = MODULOS.find(m => m.id === modId);
+          const status = getStatus(modId);
+          return (
+            <div
+              key={modId}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                background: status === "rodando" ? "rgba(59,130,246,0.15)" : "transparent",
+                border: `1px solid ${status === "rodando" ? "var(--atlas-blue)" : "transparent"}`,
+                borderRadius: 2,
+                opacity: status === "espera" ? 0.5 : 1
+              }}
+            >
+              <span style={{
+                color: getColor(status, modId),
+                fontSize: 10,
+                animation: status === "rodando" ? "pulse 1s infinite" : "none"
+              }}>
+                {getIcon(modId, status)}
+              </span>
+              <span style={{
+                fontFamily: "monospace",
+                fontSize: 9,
+                color: getColor(status, modId),
+                textTransform: "uppercase"
+              }}>
+                {mod?.label || modId}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Espaço entre grupos (espaço triplo) */}
+        <div style={{ width: 24 }} />
+
+        {/* Grupo 3: TP/STOP */}
+        {["TP_STOP"].map(modId => {
+          const mod = MODULOS.find(m => m.id === modId);
+          const status = getStatus(modId);
+          return (
+            <div
+              key={modId}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                background: status === "rodando" ? "rgba(59,130,246,0.15)" : "transparent",
+                border: `1px solid ${status === "rodando" ? "var(--atlas-blue)" : "transparent"}`,
+                borderRadius: 2,
+                opacity: status === "espera" ? 0.5 : 1
+              }}
+            >
+              <span style={{
+                color: getColor(status, modId),
+                fontSize: 10,
+                animation: status === "rodando" ? "pulse 1s infinite" : "none"
+              }}>
+                {getIcon(modId, status)}
+              </span>
+              <span style={{
+                fontFamily: "monospace",
+                fontSize: 9,
+                color: getColor(status, modId),
+                textTransform: "uppercase"
+              }}>
+                {mod?.label || modId}
               </span>
             </div>
           );
