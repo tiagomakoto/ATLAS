@@ -20,6 +20,71 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     return "var(--atlas-text-secondary)";
   };
 
+  // ═══ Item 3: Cor baseada no REGIME do ORBIT ═══
+  const corRegime = (regime) => {
+    if (!regime || regime === "~") return "var(--atlas-text-secondary)";
+    const cores = {
+      "ALTA": "var(--atlas-green)",
+      "BAIXA": "var(--atlas-red)",
+      "NEUTRO": "var(--atlas-amber)",
+      "NEUTRO_BULL": "#00CED1",      // turquesa
+      "NEUTRO_BEAR": "#FF8C00",     // laranja
+      "NEUTRO_LATERAL": "#9370DB",   // roxo
+      "NEUTRO_TRANSICAO": "#20B2AA", // verdeágua
+      "NEUTRO_MORTO": "#808080",    // cinza
+      "RECUPERACAO": "#32CD32",     // verde limao
+      "PANICO": "#FF1493"            // rosa
+    };
+    return cores[regime] || "var(--atlas-text-secondary)";
+  };
+
+  // ═══ Item 3: Cor baseada no STATUS do ativo ═══
+  const corStatus = (status) => {
+    if (!status) return "var(--atlas-text-secondary)";
+    if (status === "OPERAR") return "var(--atlas-green)";
+    if (status === "MONITORAR") return "var(--atlas-amber)";
+    return "var(--atlas-text-secondary)"; // SEM_EDGE, etc
+  };
+  
+  // ═══ Helper para renderizar regime (ORBIT) com cores ═══
+  const renderOrbitAntesDepois = (orbitStr, orbitAntes, orbitDepois) => {
+    if (!orbitStr || !orbitStr.includes(" -> ")) {
+      return <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>{orbitStr}</span>;
+    }
+    
+    const [antes, depois] = orbitStr.split(" -> ");
+    return (
+      <span style={{ fontSize: 9 }}>
+        <span style={{ color: corRegime(antes) }}>{antes}</span>
+        {" -> "}
+        <span style={{ color: corRegime(depois), fontWeight: "bold" }}>{depois}</span>
+      </span>
+    );
+  };
+
+  // ═══ Helper para renderizar STATUS com cores ═══
+  const renderStatusAntesDepois = (statusStr, statusAntes, statusDepois) => {
+    if (!statusStr || !statusStr.includes(" -> ")) {
+      return <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>{statusStr}</span>;
+    }
+    
+    const [antes, depois] = statusStr.split(" -> ");
+    return (
+      <span style={{ fontSize: 9 }}>
+        <span style={{ color: corStatus(antes) }}>{antes}</span>
+        {" -> "}
+        <span style={{ color: corStatus(depois), fontWeight: "bold" }}>{depois}</span>
+      </span>
+    );
+  };
+  // ═══ FIM ═══
+        {" -> "}
+        <span style={{ color: corOrbit(depois), fontWeight: "bold" }}>{depois}</span>
+      </span>
+    );
+  };
+  // ═══ FIM ═══
+
   const statusGeral = (evento) => {
     const erros = evento.erros || [];
     if (erros.length > 0) return "erro";
@@ -153,12 +218,38 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                   <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
                     orbit
                   </span>
-                  <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
-                    {ev.bloco_mensal.orbit}
-                  </span>
+                  {/* ═══ Item 3: Mostrar antes -> depois com cores (regime) ═══ */}
+                  {renderOrbitAntesDepois(
+                    ev.bloco_mensal.orbit,
+                    ev.bloco_mensal.orbit_antes,
+                    ev.bloco_mensal.orbit_depois
+                  )}
+                  {/* ═══ FIM ═══ */}
                 </div>
 
-                {/* reflect_cycle */}
+                {/* status - NOVO */}
+                {ev.bloco_mensal.status_antes && (
+                  <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
+                    <span style={{ color: cor(ev.bloco_mensal.status), width: 10 }}>
+                      {icone(ev.bloco_mensal.status)}
+                    </span>
+                    <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
+                      status
+                    </span>
+                    {/* ═══ Item 3: Mostrar status antes -> depois com cores ═══ */}
+                    {renderStatusAntesDepois(
+                      ev.bloco_mensal.status_antes && ev.bloco_mensal.status_depois 
+                        ? `${ev.bloco_mensal.status_antes} -> ${ev.bloco_mensal.status_depois}`
+                        : null,
+                      ev.bloco_mensal.status_antes,
+                      ev.bloco_mensal.status_depois
+                    )}
+                    {/* ═══ FIM ═══ */}
+                  </div>
+                )}
+
+                {/* reflect_cycle - ═══ Item 1: REMOVER ═══ */}
+                {/*
                 <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
                   <span style={{ color: cor(ev.bloco_mensal.reflect_cycle), width: 10 }}>
                     {icone(ev.bloco_mensal.reflect_cycle)}
@@ -170,8 +261,10 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                     {ev.bloco_mensal.reflect_cycle}
                   </span>
                 </div>
+                */}
 
-                {/* gate */}
+                {/* gate - ═══ Item 1: REMOVER ═══ */}
+                {/*
                 <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
                   <span style={{ color: cor(ev.bloco_mensal.gate), width: 10 }}>
                     {icone(ev.bloco_mensal.gate)}
@@ -195,8 +288,10 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                     )}
                   </span>
                 </div>
+                */}
 
-                {/* tune */}
+                {/* tune - ═══ Item 1: REMOVER ═══ */}
+                {/*
                 <div style={{ display: "flex", gap: 12, padding: "2px 0" }}>
                   <span style={{ color: cor(ev.bloco_mensal.tune), width: 10 }}>
                     {icone(ev.bloco_mensal.tune)}
@@ -208,6 +303,7 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                     {ev.bloco_mensal.tune}
                   </span>
                 </div>
+                */}
               </div>
             )}
 

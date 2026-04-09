@@ -405,6 +405,9 @@ async def dc_daily(tickers: list) -> dict:
                 }
             })
             # ═══ FIM NOVO ═══
+            # ═══ Item 4: Adicionar gate_eod no digest para ativos bloqueados ═══
+            ticker_digest["gate_eod"] = "GATE inexistente. Rodar backtest."
+            # ═══ FIM ═══
             ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
             digest[ticker] = ticker_digest
             continue
@@ -500,6 +503,14 @@ async def dc_daily(tickers: list) -> dict:
                 digest[ticker] = ticker_digest
                 continue
 
+            # ═══ Item 3: Capturar status E regime ANTES do ORBIT ═══
+            dados_antes = get_ativo(ticker)
+            status_antes = dados_antes.get("status", "SEM_EDGE")
+            # Regime do ciclo (do último historico)
+            historico_antes = dados_antes.get("historico", [])
+            regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
+            # ═══ FIM ═══
+
             try:
                 orbit_result = await dc_orbit_update(ticker)
                 if orbit_result["status"] != "OK":
@@ -507,7 +518,21 @@ async def dc_daily(tickers: list) -> dict:
                     ticker_digest["bloco_mensal"] = bloco_mensal
                     digest[ticker] = ticker_digest
                     continue
-                bloco_mensal["orbit"] = "ok"
+                
+                # ═══ Item 3: Capturar status E regime DEPOIS do ORBIT ═══
+                dados_depois = get_ativo(ticker)
+                status_depois = dados_depois.get("status", "SEM_EDGE")
+                historico_depois = dados_depois.get("historico", [])
+                regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
+                
+                # orbit = regime, status = status do ativo
+                bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
+                bloco_mensal["orbit_antes"] = regime_antes
+                bloco_mensal["orbit_depois"] = regime_depois
+                bloco_mensal["status_antes"] = status_antes
+                bloco_mensal["status_depois"] = status_depois
+                # ═══ FIM ═══
+                
                 emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
                 # Emitir evento para ORBIT
                 emit_dc_event("dc_module_complete", "ORBIT", "ok",
