@@ -1,0 +1,15 @@
+{
+  "defaultViewMode": "preview",
+  "foldHeading": false,
+  "foldIndent": true,
+  "showLineNumber": false,
+  "readableLineLength": true,
+  "strictLineBreaks": false,
+  "showFrontmatter": false,
+  "useTab": false,
+  "tabSize": 2,
+  "newFileLocation": "current",
+  "attachmentFolderPath": "SYSTEM/attachments",
+  "newLinkFormat": "absolute",
+  "useMarkdownLinks": false
+}

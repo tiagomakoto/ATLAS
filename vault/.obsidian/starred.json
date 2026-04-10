@@ -1,0 +1,14 @@
+{
+  "starred": [
+    {
+      "type": "file",
+      "path": "BOARD/decision_log.md",
+      "title": "Decision Log"
+    },
+    {
+      "type": "file",
+      "path": "SYSTEM/system_overview.md",
+      "title": "System Overview"
+    }
+  ]
+}
