@@ -3,7 +3,7 @@
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "nvidia/qwen/qwen3-coder-480b-a35b-instruct",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-planner.txt}",
       "description": "Analisa specs e decompõe em tarefas atômicas para o BUILD. Não escreve código.",
@@ -16,7 +16,7 @@
     },
     "build": {
       "mode": "primary",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "nvidia/deepseek-ai/deepseek-v3.1-terminus",
       "temperature": 0.3,
       "prompt": "{file:./prompts/atlas-builder.txt}",
       "description": "Executa tarefas atômicas delegadas pelo PLAN. Edição cirúrgica.",
@@ -29,7 +29,7 @@
     },
     "commit": {
       "mode": "primary",
-      "model": "opencode/minimax-m2.5-free",
+      "model": "nvidia/stepfun-ai/step-3.5-flash",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-commit.txt}",
       "description": "Fecha o ciclo: roda update_scm.py, compõe mensagem de commit, commita código + vault e faz push.",
@@ -43,7 +43,7 @@
     },
     "debug": {
       "mode": "primary",
-      "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+      "model": "nvidia/moonshotai/kimi-k2.5",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-debugger.txt}",
       "description": "Investiga bugs, emite diagnóstico ou aplica hotfix cirúrgico. Aciona PLAN para correções complexas.",

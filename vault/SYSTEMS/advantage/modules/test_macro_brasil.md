@@ -5,7 +5,7 @@ status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: advantage/src/data_layer/collectors/alternativo.py
+file: advantage/tests/data_layer/collectors/test_macro_brasil.py
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -23,9 +23,12 @@ depends_on_condition:
 used_by:
   - [[SYSTEMS/<system>/modules/...]]
 
-intent: [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent: [BOARD_REVIEW_REQUIRED]
+  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
 
-constraints: [BOARD_REVIEW_REQUIRED] — thresholds literais / invariantes / thresholds literais>
+constraints: [BOARD_REVIEW_REQUIRED]
+  - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-09 — módulo criado automaticamente a partir de advantage/src/data_layer/collectors/alternativo.py cases ou riscos>
+  - 2026-04-10 — módulo criado automaticamente a partir de advantage/tests/data_layer/collectors/test_macro_brasil.py
+  - <edge cases ou riscos>

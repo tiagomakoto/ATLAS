@@ -1,11 +1,11 @@
 ---
-uid: mod-advantage-001
+uid: mod-advantage-007
 version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: ADVANTAGE_DataLayer_Spec_v1.md
+file: advantage/tests/data_layer/db/test_schema.py
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -23,9 +23,12 @@ depends_on_condition:
 used_by:
   - [[SYSTEMS/<system>/modules/...]]
 
-intent: [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent: [BOARD_REVIEW_REQUIRED]
+  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
 
-constraints: [BOARD_REVIEW_REQUIRED] — thresholds literais / invariantes / thresholds literais>
+constraints: [BOARD_REVIEW_REQUIRED]
+  - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-09 — módulo criado automaticamente a partir de ADVANTAGE_DataLayer_Spec_v1.md cases ou riscos>
+  - 2026-04-10 — módulo criado automaticamente a partir de advantage/tests/data_layer/db/test_schema.py
+  - <edge cases ou riscos>
