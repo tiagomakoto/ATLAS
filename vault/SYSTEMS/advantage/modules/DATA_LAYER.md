@@ -1,6 +1,6 @@
 ---
 uid: mod-adv-001
-version: 1.0
+version: 1.0.1
 status: validated
 owner: Chan
 
@@ -36,6 +36,7 @@ constraints:
   - Criar arquivo se nao existir — path.parent.mkdir(parents=True, exist_ok=True)
 
 notes:
+  - 2026-04-11: código modificado — schema.py
   - Quatro dominios: preco_volume.db, macro.db, alternativo.db, portfolio.db
   - schema.py — create_all_tables() idempotente — seguro chamar multiplas vezes
 ---
