@@ -1,6 +1,6 @@
 ---
 uid: mod-advantage-009
-version: 1.0.3
+version: 1.0.4
 status: validated
 owner: Chan
 
@@ -36,6 +36,7 @@ constraints:
   - `calcular_indicadores` só puxa ativos em lote limit e com `flag_qualidade = 1`. Mínimo 20 bars.
 
 notes:
+  - 2026-04-11: código modificado — scheduler.py
   - 2026-04-10: código modificado — scheduler.py
   - 2026-04-10: código modificado — scheduler.py
   - 2026-04-10: código modificado — scheduler.py

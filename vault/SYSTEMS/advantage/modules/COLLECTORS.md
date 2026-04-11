@@ -1,6 +1,6 @@
 ---
 uid: mod-adv-002
-version: 1.0.7
+version: 1.0.10
 status: validated
 owner: Chan
 
@@ -34,6 +34,9 @@ constraints:
   - retry com backoff linear — 3 tentativas, 5s de espera
 
 notes:
+  - 2026-04-11: código modificado — polymarket.py
+  - 2026-04-11: código modificado — macro_global.py
+  - 2026-04-11: código modificado — alternativo.py
   - 2026-04-11: código modificado — utils.py
   - 2026-04-10: código modificado — utils.py
   - 2026-04-10: código modificado — macro_global.py

@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 import sys
 import os
+import math
 
 # Adicionar o caminho do projeto ao sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -69,73 +70,111 @@ def calcular_indicadores() -> int:
                 if len(df_ticker) < 20:  # Mínimo de dados para calcular indicadores
                     continue
 
-                # Calcular indicadores técnicos
-                # SMA (Simple Moving Average)
-                sma_20 = ta.sma(df_ticker['fechamento'], length=20)
-                sma_50 = ta.sma(df_ticker['fechamento'], length=50)
-                sma_200 = ta.sma(df_ticker['fechamento'], length=200)
+# Calcular indicadores técnicos
+    # SMA (Simple Moving Average)
+    sma_20 = ta.sma(df_ticker['fechamento'], length=20)
+    sma_50 = ta.sma(df_ticker['fechamento'], length=50)
+    sma_200 = ta.sma(df_ticker['fechamento'], length=200)
 
-                # EMA (Exponential Moving Average)
-                ema_9 = ta.ema(df_ticker['fechamento'], length=9)
-                ema_21 = ta.ema(df_ticker['fechamento'], length=21)
+    # EMA (Exponential Moving Average)
+    ema_9 = ta.ema(df_ticker['fechamento'], length=9)
+    ema_21 = ta.ema(df_ticker['fechamento'], length=21)
 
-                # RSI (Relative Strength Index)
-                rsi_14 = ta.rsi(df_ticker['fechamento'], length=14)
+    # RSI (Relative Strength Index)
+    rsi_14 = ta.rsi(df_ticker['fechamento'], length=14)
 
-                # MACD
-                macd_result = ta.macd(df_ticker['fechamento'])
+    # MACD
+    macd_result = ta.macd(df_ticker['fechamento'])
 
-                # ATR (Average True Range)
-                atr_14 = ta.atr(df_ticker['maxima'], df_ticker['minima'], df_ticker['fechamento'], length=14)
+    # ATR (Average True Range)
+    atr_14 = ta.atr(df_ticker['maxima'], df_ticker['minima'], df_ticker['fechamento'], length=14)
+    atr_60 = ta.atr(df_ticker['maxima'], df_ticker['minima'], df_ticker['fechamento'], length=60)
 
-                # Bollinger Bands
-                bb_result = ta.bbands(df_ticker['fechamento'], length=20)
+    # Bollinger Bands
+    bb_result = ta.bbands(df_ticker['fechamento'], length=20)
 
-                # VWAP (Volume Weighted Average Price)
-                vwap = ta.vwap(df_ticker['maxima'], df_ticker['minima'], df_ticker['fechamento'], df_ticker['volume'])
+    # VWAP (Volume Weighted Average Price)
+    vwap = ta.vwap(df_ticker['maxima'], df_ticker['minima'], df_ticker['fechamento'], df_ticker['volume'])
 
-                # OBV (On-Balance Volume)
-                obv = ta.obv(df_ticker['fechamento'], df_ticker['volume'])
+    # OBV (On-Balance Volume)
+    obv = ta.obv(df_ticker['fechamento'], df_ticker['volume'])
 
-                # Calcular distância da SMA200
-                dist_sma200_pct = (df_ticker['fechamento'] - sma_200) / sma_200
+    # Calcular distância da SMA200
+    dist_sma200_pct = (df_ticker['fechamento'] - sma_200) / sma_200
 
-                # Verificar se está acima do VWAP
-                acima_vwap = (df_ticker['fechamento'] > vwap).astype(int)
+    # Verificar se está acima do VWAP
+    acima_vwap = (df_ticker['fechamento'] > vwap).astype(int)
 
-                # Inserir indicadores calculados
-                for idx, row in df_ticker.iterrows():
-                    if pd.notna(sma_20.iloc[idx]) and pd.notna(rsi_14.iloc[idx]):
-                        conn.execute("""
-                        INSERT OR IGNORE INTO indicadores_compartilhados
-                        (ticker, data, sma_20, sma_50, sma_200, ema_9, ema_21,
-                        rsi_14, macd, macd_signal, macd_hist, atr_14,
-                        bb_upper, bb_lower, bb_width, vwap, obv,
-                        dist_sma200_pct, acima_vwap, data_calculo)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            ticker,
-                            row['data'],
-                            float(sma_20.iloc[idx]) if pd.notna(sma_20.iloc[idx]) else None,
-                            float(sma_50.iloc[idx]) if pd.notna(sma_50.iloc[idx]) else None,
-                            float(sma_200.iloc[idx]) if pd.notna(sma_200.iloc[idx]) else None,
-                            float(ema_9.iloc[idx]) if pd.notna(ema_9.iloc[idx]) else None,
-                            float(ema_21.iloc[idx]) if pd.notna(ema_21.iloc[idx]) else None,
-                            float(rsi_14.iloc[idx]) if pd.notna(rsi_14.iloc[idx]) else None,
-                            float(macd_result['MACD_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACD_12_26_9'].iloc[idx]) else None,
-                            float(macd_result['MACDs_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACDs_12_26_9'].iloc[idx]) else None,
-                            float(macd_result['MACDh_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACDh_12_26_9'].iloc[idx]) else None,
-                            float(atr_14.iloc[idx]) if pd.notna(atr_14.iloc[idx]) else None,
-                            float(bb_result['BBU_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBU_20_2.0'].iloc[idx]) else None,
-                            float(bb_result['BBL_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBL_20_2.0'].iloc[idx]) else None,
-                            float(bb_result['BBW_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBW_20_2.0'].iloc[idx]) else None,
-                            float(vwap.iloc[idx]) if pd.notna(vwap.iloc[idx]) else None,
-                            float(obv.iloc[idx]) if pd.notna(obv.iloc[idx]) else None,
-                            float(dist_sma200_pct.iloc[idx]) if pd.notna(dist_sma200_pct.iloc[idx]) else None,
-                            int(acima_vwap.iloc[idx]) if pd.notna(acima_vwap.iloc[idx]) else None,
-                            datetime.now()
-                        ))
-                        registros_processados += conn.rowcount
+    # Volume médio
+    vol_media_20 = df_ticker['volume'].rolling(window=20).mean()
+    vol_media_60 = df_ticker['volume'].rolling(window=60).mean()
+
+    # Máximas e mínimas
+    maxima_52s = df_ticker['fechamento'].rolling(window=252).max()
+    minima_52s = df_ticker['fechamento'].rolling(window=252).min()
+    maxima_3a = df_ticker['fechamento'].rolling(window=756).max()
+    minima_3a = df_ticker['fechamento'].rolling(window=756).min()
+
+# Inserir indicadores calculados
+    for idx, row in df_ticker.iterrows():
+        if pd.notna(sma_20.iloc[idx]) and pd.notna(rsi_14.iloc[idx]):
+            conn.execute("""INSERT OR IGNORE INTO indicadores_compartilhados
+            (ticker, data, sma_20, sma_50, sma_200, ema_9, ema_21, 
+            rsi_14, macd, macd_signal, macd_hist, atr_14, atr_60,
+            bb_upper, bb_lower, bb_width, vwap, obv, 
+            dist_sma200_pct, acima_vwap, vol_media_20, vol_media_60,
+            maxima_52s, minima_52s, maxima_3a, minima_3a, parametros_ver, data_calculo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
+                ticker,
+                row['data'],
+                float(sma_20.iloc[idx]) if pd.notna(sma_20.iloc[idx]) else None,
+                float(sma_50.iloc[idx]) if pd.notna(sma_50.iloc[idx]) else None,
+                float(sma_200.iloc[idx]) if pd.notna(sma_200.iloc[idx]) else None,
+                float(ema_9.iloc[idx]) if pd.notna(ema_9.iloc[idx]) else None,
+                float(ema_21.iloc[idx]) if pd.notna(ema_21.iloc[idx]) else None,
+                float(rsi_14.iloc[idx]) if pd.notna(rsi_14.iloc[idx]) else None,
+                float(macd_result['MACD_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACD_12_26_9'].iloc[idx]) else None,
+                float(macd_result['MACDs_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACDs_12_26_9'].iloc[idx]) else None,
+                float(macd_result['MACDh_12_26_9'].iloc[idx]) if pd.notna(macd_result['MACDh_12_26_9'].iloc[idx]) else None,
+                float(atr_14.iloc[idx]) if pd.notna(atr_14.iloc[idx]) else None,
+                float(atr_60.iloc[idx]) if pd.notna(atr_60.iloc[idx]) else None,
+                float(bb_result['BBU_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBU_20_2.0'].iloc[idx]) else None,
+                float(bb_result['BBL_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBL_20_2.0'].iloc[idx]) else None,
+                float(bb_result['BBW_20_2.0'].iloc[idx]) if pd.notna(bb_result['BBW_20_2.0'].iloc[idx]) else None,
+                float(vwap.iloc[idx]) if pd.notna(vwap.iloc[idx]) else None,
+                float(obv.iloc[idx]) if pd.notna(obv.iloc[idx]) else None,
+                float(dist_sma200_pct.iloc[idx]) if pd.notna(dist_sma200_pct.iloc[idx]) else None,
+                int(acima_vwap.iloc[idx]) if pd.notna(acima_vwap.iloc[idx]) else None,
+                float(vol_media_20.iloc[idx]) if pd.notna(vol_media_20.iloc[idx]) else None,
+                float(vol_media_60.iloc[idx]) if pd.notna(vol_media_60.iloc[idx]) else None,
+                float(maxima_52s.iloc[idx]) if pd.notna(maxima_52s.iloc[idx]) else None,
+                float(minima_52s.iloc[idx]) if pd.notna(minima_52s.iloc[idx]) else None,
+                float(maxima_3a.iloc[idx]) if pd.notna(maxima_3a.iloc[idx]) else None,
+                float(minima_3a.iloc[idx]) if pd.notna(minima_3a.iloc[idx]) else None,
+                "v1.0",  # parametros_ver
+                datetime.now()
+            ))
+            registros_processados += conn.rowcount
+            
+            # Calcular retornos históricos
+            if idx > 0:  # Não calcula para o primeiro registro
+                # Retorno diário
+                retorno_diario = (row['fechamento'] / df_ticker.iloc[idx-1]['fechamento']) - 1
+                
+                # Retorno logarítmico
+                retorno_log = math.log(row['fechamento'] / df_ticker.iloc[idx-1]['fechamento'])
+                
+                # Inserir retornos históricos
+                conn.execute("""INSERT OR IGNORE INTO retornos_historicos
+                (ticker, data, retorno_diario, retorno_log, data_calculo)
+                VALUES (?, ?, ?, ?, ?)""", (
+                    ticker,
+                    row['data'],
+                    float(retorno_diario) if pd.notna(retorno_diario) else None,
+                    float(retorno_log) if pd.notna(retorno_log) else None,
+                    datetime.now()
+                ))
+                registros_processados += conn.rowcount
 
             except Exception as e:
                 print(f"[{datetime.now()}] [calcular_indicadores] Erro no ticker {ticker}: {e}")

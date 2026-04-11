@@ -88,16 +88,21 @@ def coletar(tickers: List[str] | None = None) -> int:
         
         # Coletar dados via yfinance para índices e commodities
         try:
-            # Símbolos para coleta via yfinance
-            simbolos_yf = {
-                'DXY': 'DX-Y.NYB',      # Dollar Index
-                'SP500': '^GSPC',       # S&P 500
-                'WTI': 'CL=F',          # Petróleo WTI
-                'BRENT': 'BZ=F',        # Petróleo Brent
-                'SOJA': 'ZS=F',         # Soja
-                'MILHO': 'ZC=F',        # Milho
-                'COBRE': 'HG=F'         # Cobre
-            }
+# Símbolos para coleta via yfinance
+    simbolos_yf = {
+        'DXY': 'DX-Y.NYB', # Dollar Index
+        'SP500': '^GSPC', # S&P 500
+        'WTI': 'CL=F', # Petróleo WTI
+        'BRENT': 'BZ=F', # Petróleo Brent
+        'SOJA': 'ZS=F', # Soja
+        'MILHO': 'ZC=F', # Milho
+        'COBRE': 'HG=F', # Cobre
+        'NIQUEL': 'LNGG.L', # Níquel LME
+        'ALUMINIO': 'ALI=F', # Alumínio LME
+        'BOI_GORDO': 'GF=F', # Boi gordo B3
+        'ACUCAR': 'SB=F', # Açúcar NYBOT
+        'CAFE': 'KC=F' # Café NYBOT
+    }
             
             # Coletar dados para cada símbolo
             for nome, simbolo in simbolos_yf.items():
@@ -109,16 +114,21 @@ def coletar(tickers: List[str] | None = None) -> int:
                     if not hist.empty:
                         preco_fechamento = hist['Close'].iloc[-1]
                         
-                        # Mapear para colunas da tabela
-                        mapeamento_colunas = {
-                            'DXY': 'dxy',
-                            'SP500': 'sp500', 
-                            'WTI': 'petroleo_wti',
-                            'BRENT': 'petroleo_brent',
-                            'SOJA': 'soja_cbot',
-                            'MILHO': 'milho_cbot',
-                            'COBRE': 'cobre_lme'
-                        }
+# Mapear para colunas da tabela
+    mapeamento_colunas = {
+        'DXY': 'dxy',
+        'SP500': 'sp500',
+        'WTI': 'petroleo_wti',
+        'BRENT': 'petroleo_brent',
+        'SOJA': 'soja_cbot',
+        'MILHO': 'milho_cbot',
+        'COBRE': 'cobre_lme',
+        'NIQUEL': 'niquel_lme',
+        'ALUMINIO': 'aluminio_lme',
+        'BOI_GORDO': 'boi_gordo_b3',
+        'ACUCAR': 'acucar_nybot',
+        'CAFE': 'cafe_nybot'
+    }
                         
                         coluna = mapeamento_colunas.get(nome)
                         if coluna:
@@ -142,12 +152,71 @@ def coletar(tickers: List[str] | None = None) -> int:
         except Exception as e:
             print(f"[{datetime.now()}] [yfinance] Erro geral: {e}")
         
-        # Coletar dados do BDI (Baltic Dry Index) - temporariamente omitido
-        # Aguardando fonte atualizada de dados
-        print(f"[{datetime.now()}] [BDI] Coleta temporariamente omitida - aguardando fonte atualizada")
+# Coletar dados do BDI (Baltic Dry Index) - temporariamente omitido
+    # Aguardando fonte atualizada de dados
+    print(f"[{datetime.now()}] [BDI] Coleta temporariamente omitida - aguardando fonte atualizada")
+
+    # Coletar minério de ferro via yfinance
+    try:
+        # Tentar coletar minério de ferro via yfinance
+        ticker_minerio = yf.Ticker('SC=F') # Símbolo para minério de ferro
+        hist_minerio = ticker_minerio.history(period='1d')
         
-        # Coletar minério de ferro via yfinance
-        try:
+        if not hist_minerio.empty:
+            preco_minerio = hist_minerio['Close'].iloc[-1]
+            
+            conn.execute("""INSERT OR IGNORE INTO macro_global
+            (data, minerio_ferro, fonte, data_coleta)
+            VALUES (?, ?, ?, ?)""", (
+                date.today(),
+                float(preco_minerio),
+                'yfinance',
+                datetime.now()
+            ))
+            registros_inseridos += conn.rowcount
+            print(f"[{datetime.now()}] [Minério de Ferro] Dados coletados com sucesso")
+        else:
+            print(f"[{datetime.now()}] [Minério de Ferro] Nenhum dado disponível")
+        
+    except Exception as e:
+        print(f"[{datetime.now()}] [Minério de Ferro] Erro ao coletar dados: {e}")
+    
+    # Stub for lítio spot (sem API gratuita disponível)
+    print(f"[{datetime.now()}] [LÍTIO] API não disponível - stub documentado")
+    
+    # Stub for celulose FOEX (sem API gratuita disponível)
+    print(f"[{datetime.now()}] [CELULOSE FOEX] API não disponível - stub documentado")
+        # Tentar coletar minério de ferro via yfinance
+        ticker_minerio = yf.Ticker('SC=F') # Símbolo para minério de ferro
+        hist_minerio = ticker_minerio.history(period='1d')
+        
+        if not hist_minerio.empty:
+            preco_minerio = hist_minerio['Close'].iloc[-1]
+            
+            conn.execute("""INSERT OR IGNORE INTO macro_global
+            (data, minerio_ferro, fonte, data_coleta)
+            VALUES (?, ?, ?, ?)""", (
+                date.today(),
+                float(preco_minerio),
+                'yfinance',
+                datetime.now()
+            ))
+            registros_inseridos += conn.rowcount
+            print(f"[{datetime.now()}] [Minério de Ferro] Dados coletados com sucesso")
+        else:
+            print(f"[{datetime.now()}] [Minério de Ferro] Nenhum dado disponível")
+        
+    except Exception as e:
+        print(f"[{datetime.now()}] [Minério de Ferro] Erro ao coletar dados: {e}")
+    
+    # Stub para lítio spot (sem API gratuita disponível)
+    print(f"[{datetime.now()}] [LÍTIO] API não disponível - stub documentado")
+    
+    # Stub para celulose FOEX (sem API gratuita disponível)
+    print(f"[{datetime.now()}] [CELULOSE FOEX] API não disponível - stub documentado")
+    
+    # Coletar minério de ferro via yfinance
+    try:
             # Tentar coletar minério de ferro via yfinance
             ticker_minerio = yf.Ticker('SC=F')  # Símbolo para minério de ferro
             hist_minerio = ticker_minerio.history(period='1d')
