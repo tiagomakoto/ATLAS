@@ -24,3 +24,6 @@ google-generativeai>=0.8.0
 
 # Configuração de ambiente
 python-dotenv>=1.0.0
+
+# Persistência de jobs
+sqlalchemy>=2.0.0

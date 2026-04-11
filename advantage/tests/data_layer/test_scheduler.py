@@ -1,48 +1,21 @@
-import pytest
+"""
+test_scheduler.py — Testes para o scheduler do Data Layer
+
+Testes unitários para o scheduler e suas funções principais.
+"""
+
+import unittest
 import sys
-import os
+from pathlib import Path
+import json
+from unittest.mock import patch, Mock
+import sqlite3
+import pandas as pd
 
 # Adicionar o caminho do projeto ao sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from data_layer.scheduler import calcular_indicadores, log_job_execution
-
-def test_calcular_indicadores_interface():
-    """Testa se a função calcular_indicadores existe e tem a interface correta"""
-    # Verificar se a função existe
-    assert callable(calcular_indicadores)
-    
-    # Testar chamada básica
-    resultado = calcular_indicadores()
-    
-    # Verificar que retorna um inteiro
-    assert isinstance(resultado, int)
-    
-    # Verificar que não lança exceção
-    assert resultado >= 0
-
-def test_log_job_execution():
-    """Testa a função de log de execução de jobs"""
-    # Testar log de sucesso
-    log_job_execution("test_job", 10)
-    
-    # Testar log de erro
-    log_job_execution("test_job", 0, "erro_teste")
-    
-    # Verificar que não lança exceção
-    assert True
-
-def test_calcular_indicadores_append_only():
-    """Testa que a função é append-only"""
-    # Executar duas vezes e verificar que não lança erro
-    resultado1 = calcular_indicadores()
-    resultado2 = calcular_indicadores()
-    
-    # Ambas as execuções devem retornar valores válidos
-assert isinstance(resultado1, int)
-assert isinstance(resultado2, int)
-assert resultado1 >= 0
-assert resultado2 >= 0
+from advantage.src.data_layer.scheduler import calcular_indicadores, log_job_execution, main
 
 class TestSchedulerFunctions(unittest.TestCase):
     """Testes para as funções do scheduler"""
@@ -158,4 +131,84 @@ class TestSchedulerFunctions(unittest.TestCase):
         # Verificar que o número de registros processados é correto
         # Como o teste usa mocks, o número real pode variar
         # O importante é que os novos indicadores foram calculados
-        self.assertGreaterEqual(resultado, 1) # Pelo menos um registro foi processado""
+        self.assertGreaterEqual(resultado, 1) # Pelo menos um registro foi processado
+
+    def test_log_job_execution(self):
+        """Testa a função de log de execução de jobs"""
+        # Testar log de sucesso
+        log_job_execution("test_job", 10)
+        
+        # Testar log de erro
+        log_job_execution("test_job", 0, "erro_teste")
+        
+        # Verificar que não lança exceção
+        assert True
+
+    def test_calcular_indicadores_append_only(self):
+        """Testa que a função é append-only"""
+        # Executar duas vezes e verificar que não lança erro
+        resultado1 = calcular_indicadores()
+        resultado2 = calcular_indicadores()
+        
+        # Ambas as execuções devem retornar valores válidos
+        assert isinstance(resultado1, int)
+        assert isinstance(resultado2, int)
+        assert resultado1 >= 0
+        assert resultado2 >= 0
+
+    @patch('advantage.src.data_layer.scheduler.coletar_polymarket')
+    def test_job_polymarket_executa_corretamente(self, mock_coletar_polymarket):
+        """Verifica que o job_polymarket executa corretamente"""
+        # Mock da função coletar_polymarket
+        mock_coletar_polymarket.return_value = 5
+        
+        # Importar a função job_polymarket
+        from advantage.src.data_layer.scheduler import job_polymarket
+        
+        # Executar o job
+        job_polymarket()
+        
+        # Verificar que a função foi chamada
+        mock_coletar_polymarket.assert_called_once()
+        
+        # Verificar que o log foi chamado com os parâmetros corretos
+        # Como não podemos verificar diretamente o log, verificamos que a função foi chamada
+        assert True
+
+    @patch('advantage.src.data_layer.scheduler.coletar_alternativo')
+    def test_job_ibge_embalagens_mensal_executa_corretamente(self, mock_coletar_alternativo):
+        """Verifica que o job_ibge_embalagens_mensal executa corretamente"""
+        # Mock da função coletar_alternativo
+        mock_coletar_alternativo.return_value = 10
+        
+        # Importar a função job_ibge_embalagens_mensal
+        from advantage.src.data_layer.scheduler import job_ibge_embalagens_mensal
+        
+        # Executar o job
+        job_ibge_embalagens_mensal()
+        
+        # Verificar que a função foi chamada
+        mock_coletar_alternativo.assert_called_once()
+        
+        # Verificar que o log foi chamado com os parâmetros corretos
+        # Como não podemos verificar diretamente o log, verificamos que a função foi chamada
+        assert True
+
+    @patch('advantage.src.data_layer.scheduler.coletar_alternativo')
+    def test_job_ibge_atividade_mensal_executa_corretamente(self, mock_coletar_alternativo):
+        """Verifica que o job_ibge_atividade_mensal executa corretamente"""
+        # Mock da função coletar_alternativo
+        mock_coletar_alternativo.return_value = 15
+        
+        # Importar a função job_ibge_atividade_mensal
+        from advantage.src.data_layer.scheduler import job_ibge_atividade_mensal
+        
+        # Executar o job
+        job_ibge_atividade_mensal()
+        
+        # Verificar que a função foi chamada
+        mock_coletar_alternativo.assert_called_once()
+        
+        # Verificar que o log foi chamado com os parâmetros corretos
+        # Como não podemos verificar diretamente o log, verificamos que a função foi chamada
+        assert True""

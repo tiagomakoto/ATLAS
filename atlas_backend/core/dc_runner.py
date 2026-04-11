@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = None   # None = roda todos
+DEBUG_TICKER = "VALE3"   # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -436,7 +436,7 @@ async def dc_daily(tickers: list) -> dict:
         try:
             gate_result = await dc_gate_eod(ticker)
             gate_output = gate_result.get("output", "")
-            
+
             if "BLOQUEADO" in gate_output:
                 ticker_digest["gate_eod"] = "BLOQUEADO"
                 precisa_bloco_mensal = (
@@ -444,62 +444,61 @@ async def dc_daily(tickers: list) -> dict:
                     or "ORBIT defasado" in gate_output
                 )
                 if precisa_bloco_mensal:
+                    # Executar bloco mensal SEMPRE quando ORBIT defasado ou GATE nunca executado
                     emit_dc_event("dc_module_complete", "GATE", "error",
-                                  ticker=ticker, descricao="GATE EOD = BLOQUEADO — dados incompletos")
+                    ticker=ticker, descricao="GATE EOD = BLOQUEADO — dados incompletos")
                     emit_log(f"[DAILY] {ticker}: BLOQUEADO — rodando bloco mensal", level="info")
-                    
+
                     # ═══ BLOCO MENSAL (TAPE → ORBIT → REFLECT → GATE) ═══
-                    if _ciclo_mudou(ticker):
-                        emit_log(f"[DAILY] {ticker}: ciclo mudou — executando bloco mensal", level="info")
-                        bloco_mensal = {"orbit": None, "tune": None}
+                    bloco_mensal = {"orbit": None, "tune": None}
 
-                        # 5. orbit
-                        if not dados_ok.get("cotahist", False):
-                            bloco_mensal["orbit"] = "postergado — COTAHIST indisponível"
-                            ticker_digest["bloco_mensal"] = bloco_mensal
-                            digest[ticker] = ticker_digest
-                            continue
-
-                        # Capturar status E regime ANTES do ORBIT
-                        dados_antes = get_ativo(ticker)
-                        status_antes = dados_antes.get("status", "SEM_EDGE")
-                        historico_antes = dados_antes.get("historico", [])
-                        regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
-                        reflect_antes = dados_antes.get("reflect_state", "B")
-
-                        try:
-                            orbit_result = await dc_orbit_update(ticker)
-                            if orbit_result["status"] != "OK":
-                                bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
-                                ticker_digest["bloco_mensal"] = bloco_mensal
-                                digest[ticker] = ticker_digest
-                                continue
-                            
-                            # Capturar status E regime DEPOIS do ORBIT
-                            dados_depois = get_ativo(ticker)
-                            status_depois = dados_depois.get("status", "SEM_EDGE")
-                            historico_depois = dados_depois.get("historico", [])
-                            regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
-                            reflect_depois = dados_depois.get("reflect_state", "B")
-                            
-                            bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
-                            bloco_mensal["orbit_antes"] = regime_antes
-                            bloco_mensal["orbit_depois"] = regime_depois
-                            bloco_mensal["status_antes"] = status_antes
-                            bloco_mensal["status_depois"] = status_depois
-                            bloco_mensal["reflect_antes"] = reflect_antes
-                            bloco_mensal["reflect_depois"] = reflect_depois
-                            
-                            emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
-                            # REMOVIDO: O watcher já emite dc_module_complete automaticamente
-                        except Exception as e:
-                            bloco_mensal["orbit"] = f"erro: {str(e)}"
-                            ticker_digest["bloco_mensal"] = bloco_mensal
-                            digest[ticker] = ticker_digest
-                            continue
-
-                        bloco_mensal["tune"] = "executado via Gestão"
+                    # 5. orbit
+                    if not dados_ok.get("cotahist", False):
+                        bloco_mensal["orbit"] = "postergado — COTAHIST indisponível"
                         ticker_digest["bloco_mensal"] = bloco_mensal
+                        digest[ticker] = ticker_digest
+                        continue
+
+                    # Capturar status E regime ANTES do ORBIT
+                    dados_antes = get_ativo(ticker)
+                    status_antes = dados_antes.get("status", "SEM_EDGE")
+                    historico_antes = dados_antes.get("historico", [])
+                    regime_antes = historico_antes[-1].get("regime", "~") if historico_antes else "~"
+                    reflect_antes = dados_antes.get("reflect_state", "B")
+
+                    try:
+                        orbit_result = await dc_orbit_update(ticker)
+                        if orbit_result["status"] != "OK":
+                            bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
+                            ticker_digest["bloco_mensal"] = bloco_mensal
+                            digest[ticker] = ticker_digest
+                            continue
+
+                        # Capturar status E regime DEPOIS do ORBIT
+                        dados_depois = get_ativo(ticker)
+                        status_depois = dados_depois.get("status", "SEM_EDGE")
+                        historico_depois = dados_depois.get("historico", [])
+                        regime_depois = historico_depois[-1].get("regime", "~") if historico_depois else "~"
+                        reflect_depois = dados_depois.get("reflect_state", "B")
+
+                        bloco_mensal["orbit"] = f"{regime_antes} -> {regime_depois}"
+                        bloco_mensal["orbit_antes"] = regime_antes
+                        bloco_mensal["orbit_depois"] = regime_depois
+                        bloco_mensal["status_antes"] = status_antes
+                        bloco_mensal["status_depois"] = status_depois
+                        bloco_mensal["reflect_antes"] = reflect_antes
+                        bloco_mensal["reflect_depois"] = reflect_depois
+
+                        emit_log(f"[DAILY] {ticker}: orbit update ok", level="info")
+                        # REMOVIDO: O watcher já emite dc_module_complete automaticamente
+                    except Exception as e:
+                        bloco_mensal["orbit"] = f"erro: {str(e)}"
+                        ticker_digest["bloco_mensal"] = bloco_mensal
+                        digest[ticker] = ticker_digest
+                        continue
+
+                    bloco_mensal["tune"] = "executado via Gestão"
+                    ticker_digest["bloco_mensal"] = bloco_mensal
 
                     # Após bloco mensal executado, rodar GATE novamente
                     try:
@@ -515,15 +514,19 @@ async def dc_daily(tickers: list) -> dict:
                             ticker_digest["gate_eod"] = gate_output.strip()
                     except Exception as e:
                         emit_log(f"[DAILY] {ticker}: erro ao revalidar GATE — {e}", level="error")
+                        # Continuar para verificar XLSX mesmo se houver erro no GATE
+
                 else:
+                    # BLOQUEADO por outro motivo (ex: GATE vencido, mas ORBIT atualizado)
                     emit_dc_event("dc_module_complete", "GATE", "error",
-                                  ticker=ticker, descricao="GATE EOD = BLOQUEADO")
+                    ticker=ticker, descricao="GATE EOD = BLOQUEADO")
                     emit_log(f"[DAILY] {ticker}: BLOQUEADO — pulando", level="info")
                     ticker_digest["xlsx"] = "pulado"
                     ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
                     digest[ticker] = ticker_digest
                     _atualizar_ativo_store(ticker)
                     continue
+
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
                 # REMOVIDO: O watcher já emite dc_module_complete automaticamente
