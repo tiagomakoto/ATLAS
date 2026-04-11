@@ -1,6 +1,6 @@
 ---
 uid: mod-adv-002
-version: 1.0
+version: 1.0.6
 status: validated
 owner: Chan
 
@@ -33,7 +33,13 @@ constraints:
   - flag_qualidade=0 para linhas suspeitas — nao descarta dado
   - retry com backoff linear — 3 tentativas, 5s de espera
 
-notes: >
+notes:
+  - 2026-04-10: código modificado — utils.py
+  - 2026-04-10: código modificado — macro_global.py
+  - 2026-04-10: código modificado — utils.py
+  - 2026-04-10: código modificado — macro_global.py
+  - 2026-04-10: código modificado — utils.py
+  - 2026-04-10: código modificado — macro_global.py >
   PRECO_VOLUME (preco_volume.py):
   - Fonte primaria: yfinance. Fallback: brapi.dev por ticker
   - Universo padrao: Ibovespa (~80 ativos)

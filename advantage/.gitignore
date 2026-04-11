@@ -1,0 +1,13 @@
+# Configurações Sensíveis - ADVANTAGE Data Layer
+.env
+.env.local
+*.db
+*.log
+data/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/

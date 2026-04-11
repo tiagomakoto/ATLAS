@@ -1,0 +1,23 @@
+# ADVANTAGE Data Layer — Dependências
+# Instalar com: pip install -r requirements.txt
+
+# Scheduler
+apscheduler>=3.10.0
+
+# Coleta de dados financeiros
+yfinance>=0.2.36
+requests>=2.31.0
+pandas>=2.0.0
+
+# Indicadores técnicos
+pandas-ta>=0.3.14b
+
+# Dados alternativos
+feedparser>=6.0.10
+pytrends>=4.9.2
+
+# Dados macroeconômicos
+fredapi>=0.5.0
+
+# IA para análise de notícias
+google-generativeai>=0.8.0

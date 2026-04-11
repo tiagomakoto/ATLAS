@@ -4,7 +4,7 @@ from typing import List, Optional
 import sqlite3
 from datetime import datetime
 import traceback
-from ...db.connection import get_connection
+from src.data_layer.db.connection import get_connection
 
 def coletar(tickers: List[str] | None = None) -> int:
     """

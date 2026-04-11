@@ -19,8 +19,19 @@
               "icon": "lucide-folder-closed",
               "title": "Explorador de arquivos"
             }
+          },
+          {
+            "id": "21ef8381812377e2",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -178,8 +189,9 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "sidebar",
+  "active": "21ef8381812377e2",
   "lastOpenFiles": [
+    "SYSTEMS/advantage/modules/pytest.md",
     "SYSTEM/llm_usage.md",
     "BOARD/tensoes_abertas/B27_BBAS3_edge_nao_testado.md",
     "BOARD/tensoes_abertas/B11_pesos_reflect_optuna.md",

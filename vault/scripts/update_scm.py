@@ -74,6 +74,7 @@ IGNORED_PATTERNS = {
     "__init__", ".gitignore", ".gitattributes",
     "requirements", "package", "vite.config",
     "ADVANTAGE_DataLayer", "SPEC_", "README",
+    "test_", "conftest", "pytest", "/tests/",
 }
 
 
@@ -89,6 +90,13 @@ def detect_system(file_path: str) -> Optional[str]:
 def should_ignore(file_path: str) -> bool:
     """Retorna True se o arquivo deve ser ignorado pelo SCM."""
     path = Path(file_path)
+    normalized = file_path.lower().replace("\\", "/")
+
+    # Pastas ignoradas no caminho
+    ignored_dirs = {"/tests/", "/test/", "/__pycache__/", "/.git/", "/node_modules/"}
+    for d in ignored_dirs:
+        if d in normalized:
+            return True
 
     # Extensão ignorada
     if path.suffix.lower() in IGNORED_EXTENSIONS:
@@ -99,7 +107,7 @@ def should_ignore(file_path: str) -> bool:
         if pattern.lower() in path.name.lower():
             return True
 
-    return False
+    return True if path.name.startswith("test_") else False
 
 
 def find_coverage(file_path: str, system: str) -> Optional[str]:
@@ -312,7 +320,7 @@ def main():
     if results["updated"]:
         print("Arquivos SCM atualizados:")
         for item in results["updated"]:
-            print(f"  - {item['file']} (v{item['version']}) ← {Path(item['source']).name}")
+            print(f" - {item['file']} (v{item['version']}) --> {Path(item['source']).name}")
         print()
 
     if results["created"]:

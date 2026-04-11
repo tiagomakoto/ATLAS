@@ -5,8 +5,8 @@ status: validated
 owner: Chan
 
 function: Fonte unica de verdade para todos os dados do sistema Advantage. Quatro dominios isolados em SQLite — preco_volume, macro, alternativo, portfolio. Nenhuma camada de analise acessa fonte externa diretamente.
-file: advantage/src/data_layer/db/connection.py
-role: Camada de acesso a dados — get_connection(domain) como unico ponto de entrada por dominio
+file: advantage/src/data_layer/db/connection.py, advantage/src/data_layer/db/schema.py
+role: Camada de acesso a dados — get_connection(domain) como unico ponto de entrada por dominio e schema.py para DDL idempotente.
 
 input:
   - domain: Literal["preco_volume", "macro", "alternativo", "portfolio"]
