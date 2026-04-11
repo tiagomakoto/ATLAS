@@ -2,6 +2,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import functools
+import math
 from typing import Callable, Any
 
 def validar_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
@@ -128,3 +129,32 @@ def calcular_variacao_percentual(valor_atual: float, valor_anterior: float) -> f
     if valor_anterior is None or valor_anterior == 0:
         return 0.0
     return ((valor_atual - valor_anterior) / valor_anterior) * 100
+
+def alter_table_if_column_missing(conn, tabela: str, coluna: str, tipo: str) -> None:
+    """
+    Adiciona coluna a tabela existente apenas se não existir.
+    Idempotente — seguro chamar múltiplas vezes.
+    """
+    cursor = conn.execute(f"PRAGMA table_info({tabela})")
+    colunas_existentes = [row[1] for row in cursor.fetchall()]
+    if coluna not in colunas_existentes:
+        conn.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+        conn.commit()
+
+def calcular_temperatura(polaridade: float, intensidade: float, volume_atual: int, volume_tipico: float) -> float:
+    """
+    temperatura = polaridade × intensidade × log(volume / volume_típico)
+    Retorna 0.0 se volume_tipico == 0.
+    """
+    if volume_tipico == 0:
+        return 0.0
+    return polaridade * intensidade * math.log(volume_atual / volume_tipico)
+
+def calcular_temperatura_zscore(temperatura: float, media_historica: float, desvpad_historico: float) -> float:
+    """
+    Retorna o z-score da temperatura em relação à média histórica.
+    Retorna 0.0 se desvpad_historico == 0.
+    """
+    if desvpad_historico == 0:
+        return 0.0
+    return (temperatura - media_historica) / desvpad_historico

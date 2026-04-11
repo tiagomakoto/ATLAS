@@ -85,6 +85,95 @@ def test_formatar_moeda():
 
 def test_calcular_variacao_percentual():
     """Testa o cálculo de variação percentual"""
-    assert calcular_variacao_percentual(110, 100) == 10.0
-    assert calcular_variacao_percentual(90, 100) == -10.0
-    assert calcular_variacao_percentual(100, 0) == 0.0  # Divisão por zero
+assert calcular_variacao_percentual(110, 100) == 10.0
+assert calcular_variacao_percentual(90, 100) == -10.0
+assert calcular_variacao_percentual(100, 0) == 0.0 # Divisão por zero
+
+
+class TestAlterTableIfColumnMissing(unittest.TestCase):
+    """Testes para a função alter_table_if_column_missing"""
+
+    def setUp(self):
+        """Configuração antes de cada teste."""
+        # Criar banco de teste
+        self.test_db_path = Path("/tmp/test_utils.db")
+        self.test_db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Criar banco de dados de teste
+        self.conn = sqlite3.connect(str(self.test_db_path))
+        self.conn.execute("""CREATE TABLE IF NOT EXISTS test_table (
+            id INTEGER PRIMARY KEY,
+            nome TEXT
+        )""")
+        self.conn.commit()
+
+    def tearDown(self):
+        """Limpeza após cada teste."""
+        if hasattr(self, 'conn'):
+            self.conn.close()
+        if hasattr(self, 'test_db_path') and self.test_db_path.exists():
+            self.test_db_path.unlink()
+
+    def test_alter_table_if_column_missing_adds_column(self):
+        """Verifica que a função adiciona uma coluna que não existe."""
+        # Verificar que a coluna não existe inicialmente
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        self.assertNotIn('idade', colunas_existentes)
+        
+        # Chamar a função para adicionar a coluna
+        alter_table_if_column_missing(self.conn, 'test_table', 'idade', 'INTEGER')
+        
+        # Verificar que a coluna foi adicionada
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        self.assertIn('idade', colunas_existentes)
+
+    def test_alter_table_if_column_missing_idempotent(self):
+        """Verifica que a função é idempotente (não adiciona coluna se já existir)."""
+        # Adicionar a coluna pela primeira vez
+        alter_table_if_column_missing(self.conn, 'test_table', 'idade', 'INTEGER')
+        
+        # Verificar que a coluna foi adicionada
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        self.assertIn('idade', colunas_existentes)
+        
+        # Contar o número de colunas antes da segunda chamada
+        num_colunas_antes = len(colunas_existentes)
+        
+        # Chamar a função novamente (deve ser idempotente)
+        alter_table_if_column_missing(self.conn, 'test_table', 'idade', 'INTEGER')
+        
+        # Verificar que o número de colunas não mudou
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        num_colunas_depois = len(colunas_existentes)
+        self.assertEqual(num_colunas_antes, num_colunas_depois)
+        
+        # Verificar que a coluna ainda existe
+        self.assertIn('idade', colunas_existentes)
+
+    def test_alter_table_if_column_missing_different_type(self):
+        """Verifica que a função não altera o tipo da coluna se já existir."""
+        # Adicionar a coluna como INTEGER
+        alter_table_if_column_missing(self.conn, 'test_table', 'idade', 'INTEGER')
+        
+        # Verificar que a coluna foi adicionada
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        self.assertIn('idade', colunas_existentes)
+        
+        # Tentar adicionar a mesma coluna com tipo diferente (deve ser ignorado)
+        alter_table_if_column_missing(self.conn, 'test_table', 'idade', 'TEXT')
+        
+        # Verificar que o tipo ainda é INTEGER (não foi alterado)
+        cursor = self.conn.execute("PRAGMA table_info(test_table)")
+        for row in cursor.fetchall():
+            if row[1] == 'idade':
+                self.assertEqual(row[2], 'INTEGER')
+                break
+        
+        # Verificar que a coluna ainda existe
+        colunas_existentes = [row[1] for row in cursor.fetchall()]
+        self.assertIn('idade', colunas_existentes)
