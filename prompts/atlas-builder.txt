@@ -48,5 +48,11 @@ Não avance para a próxima tarefa sem autorização explícita.
 - Se encontrar conflito entre o que a tarefa pede e o estado atual do arquivo, pare e reporte ao Plan antes de executar
 - Em caso de dúvida sobre o escopo, pergunte. Nunca assuma.
 
+## Regras de indentação MANDATORY!
+- Detect indentation style from file before any edit (tabs vs spaces, width)
+- All edits must preserve the exact indentation of surrounding context
+- Never reformat, normalize or "fix" indentation outside the edited lines
+- When using str_replace: match indentation character-for-character with the original
+- When writing new blocks: copy indentation from the nearest sibling block, not from convention
 
 

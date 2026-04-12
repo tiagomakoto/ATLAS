@@ -50,6 +50,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/Q09_separar_data_decisao_execucao\|Q9]] | Separar data_decisao de data_execucao | antes de capital real | 2026-03-23 |
 | [[BOARD/tensoes_abertas/Q10_S6_VALE3_congelado\|Q10]] | S6 VALE3 congelado 2024-Q1 | investigação imediata | 2026-03-23 |
 | [[BOARD/tensoes_abertas/Q11_TUNE_VALE3_afetado_Q10\|Q11]] | TUNE v1.1 VALE3 afetado por Q10 | resolução de Q10 | 2026-03-23 |
+| [[BOARD/tensoes_abertas/B46_advantage_integracao_dados_externos\|B46]] | ADVANTAGE — integração de dados externos ao Delta Chaos | fim do 1º trimestre paper | 2026-04-11 |
 
 ---
 

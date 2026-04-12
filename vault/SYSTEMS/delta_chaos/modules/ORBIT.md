@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-002
-version: 3.4
+version: 3.4.1
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - Vocabulario exclusivo — nao misturar com estados do REFLECT (A-E)
 
 notes:
+  - 2026-04-12: código modificado — orbit.py
   - Sub-regimes NEUTRO — NEUTRO_BULL, NEUTRO_BEAR, NEUTRO_LATERAL, NEUTRO_MORTO, NEUTRO_TRANSICAO
   - Regimes completos — ALTA, NEUTRO e sub-regimes, BAIXA, RECUPERACAO, PANICO
   - Q10 aberto: S6 VALE3 congelado 2024-Q1 — pode afetar classificacao de regime nesse periodo

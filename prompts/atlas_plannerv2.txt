@@ -164,6 +164,9 @@ evitar refatorações amplas sem necessidade explícita
 explicitar impactos em interfaces no BLOCO 1
 garantir que tarefas sejam executáveis sem interpretação adicional
 em caso de dúvida, perguntar
+read the first 20 lines to detect indentation. Preserve it exactly e explicitamente no plano. Do not reformat.
+
+
 
 PRINCÍPIO CENTRAL
 

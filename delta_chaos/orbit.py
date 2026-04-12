@@ -27,7 +27,7 @@ except ImportError:
     _atlas_disponivel = False
 
 # ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — ORBIT v3.4
+# DELTA CHAOS — ORBIT v3.5
 # Alterações em relação à v3.3:
 # CORRIGIDO (SCAN-10): removida importação morta de tape_reflect_cycle
 #   tape_reflect_cycle é chamado pelo EDGE, não pelo ORBIT
@@ -232,6 +232,7 @@ def _pesos_temporais(df_idx):
 
 def _calibrar(cam_df, ret_fut, prior_dict,
               pct_treino=0.70, lam=0.10):
+    # PATCH v3.5: s6 opcional - detecta colunas presentes
     colunas_validas = [f"s{i}" for i in range(1, 7)
                        if f"s{i}" in cam_df.columns]
     if not colunas_validas:
@@ -239,7 +240,14 @@ def _calibrar(cam_df, ret_fut, prior_dict,
 
     df_j=cam_df[colunas_validas].copy()
     df_j["ret"]=ret_fut
-    df_j=df_j.dropna()
+    df_j=df_j.dropna(how="any")
+    
+    # PATCH: recalcula apÃ³s dropna - remove colunas sem dados suficientes
+    colunas_validas = [c for c in colunas_validas
+                       if c in df_j.columns and df_j[c].notna().sum() > 20]
+    if not colunas_validas:
+        return {}, 0.0
+        
     n=len(df_j); n_tr=int(n*pct_treino)
 
     pr=np.array([1.0/len(colunas_validas)
@@ -253,6 +261,8 @@ def _calibrar(cam_df, ret_fut, prior_dict,
     w=_pesos_temporais(df_tr.index)
     w=w/w.sum()*len(w)
 
+    # PATCH: garante colunas existem em df_tr
+    colunas_validas = [c for c in colunas_validas if c in df_tr.columns]
     X=df_tr[colunas_validas].values
     y=df_tr["ret"].values
     W=np.diag(w)
@@ -291,7 +301,8 @@ def _calibrar(cam_df, ret_fut, prior_dict,
 
 def _score_rolante(cam_df, ret_fut, prior_dict,
                    janela=504, recal=126, lam=0.10):
-    colunas_validas = [f"s{i}" for i in range(1, 7)
+    # PATCH v3.5: nÃ£o fixa colunas - _calibrar decide por janela (s6 opcional)
+    colunas_base = [f"s{i}" for i in range(1, 7)
                        if f"s{i}" in cam_df.columns]
 
     n      = len(cam_df)
@@ -325,9 +336,9 @@ def _score_rolante(cam_df, ret_fut, prior_dict,
                 "ir":    ir_ok})
 
         if pw:
-            s=sum(cam_df[c].iloc[i]*pw.get(c,0)
-                  for c in colunas_validas
-                  if c in cam_df.columns)
+            # PATCH v3.5: usa apenas pesos retornados por _calibrar (5 ou 6 features)
+            s = sum(cam_df.get(c, pd.Series(0, index=cam_df.index)).iloc[i] * w
+                  for c, w in pw.items())
             s=float(np.clip(s,-1,1))
             scores.iloc[i]=s
 
@@ -407,12 +418,12 @@ def _classificar_sub_regime_neutro(score, score_vel,
     return "NEUTRO_BEAR"
 
 # ════════════════════════════════════════════════════════════════════
-# CLASSE ORBIT v3.4
+# CLASSE ORBIT v3.5
 # ════════════════════════════════════════════════════════════════════
 
 class ORBIT:
     """
-    ORBIT v3.4
+    ORBIT v3.5
     Dados via TAPE — sem acesso direto ao Drive
     Master JSON por ativo via tape_ativo_carregar / tape_ciclo_salvar
     tape_reflect_cycle removido — responsabilidade do EDGE
@@ -421,10 +432,10 @@ class ORBIT:
     def __init__(self, universo: dict):
         self.universo = universo
         self.ativos   = list(universo.keys())
-        print(f"  ORBIT v3.4 — {len(self.ativos)} ativos")
+        print(f"  ORBIT v3.5 — {len(self.ativos)} ativos")
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
-    def orbit_rodar(self, df_tape, anos, modo="pipeline", externas_dict=None):
+    def orbit_rodar(self, df_tape, anos, modo="pipeline", externas_dict=None, ciclos_forcados=None):
         df_cache, ciclos_faltantes = self.orbit_cache_carregar(anos)
 
         # Cache completo — retorna sem processar
@@ -452,7 +463,7 @@ class ORBIT:
         self._externas_cache = externas_dict or {}
 
         # ← MUDANÇA: usar ciclos_faltantes em vez de _gerar_ciclos(anos)
-        ciclos = ciclos_faltantes
+        ciclos = ciclos_forcados if ciclos_forcados else ciclos_faltantes
         print(f"  {len(ciclos)} ciclos × "
               f"{len(ohlcv_ativos)} ativos (apenas ausentes)")
 
@@ -469,13 +480,16 @@ class ORBIT:
 
         rows       = []
 
+        # PATCH v3.5: cache configs - evita recarregar TAPE a cada ciclo
+        cfgs_ativos = {ativo: tape_ativo_carregar(ativo) for ativo in ohlcv_ativos}
+
         with _tqdm(ciclos, desc="ORBIT",
                    unit="ciclo", ncols=None) as pbar:
             for ciclo_id in ciclos:
                 data_ref = self._data_ref(ciclo_id)
 
                 for ativo in ohlcv_ativos:
-                    cfg = tape_ativo_carregar(ativo)
+                    cfg = cfgs_ativos[ativo]
 
                     df_ohlcv = ohlcv_ativos[ativo]
                     df_ate   = df_ohlcv[
@@ -496,7 +510,10 @@ class ORBIT:
                     if resultado:
                         rows.append(resultado)
                         # Salva ciclo no master JSON
-                        tape_ciclo_salvar(ativo, resultado)
+                        try:
+                            tape_ciclo_salvar(ativo, resultado)
+                        except Exception as e:
+                            emit_error(f"Falha ao salvar {ativo} {ciclo_id}: {e}")
                         pbar.set_postfix(
                             ciclo  = ciclo_id,
                             ativo  = ativo,
@@ -681,7 +698,7 @@ class ORBIT:
         ciclo_ant   = ciclos[-2] if len(ciclos)>=2 else None
         sep = "═"*60
         print(f"\n{sep}")
-        print(f"  ORBIT v3.4 — Relatório {ciclo_atual}")
+        print(f"  ORBIT v3.5 — Relatório {ciclo_atual}")
         print(sep)
         df_m0 = df_regimes[
             df_regimes["ciclo_id"]==ciclo_atual]
@@ -770,7 +787,7 @@ class ORBIT:
         return df, ciclos_faltantes
 
 if __name__ == "__main__":
-    print("✓ ORBIT v3.4 carregado")
+    print("✓ ORBIT v3.5 carregado")
     print("  5 regimes | dados via TAPE | master JSON por ativo")
     print("  tape_reflect_cycle removido — responsabilidade do EDGE")
     print("  ORBIT(universo).rodar(df_tape, anos, modo)")
