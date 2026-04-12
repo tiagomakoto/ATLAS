@@ -439,9 +439,7 @@ class ORBIT:
         df_cache, ciclos_faltantes = self.orbit_cache_carregar(anos)
 
         # Cache completo — retorna sem processar
-        # Aplicar filtro de ciclos forçados se fornecido
-        if ciclos_forcados:
-            ciclos_faltantes = [c for c in ciclos_faltantes if c in ciclos_forcados]
+        if not ciclos_faltantes:
             return df_cache
 
         ibov_close = tape_ibov_carregar(anos)
@@ -464,8 +462,10 @@ class ORBIT:
         # Séries externas — recebidas do TAPE (não buscar internamente)
         self._externas_cache = externas_dict or {}
 
-        # ← MUDANÇA: usar ciclos_faltantes em vez de _gerar_ciclos(anos)
-        ciclos = ciclos_forcados if ciclos_forcados else ciclos_faltantes
+        # Aplicar filtro ciclos_forcados se fornecido
+        if ciclos_forcados:
+            ciclos_faltantes = [c for c in ciclos_faltantes if c in ciclos_forcados]
+        ciclos = ciclos_faltantes
         print(f"  {len(ciclos)} ciclos × "
               f"{len(ohlcv_ativos)} ativos (apenas ausentes)")
 

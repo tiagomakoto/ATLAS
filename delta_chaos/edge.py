@@ -1,4 +1,4 @@
- # ════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 import os
 from datetime import datetime
 # DELTA CHAOS — EDGE v2.0
@@ -806,14 +806,11 @@ if __name__ == "__main__":
             emit_event("ORBIT", "start")
             try:
                 orbit = ORBIT(universo={ticker: cfg_ativo})
-                # PATCH v3.5: forÃ§ar apenas ciclo atual (s6 opcional)
-                ciclo_atual = datetime.now().strftime("%Y-%m")
                 orbit.orbit_rodar(
-                    df_ohlcv, 
-                    anos=[datetime.now().year], 
-                    modo="mensal", 
+                    df_ohlcv,
+                    anos=anos,
+                    modo="mensal",
                     externas_dict=externas,
-                    ciclos_forcados=[ciclo_atual]
                 )
                 print(f"  ✓ ORBIT: regimes calculados para {ticker}")
                 emit_event("ORBIT", "done")
