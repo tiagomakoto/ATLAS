@@ -75,7 +75,7 @@ async def _stream_subprocess(
     # REMOVIDO: O _watch_events já emite dc_module_start ao ler do JSONL do subprocess
     # Emitir manualmente causava duplicação de eventos no frontend
     # if modulo:
-    #     emit_dc_event("dc_module_start", modulo, "running", **action_payload)
+    # emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
 
@@ -84,36 +84,36 @@ async def _stream_subprocess(
         last_pos = 0
         seen_events: set = set()
         while not stop_event.is_set():
-    try:
-    if event_log_path.exists():
-    with open(event_log_path, "r", encoding="utf-8") as f:
-    f.seek(last_pos)
-    while True:
-    line = f.readline()
-    if not line:
-    break
-    last_pos = f.tell()
-    line = line.strip()
-    if not line:
-    continue
-    event = json.loads(line)
-    ev_modulo = event.get("modulo")
-    ev_status = event.get("status")
-    ev_ts = event.get("timestamp", "")
-    ev_key = (ev_modulo, ev_status, ev_ts)
-    if ev_key in seen_events:
-    continue
-    seen_events.add(ev_key)
+            try:
+                if event_log_path.exists():
+                    with open(event_log_path, "r", encoding="utf-8") as f:
+                        f.seek(last_pos)
+                        while True:
+                            line = f.readline()
+                            if not line:
+                                break
+                            last_pos = f.tell()
+                            line = line.strip()
+                            if not line:
+                                continue
+                            event = json.loads(line)
+                            ev_modulo = event.get("modulo")
+                            ev_status = event.get("status")
+                            ev_ts = event.get("timestamp", "")
+                            ev_key = (ev_modulo, ev_status, ev_ts)
+                            if ev_key in seen_events:
+                                continue
+                            seen_events.add(ev_key)
 
-    if ev_status == "start":
-    emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-    elif ev_status == "done":
-    emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-    elif ev_status == "error":
-    emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
-    except Exception:
-    pass
-    time.sleep(0.5)
+                            if ev_status == "start":
+                                emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                            elif ev_status == "done":
+                                emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                            elif ev_status == "error":
+                                emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+            except Exception:
+                pass
+            time.sleep(0.5)
 
     def _sync_runner():
         import subprocess
@@ -531,10 +531,10 @@ async def dc_daily(tickers: list) -> dict:
                 emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
                 emit_dc_event("dc_module_complete", "XLSX", "erro",
                 ticker=ticker, descricao=f"reflect_daily erro: {e}")
-        else:
-            emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
-            emit_dc_event("dc_module_complete", "XLSX", "erro",
-            ticker=ticker, descricao="XLSX EOD não encontrado")
+            else:
+                emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
+                emit_dc_event("dc_module_complete", "XLSX", "erro",
+                ticker=ticker, descricao="XLSX EOD não encontrado")
 
         # Preencher campo xlsx no digest
         ticker_digest["xlsx"] = "ok" if xlsx_path else "não encontrado"

@@ -439,7 +439,9 @@ class ORBIT:
         df_cache, ciclos_faltantes = self.orbit_cache_carregar(anos)
 
         # Cache completo — retorna sem processar
-        if not ciclos_faltantes:
+        # Aplicar filtro de ciclos forçados se fornecido
+        if ciclos_forcados:
+            ciclos_faltantes = [c for c in ciclos_faltantes if c in ciclos_forcados]
             return df_cache
 
         ibov_close = tape_ibov_carregar(anos)
