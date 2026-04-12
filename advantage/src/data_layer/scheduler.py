@@ -272,35 +272,74 @@ def main():
         'misfire_grace_time': 5184000 # 60 dias (2 meses) em segundos
     }
 
-    # Criar scheduler persistente
-    global cscheduler
-    cscheduler = BackgroundScheduler(
-        jobstores=jobstores,
-        executors=executors,
-        job_defaults=job_defaults,
-        timezone="America/Sao_Paulo"
-    )
-    }
-    
-    # Configurar executores
-    executors = {
-        'default': ThreadPoolExecutor(20)
-    }
-    
-    # Configurar padrões de job
-    job_defaults = {
-        'coalesce': True,  # Executa apenas uma vez se múltiplos jobs perdidos
-        'max_instances': 1,  # Evita execução paralela
-        'misfire_grace_time': 5184000  # 60 dias (2 meses) em segundos
-    }
-    
-    # Criar scheduler persistente
-    scheduler = BackgroundScheduler(
-        jobstores=jobstores,
-        executors=executors,
-        job_defaults=job_defaults,
-        timezone="America/Sao_Paulo"
-    )
+# Criar scheduler persistente
+global cscheduler
+cscheduler = BackgroundScheduler(
+    jobstores=jobstores,
+    executors=executors,
+    job_defaults=job_defaults,
+    timezone="America/Sao_Paulo"
+)
+
+# Configurar executores
+executors = {
+    'default': ThreadPoolExecutor(20)
+}
+
+# Configurar padrões de job
+job_defaults = {
+    'coalesce': True, # Executa apenas uma vez se múltiplos jobs perdidos
+    'max_instances': 1, # Evita execução paralela
+    'misfire_grace_time': 5184000 # 60 dias (2 meses) em segundos
+}
+
+# Criar scheduler persistente
+scheduler = BackgroundScheduler(
+    jobstores=jobstores,
+    executors=executors,
+    job_defaults=job_defaults,
+    timezone="America/Sao_Paulo"
+)
+
+# Configurar executores
+executors = {
+    'default': ThreadPoolExecutor(20)
+}
+
+# Configurar padrões de job
+job_defaults = {
+    'coalesce': True, # Executa apenas uma vez se múltiplos jobs perdidos
+    'max_instances': 1, # Evita execução paralela
+    'misfire_grace_time': 5184000 # 60 dias (2 meses) em segundos
+}
+
+# Criar scheduler persistente
+scheduler = BackgroundScheduler(
+    jobstores=jobstores,
+    executors=executors,
+    job_defaults=job_defaults,
+    timezone="America/Sao_Paulo"
+)
+
+# Configurar executores
+executors = {
+    'default': ThreadPoolExecutor(20)
+}
+
+# Configurar padrões de job
+job_defaults = {
+    'coalesce': True, # Executa apenas uma vez se múltiplos jobs perdidos
+    'max_instances': 1, # Evita execução paralela
+    'misfire_grace_time': 5184000 # 60 dias (2 meses) em segundos
+}
+
+# Criar scheduler persistente
+scheduler = BackgroundScheduler(
+    jobstores=jobstores,
+    executors=executors,
+    job_defaults=job_defaults,
+    timezone="America/Sao_Paulo"
+)
 
     # Agendar jobs conforme especificação
 
@@ -385,18 +424,18 @@ def main():
         except Exception as e:
             log_job_execution("ibge_atividade_mensal", 0, str(e))
 
-    # Iniciar scheduler
-    print(f"[{datetime.now()}] [SCHEDULER] Jobs agendados:")
-    print("- preco_volume: 18h30 diário")
-    print("- macro_brasil: 19h00 diário")
-    print("- macro_global: 19h30 diário")
-    print("- polymarket: 19h45 diário")
-    print("- alternativo: segunda-feira 08h00")
-    print("- ibge_embalagens_mensal: dia 1, 08h00")
-    print("- ibge_atividade_mensal: dia 1, 08h15")
-    print("- noticias: a cada 30 minutos")
-    print("- calcular_indicadores: 20h00 diário")
-    print(f"[{datetime.now()}] [SCHEDULER] Scheduler rodando...")
+# Iniciar scheduler
+print(f"[{datetime.now()}] [SCHEDULER] Jobs agendados:")
+print("- preco_volume: 18h30 diário")
+print("- macro_brasil: 19h00 diário")
+print("- macro_global: 19h30 diário")
+print("- polymarket: 19h45 diário")
+print("- alternativo: segunda-feira 08h00")
+print("- ibge_embalagens_mensal: dia 1, 08h00")
+print("- ibge_atividade_mensal: dia 1, 08h15")
+print("- noticias: a cada 30 minutos")
+print("- calcular_indicadores: 20h00 diário")
+print(f"[{datetime.now()}] [SCHEDULER] Scheduler rodando...")
 
 def signal_handler(signum, frame):
     """
@@ -405,7 +444,7 @@ def signal_handler(signum, frame):
     # Verificar se scheduler foi inicializado
     if cscheduler is None:
         return
-    
+
     print(f"[{datetime.now()}] [SCHEDULER] ═══════════════════════════════════════════")
     print(f"[{datetime.now()}] [SCHEDULER] 🛑 SINAL DE INTERRUPÇÃO RECEBIDO")
     print(f"[{datetime.now()}] [SCHEDULER] ═══════════════════════════════════════════")
@@ -421,7 +460,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 try:
     # Verificar jobs perdidos na inicialização
     verificar_jobs_perdidos()
-    
+
     # Iniciar scheduler
     print(f"[{datetime.now()}] [SCHEDULER] ═════════════════════════════════════════════════════════")
     print(f"[{datetime.now()}] [SCHEDULER] 🚀 ADVANTAGE Data Layer Scheduler - MODO PERSISTENTE")
@@ -430,20 +469,8 @@ try:
     print(f"[{datetime.now()}] [SCHEDULER] ⏰ Janela de recuperação: 2 meses")
     print(f"[{datetime.now()}] [SCHEDULER] 🔄 Jobs perdidos: Executados automaticamente")
     print(f"[{datetime.now()}] [SCHEDULER] ═════════════════════════════════════════════════════════")
-    
-    print(f"[{datetime.now()}] [SCHEDULER] Jobs agendados:")
-    print("- preco_volume: 18h30 diário")
-    print("- macro_brasil: 19h00 diário")
-    print("- macro_global: 19h30 diário")
-    print("- polymarket: 19h45 diário")
-    print("- alternativo: segunda-feira 08h00")
-    print("- ibge_embalagens_mensal: dia 1, 08h00")
-    print("- ibge_atividade_mensal: dia 1, 08h15")
-    print("- noticias: a cada 30 minutos")
-    print("- calcular_indicadores: 20h00 diário")
-    print(f"[{datetime.now()}] [SCHEDULER] Scheduler rodando...")
-    
-    scheduler.start()
+
+    cscheduler.start()
 except KeyboardInterrupt:
     print(f"[{datetime.now()}] [SCHEDULER] Scheduler interrompido")
 except Exception as e:
