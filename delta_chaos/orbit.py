@@ -485,46 +485,35 @@ class ORBIT:
         # PATCH v3.5: cache configs - evita recarregar TAPE a cada ciclo
         cfgs_ativos = {ativo: tape_ativo_carregar(ativo) for ativo in ohlcv_ativos}
 
-        with _tqdm(ciclos, desc="ORBIT",
-                   unit="ciclo", ncols=None) as pbar:
-            for ciclo_id in ciclos:
-                data_ref = self._data_ref(ciclo_id)
+        for ciclo_id in _tqdm(ciclos, desc="ORBIT",
+                             unit="ciclo", ncols=None):
+            data_ref = self._data_ref(ciclo_id)
 
-                for ativo in ohlcv_ativos:
-                    cfg = cfgs_ativos[ativo]
+            for ativo in ohlcv_ativos:
+                cfg = cfgs_ativos[ativo]
 
-                    df_ohlcv = ohlcv_ativos[ativo]
-                    df_ate   = df_ohlcv[
-                        df_ohlcv.index.date <= data_ref
-                    ].copy()
+                df_ohlcv = ohlcv_ativos[ativo]
+                df_ate   = df_ohlcv[
+                    df_ohlcv.index.date <= data_ref
+                ].copy()
 
-                    if len(df_ate) < JANELA_OLS + 63:
-                        continue
+                if len(df_ate) < JANELA_OLS + 63:
+                    continue
 
-                    ibov_al = ibov_close.reindex(
-                        df_ate.index, method="ffill")
+                ibov_al = ibov_close.reindex(
+                    df_ate.index, method="ffill")
 
-                    resultado = self.orbit_ativo_processar(
-                        ativo, cfg, df_ate,
-                        ibov_al, ciclo_id,
-                        score_hist, vol_hist)
+                resultado = self.orbit_ativo_processar(
+                    ativo, cfg, df_ate,
+                    ibov_al, ciclo_id,
+                    score_hist, vol_hist)
 
-                    if resultado:
-                        rows.append(resultado)
-                        # Salva ciclo no master JSON
-                        try:
-                            tape_ciclo_salvar(ativo, resultado)
-                        except Exception as e:
-                            emit_error(f"Falha ao salvar {ativo} {ciclo_id}: {e}")
-                        pbar.set_postfix(
-                            ciclo  = ciclo_id,
-                            ativo  = ativo,
-                            regime = resultado["regime"],
-                            ir     = f"{resultado['ir']:+.3f}")
-                        continue
-                
-                # Atualiza progresso após processar cada ciclo
-                pbar.update(1)
+                if resultado:
+                    rows.append(resultado)
+                    try:
+                        tape_ciclo_salvar(ativo, resultado)
+                    except Exception as e:
+                        emit_error(f"Falha ao salvar {ativo} {ciclo_id}: {e}")
 
         if not rows:
             print("  ✗ ORBIT sem resultados")
@@ -784,7 +773,17 @@ class ORBIT:
             print(f"  ✓ Cache completo — {len(df):,} registros, nenhum ciclo novo")
             return df, []
 
-        # Cache parcial — retornar existentes + faltantes
+        # Cache parcial — ignorar ciclos anteriores ao primeiro registrado
+        # (primeiros meses de 2002 são bootstrap, nunca foram salvos)
+        if ciclos_faltantes and ciclos_existentes:
+            primeiro_existente = min(ciclos_existentes)
+            ciclos_faltantes = [c for c in ciclos_faltantes
+                                if c >= primeiro_existente]
+
+        if not ciclos_faltantes:
+            print(f"  ✓ Cache completo — {len(df):,} registros, nenhum ciclo novo")
+            return df, []
+
         print(f"  ~ Cache parcial — {len(ciclos_faltantes)} ciclo(s) ausente(s): {ciclos_faltantes[:3]}")
         return df, ciclos_faltantes
 

@@ -734,7 +734,7 @@ if __name__ == "__main__":
         # Uso: python -m delta_chaos.edge --modo orbit_backtest --ticker VALE3
         # Fluxo: instancia EDGE completo (apaga books), roda TAPE + ORBIT
         # ──────────────────────────────────────────────────────────────
-        elif args.modo == "orbit_backtest":
+        elif args.modo in ("orbit_backtest", "backtest_dados"):
             # Mantém comportamento atual do orbit (instancia EDGE completo, apaga books)
             anos = (list(map(int, args.anos.split(",")))
                     if args.anos
@@ -765,8 +765,30 @@ if __name__ == "__main__":
                 print("  ✗ ORBIT vazio. Abortando.")
                 emit_event("ORBIT", "error", erro="ORBIT vazio")
                 sys.exit(1)
-            print(f"  ✓ ORBIT: regimes calculados")
+            print(f"  \u2713 ORBIT: regimes calculados")
             emit_event("ORBIT", "done")
+
+            # REFLECT: calcular para todos os ciclos do historico
+            print(f"\n  [3/3] REFLECT")
+            emit_event("REFLECT", "start")
+            try:
+                cfg_atual = tape_ativo_carregar(args.ticker)
+                historico_ciclos = list(dict.fromkeys(
+                    c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
+                ))
+                reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
+                ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
+                print(f"  Calculando REFLECT para {len(ciclos_sem_reflect)} ciclos...")
+                for ciclo_id in ciclos_sem_reflect:
+                    try:
+                        reflect_cycle_calcular(args.ticker, ciclo_id)
+                    except Exception as e_ciclo:
+                        print(f"  ~ REFLECT {ciclo_id} ignorado: {e_ciclo}")
+                print(f"  \u2713 REFLECT: {len(ciclos_sem_reflect)} ciclo(s) calculado(s)")
+                emit_event("REFLECT", "done")
+            except Exception as e:
+                print(f"  \u2717 REFLECT erro: {e}")
+                emit_event("REFLECT", "error", erro=str(e))
 
         # ──────────────────────────────────────────────────────────────
         # Modo: orbit_update
@@ -819,12 +841,25 @@ if __name__ == "__main__":
                 emit_event("ORBIT", "error", erro=str(e))
                 sys.exit(1)
 
-            # ── REFLECT: atualizar ciclo ──
+            # ── REFLECT: calcular para todos os ciclos novos ──
             print(f"\n  [3/3] REFLECT")
             emit_event("REFLECT", "start")
             try:
-                reflect_cycle_calcular(ticker, datetime.now().strftime("%Y-%m"))
-                print(f"  ✓ REFLECT: ciclo atualizado para {ticker}")
+                cfg_atual = tape_ativo_carregar(ticker)
+                historico_ciclos = list(dict.fromkeys(  # deduplicar mantendo ordem
+                    c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
+                ))
+                reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
+                ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
+                if not ciclos_sem_reflect:
+                    ciclos_sem_reflect = [datetime.now().strftime("%Y-%m")]
+                for ciclo_id in ciclos_sem_reflect:
+                    try:
+                        reflect_cycle_calcular(ticker, ciclo_id)
+                        print(f"  ✓ REFLECT: {ciclo_id}")
+                    except Exception as e_ciclo:
+                        print(f"  ~ REFLECT {ciclo_id} ignorado: {e_ciclo}")
+                print(f"  ✓ REFLECT: {len(ciclos_sem_reflect)} ciclo(s) calculado(s) para {ticker}")
                 emit_event("REFLECT", "done")
             except Exception as e:
                 print(f"  ✗ REFLECT erro: {e}")

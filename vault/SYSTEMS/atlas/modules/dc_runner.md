@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-010
-version: 1.0.2
+version: 1.0.3
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,6 +30,7 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-12: código modificado — dc_runner.py
   - 2026-04-12: código modificado — dc_runner.py
   - 2026-04-11: código modificado — dc_runner.py
   - 2026-04-11 — módulo criado automaticamente a partir de atlas_backend/core/dc_runner.py

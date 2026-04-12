@@ -1,0 +1,6 @@
+{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-12T15:47:24.898339", "run_id": "dc_20260412_154723"}
+{"modulo": "TAPE", "status": "done", "timestamp": "2026-04-12T15:47:26.537837", "run_id": "dc_20260412_154723", "registros": 6527}
+{"modulo": "ORBIT", "status": "start", "timestamp": "2026-04-12T15:47:26.545445", "run_id": "dc_20260412_154723"}
+{"modulo": "ORBIT", "status": "done", "timestamp": "2026-04-12T15:47:26.555038", "run_id": "dc_20260412_154723"}
+{"modulo": "REFLECT", "status": "start", "timestamp": "2026-04-12T15:47:26.555528", "run_id": "dc_20260412_154723"}
+{"modulo": "REFLECT", "status": "error", "timestamp": "2026-04-12T15:47:26.599950", "run_id": "dc_20260412_154723", "erro": "ORBIT desatualizado — ciclo 2026-04 ausente no master JSON"}

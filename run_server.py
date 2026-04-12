@@ -49,6 +49,15 @@ def reset_historico_ativos():
             continue
 
         dados["historico"] = novo_historico
+
+        # Limpar reflect_cycle_history dos mesmos ciclos removidos
+        reflect_hist = dados.get("reflect_cycle_history", {})
+        if reflect_hist:
+            dados["reflect_cycle_history"] = {
+                k: v for k, v in reflect_hist.items()
+                if not (ciclo_inicio <= k <= ciclo_fim)
+            }
+
         total_resetados += removidos
 
         try:

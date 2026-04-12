@@ -27,7 +27,7 @@ from atlas_backend.core.event_bus import emit_dc_event
 _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
-DEBUG_TICKER = "VALE3" # None = roda todos
+DEBUG_TICKER = None # None = roda todos
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -115,6 +115,37 @@ async def _stream_subprocess(
                 pass
             time.sleep(0.5)
 
+    def _flush_events(event_log_path, action_payload, last_pos, seen_events):
+        """Leitura final do JSONL após processo terminar — garante eventos do tail."""
+        try:
+            if not event_log_path.exists():
+                return
+            with open(event_log_path, "r", encoding="utf-8") as f:
+                f.seek(last_pos)
+                while True:
+                    line = f.readline()
+                    if not line:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    event = json.loads(line)
+                    ev_modulo = event.get("modulo")
+                    ev_status = event.get("status")
+                    ev_ts = event.get("timestamp", "")
+                    ev_key = (ev_modulo, ev_status, ev_ts)
+                    if ev_key in seen_events:
+                        continue
+                    seen_events.add(ev_key)
+                    if ev_status == "start":
+                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                    elif ev_status == "done":
+                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                    elif ev_status == "error":
+                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+        except Exception:
+            pass
+
     def _sync_runner():
         import subprocess
 
@@ -132,8 +163,43 @@ async def _stream_subprocess(
 
         # Iniciar watcher de eventos em thread separada
         stop_event = threading.Event()
+        seen_events = set()
+        last_pos_ref = [0]  # lista para mutabilidade dentro do closure
+
+        def _watch_events_inner(event_log_path, action_payload, stop_event):
+            while not stop_event.is_set():
+                try:
+                    if event_log_path.exists():
+                        with open(event_log_path, "r", encoding="utf-8") as f:
+                            f.seek(last_pos_ref[0])
+                            while True:
+                                line = f.readline()
+                                if not line:
+                                    break
+                                last_pos_ref[0] = f.tell()
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                event = json.loads(line)
+                                ev_modulo = event.get("modulo")
+                                ev_status = event.get("status")
+                                ev_ts = event.get("timestamp", "")
+                                ev_key = (ev_modulo, ev_status, ev_ts)
+                                if ev_key in seen_events:
+                                    continue
+                                seen_events.add(ev_key)
+                                if ev_status == "start":
+                                    emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                                elif ev_status == "done":
+                                    emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                                elif ev_status == "error":
+                                    emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                except Exception:
+                    pass
+                time.sleep(0.5)
+
         watch_thread = threading.Thread(
-            target=_watch_events,
+            target=_watch_events_inner,
             args=(event_log_path, action_payload, stop_event),
             daemon=True
         )
@@ -166,9 +232,10 @@ async def _stream_subprocess(
 
         proc.wait()
 
-        # Parar watcher e esperar thread terminar
+        # Parar watcher e fazer flush final antes de encerrar
         stop_event.set()
         watch_thread.join(timeout=2)
+        _flush_events(event_log_path, action_payload, last_pos_ref[0], seen_events)
 
         # Cleanup do arquivo de eventos (exceto se DEBUG)
         if not DEBUG_TICKER and event_log_path.exists():
@@ -431,9 +498,11 @@ async def dc_daily(tickers: list) -> dict:
             # ═══ FIM NOVO ═══
             # ═══ Item 4: Adicionar gate_eod no digest para ativos bloqueados ═══
             ticker_digest["gate_eod"] = "BLOQUEADO — onboarding não realizado"
-            # ═══ FIM ═══
             ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
             digest[ticker] = ticker_digest
+            _atualizar_ativo_store(ticker)
+            emit_dc_event("daily_ativo_complete", "DAILY", "ok",
+            ticker=ticker, digest=ticker_digest)
             continue
         # ═══ FIM NOVO ═══
 
@@ -451,6 +520,7 @@ async def dc_daily(tickers: list) -> dict:
                 bloco_mensal["orbit"] = "postergado — COTAHIST indisponível"
                 ticker_digest["bloco_mensal"] = bloco_mensal
                 digest[ticker] = ticker_digest
+                _atualizar_ativo_store(ticker)
                 continue
 
             # ORBIT
@@ -466,6 +536,7 @@ async def dc_daily(tickers: list) -> dict:
                     bloco_mensal["orbit"] = f"erro: {orbit_result['output']}"
                     ticker_digest["bloco_mensal"] = bloco_mensal
                     digest[ticker] = ticker_digest
+                    _atualizar_ativo_store(ticker)
                     continue
 
                 # Capturar status E regime DEPOIS do ORBIT
@@ -489,6 +560,7 @@ async def dc_daily(tickers: list) -> dict:
                 bloco_mensal["orbit"] = f"erro: {str(e)}"
                 ticker_digest["bloco_mensal"] = bloco_mensal
                 digest[ticker] = ticker_digest
+                _atualizar_ativo_store(ticker)
                 continue
 
         # Após bloco mensal, continuar para XLSX
@@ -501,40 +573,46 @@ async def dc_daily(tickers: list) -> dict:
             gate_output = gate_result.get("output", "")
             if "BLOQUEADO" in gate_output:
                 ticker_digest["gate_eod"] = "BLOQUEADO"
-                # Não executar bloco mensal aqui — ele é disparado por _ciclo_mudou
                 emit_dc_event("dc_module_complete", "GATE", "error",
                 ticker=ticker, descricao="GATE EOD = BLOQUEADO")
                 emit_log(f"[DAILY] {ticker}: BLOQUEADO — aguardando atualização de ciclo", level="info")
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
+                emit_dc_event("dc_module_complete", "GATE", "ok",
+                ticker=ticker, descricao="GATE EOD = OPERAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
             elif "MONITORAR" in gate_output:
                 ticker_digest["gate_eod"] = "MONITORAR"
+                emit_dc_event("dc_module_complete", "GATE", "ok",
+                ticker=ticker, descricao="GATE EOD = MONITORAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
             else:
                 ticker_digest["gate_eod"] = gate_output.strip()
+                emit_dc_event("dc_module_complete", "GATE", "error",
+                ticker=ticker, descricao=f"GATE EOD = {gate_output.strip()}")
         except Exception as e:
             ticker_digest["gate_eod"] = f"erro: {str(e)}"
             emit_log(f"[DAILY] {ticker}: gate_eod erro — {e}", level="error")
             digest[ticker] = ticker_digest
+            _atualizar_ativo_store(ticker)
             continue
 
         # 4. XLSX EOD
         xlsx_path = _detectar_xlsx(ticker)
         if xlsx_path:
             emit_log(f"[DAILY] {ticker}: xlsx encontrado, rodando reflect_daily", level="info")
-            emit_dc_event("dc_module_complete", "XLSX", "ok",
-            ticker=ticker, descricao="XLSX EOD encontrado")
             try:
                 await dc_reflect_daily(ticker, xlsx_path)
+                emit_dc_event("dc_module_complete", "XLSX", "ok",
+                ticker=ticker, descricao="XLSX EOD encontrado")
             except Exception as e:
                 emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
                 emit_dc_event("dc_module_complete", "XLSX", "erro",
                 ticker=ticker, descricao=f"reflect_daily erro: {e}")
-            else:
-                emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
-                emit_dc_event("dc_module_complete", "XLSX", "erro",
-                ticker=ticker, descricao="XLSX EOD não encontrado")
+        else:
+            emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
+            emit_dc_event("dc_module_complete", "XLSX", "erro",
+            ticker=ticker, descricao="XLSX EOD não encontrado")
 
         # Preencher campo xlsx no digest
         ticker_digest["xlsx"] = "ok" if xlsx_path else "não encontrado"
@@ -558,6 +636,9 @@ async def dc_daily(tickers: list) -> dict:
                     ticker=ticker, descricao=f"TP/STOP atingido: {resultado.get('motivo', '')}")
                     emit_log(f"[DAILY] {ticker}: {resultado['motivo']}", level="info")
                     digest[ticker] = ticker_digest
+                    _atualizar_ativo_store(ticker)
+                    emit_dc_event("daily_ativo_complete", "DAILY", "ok",
+                    ticker=ticker, digest=ticker_digest)
                     continue
                 else:
                     ticker_digest["posicao"]["pnl"] = resultado.get("pnl", 0)
@@ -574,36 +655,20 @@ async def dc_daily(tickers: list) -> dict:
                 emit_log(f"[DAILY] {ticker}: posição aberta — mantendo", level="info")
             digest[ticker] = ticker_digest
             _atualizar_ativo_store(ticker)
+            emit_dc_event("daily_ativo_complete", "DAILY", "ok",
+            ticker=ticker, digest=ticker_digest)
             continue
 
         ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
 
-        # 6. gate_eod (só se OPERAR sem posição)
-        try:
-            gate_result = await dc_gate_eod(ticker)
-            gate_output = gate_result.get("output", "")
-            if "OPERAR" in gate_output:
-                ticker_digest["gate_eod"] = "OPERAR"
-                emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
-            elif "MONITORAR" in gate_output:
-                ticker_digest["gate_eod"] = "MONITORAR"
-                emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
-            else:
-                ticker_digest["gate_eod"] = gate_output.strip()
-        except Exception as e:
-            ticker_digest["gate_eod"] = f"erro: {str(e)}"
-            emit_log(f"[DAILY] {ticker}: gate_eod erro — {e}", level="error")
-
-        # Se gate_eod = OPERAR → sinaliza abertura
+        # gate_eod já foi avaliado no bloco 3 — resultado em ticker_digest["gate_eod"]
         if ticker_digest.get("gate_eod") == "OPERAR":
             emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR → sinalizando abertura", level="info")
-            # Não pular, apenas registrar
         else:
-            emit_log(f"[DAILY] {ticker}: gate_eod = {ticker_digest['gate_eod']} → registrando motivo", level="info")
+            emit_log(f"[DAILY] {ticker}: gate_eod = {ticker_digest.get('gate_eod', '—')} → registrando motivo", level="info")
 
         digest[ticker] = ticker_digest
-
-        # #3 FIX: Emitir evento quando cada ativo termina - permite atualizar UI durante ciclo
+        _atualizar_ativo_store(ticker)
         emit_dc_event("daily_ativo_complete", "DAILY", "ok",
         ticker=ticker, digest=ticker_digest)
 

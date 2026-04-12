@@ -45,9 +45,26 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
     if not isinstance(historico, list):
         historico = []
 
-    # ✅ A05: Extrair e sanitizar reflect_historico (de reflect_all_cycles_history)
-    reflect_historico_raw = raw_data.get("reflect_all_cycles_history", [])
-    reflect_historico = [sanitize_record(r) for r in reflect_historico_raw]
+    # ✅ A05: Extrair e sanitizar reflect_historico (de reflect_cycle_history)
+    # Filtrar apenas ciclos que existem no historico ORBIT atual
+    ciclos_orbit = {c["ciclo_id"] for c in historico if "ciclo_id" in c}
+    reflect_cycle_history = raw_data.get("reflect_cycle_history", {})
+    reflect_historico = []
+    for ciclo_id, dados in sorted(reflect_cycle_history.items()):
+        if ciclo_id not in ciclos_orbit:
+            continue  # ciclo órfão — não existe no historico atual
+        record = {
+            "ciclo_id": ciclo_id,
+            "reflect_state": dados.get("reflect_state"),
+            "reflect_score": dados.get("score_reflect"),
+            "aceleracao": dados.get("aceleracao"),
+            "delta_ir": dados.get("delta_ir"),
+            "iv_prem_ratio": dados.get("iv_media"),
+            "ret_vol_ratio": dados.get("rv_media"),
+            "fonte_divergencia": dados.get("fonte_divergencia"),
+            "divergencia_disponivel": dados.get("divergencia_disponivel"),
+        }
+        reflect_historico.append(sanitize_record(record))
 
     # ✅ Extrair core
     core = raw_data.get("core", {})

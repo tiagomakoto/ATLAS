@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-005
-version: 1.3.1
+version: 1.3.3
 status: validated
 owner: Chan
 
@@ -50,6 +50,8 @@ constraints:
   - executar_eod() implementado — arquiva xlsx + GATE EOD + paper
 
 notes:
+  - 2026-04-12: código modificado — edge.py
+  - 2026-04-12: código modificado — edge.py
   - 2026-04-12: código modificado — edge.py
   - opcoes_historico/ — padrao YYYY-MM-DD TICKER.xlsx — snapshots permanentes no Drive
   - B35 aberto: backtest atual nao inclui sizing do REFLECT — sequencia obrigatoria pre-capital real

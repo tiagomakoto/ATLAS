@@ -4,6 +4,7 @@ import DistributionChart from "../components/DistributionChart";
 import ACFChart from "../components/ACFChart";
 import TailMetrics from "../components/TailMetrics";
 import Tooltip from "../components/Tooltip";
+import { getRegimeColor, getRegimeBgColor } from "../store/regimeColors";
 
 const API_BASE = "http://localhost:8000";
 
@@ -68,25 +69,7 @@ const OrbitTab = ({ ticker, data }) => {
   const regimeMaisFrequente = distribuicaoPercentual[0]?.regime || "—";
   const countRegimeMaisFrequente = distribuicaoPercentual[0]?.count || 0;
 
-  const getRegimeColor = (regime) => {
-    if (!regime) return "var(--atlas-text-secondary)";
-    const r = regime.toUpperCase();
-    if (r.includes("ALTA") || r.includes("BULL")) return "var(--atlas-green)";
-    if (r.includes("BAIXA") || r.includes("BEAR")) return "var(--atlas-red)";
-    if (r.includes("TRANSICAO") || r.includes("TRANSIÇÃO")) return "var(--atlas-amber)";
-    if (r.includes("NEUTRO")) return "var(--atlas-blue)";
-    return "var(--atlas-text-secondary)";
-  };
-
-  const getRegimeBgColor = (regime) => {
-    if (!regime) return "var(--atlas-surface)";
-    const r = regime.toUpperCase();
-    if (r.includes("ALTA") || r.includes("BULL")) return "rgba(34, 197, 94, 0.2)";
-    if (r.includes("BAIXA") || r.includes("BEAR")) return "rgba(239, 68, 68, 0.2)";
-    if (r.includes("TRANSICAO") || r.includes("TRANSIÇÃO")) return "rgba(245, 158, 11, 0.2)";
-    if (r.includes("NEUTRO")) return "rgba(59, 130, 246, 0.2)";
-    return "var(--atlas-surface)";
-  };
+  // getRegimeColor e getRegimeBgColor importados de ../store/regimeColors
 
   return (
     <div style={{ fontFamily: "monospace", fontSize: 11, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -264,7 +247,16 @@ const OrbitTab = ({ ticker, data }) => {
 const ReflectTab = ({ ticker, data }) => {
   const reflectHistorico = data?.reflect_historico || [];
   const reflectPermanentBlock = data?.reflect_permanent_block || false;
-  const ultimoEstado = reflectHistorico.slice(-1)[0] || {};
+  const reflectStateAtual = data?.reflect_state || "B";
+
+  // Deriva estado A/B/C/D a partir do score quando reflect_state por ciclo não está disponível
+  const scoreToState = (score) => {
+    if (score === null || score === undefined) return null;
+    if (score >= 0.5)  return "A";
+    if (score >= 0.0)  return "B";
+    if (score >= -0.5) return "C";
+    return "D";
+  };
 
   const getStateColor = (state) => {
     if (!state) return "var(--atlas-text-secondary)";
@@ -305,14 +297,16 @@ const ReflectTab = ({ ticker, data }) => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         <div style={{ padding: 12, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)" }}>
           <div style={{ color: "var(--atlas-text-secondary)", marginBottom: 4 }}>Estado Atual</div>
-          <div style={{ fontSize: 18, fontWeight: "bold", color: getStateColor(ultimoEstado.reflect_state) }}>
-            {ultimoEstado.reflect_state || "—"}
+          <div style={{ fontSize: 18, fontWeight: "bold", color: getStateColor(reflectStateAtual) }}>
+            {reflectStateAtual}
           </div>
         </div>
         <div style={{ padding: 12, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)" }}>
           <div style={{ color: "var(--atlas-text-secondary)", marginBottom: 4 }}>Score Atual</div>
-          <div style={{ fontSize: 18, fontWeight: "bold", color: ultimoEstado.reflect_score > 0.7 ? "var(--atlas-green)" : "var(--atlas-amber)" }}>
-            {ultimoEstado.reflect_score ? (ultimoEstado.reflect_score * 100).toFixed(1) : "—"}
+          <div style={{ fontSize: 18, fontWeight: "bold", color: reflectHistorico.slice(-1)[0]?.reflect_score > 0 ? "var(--atlas-green)" : "var(--atlas-amber)" }}>
+            {reflectHistorico.slice(-1)[0]?.reflect_score != null
+              ? reflectHistorico.slice(-1)[0].reflect_score.toFixed(4)
+              : "—"}
           </div>
         </div>
         <div style={{ padding: 12, background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)" }}>
@@ -349,45 +343,48 @@ const ReflectTab = ({ ticker, data }) => {
                 </tr>
               </thead>
               <tbody>
-                {reflectHistorico.slice().reverse().map((ciclo, i) => (
+                {reflectHistorico.slice().reverse().map((ciclo, i) => {
+                  const state = ciclo.reflect_state || scoreToState(ciclo.reflect_score);
+                  return (
                   <tr 
                     key={i} 
                     style={{ 
                       borderBottom: "1px solid var(--atlas-border)",
-                      background: getStateBgColor(ciclo.reflect_state),
-                      opacity: ciclo.reflect_state === "E" ? 0.6 : 1
+                      background: getStateBgColor(state),
+                      opacity: state === "E" ? 0.6 : 1
                     }}
-                    title={getStateTooltip(ciclo.reflect_state)}
+                    title={getStateTooltip(state)}
                   >
                     <td style={{ padding: 8, fontWeight: "bold" }}>{ciclo.ciclo_id || "—"}</td>
                     <td style={{ padding: 8, textAlign: "center" }}>
-                      <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 9, background: getStateColor(ciclo.reflect_state), color: "#fff", fontWeight: "bold" }}>
-                        {ciclo.reflect_state || "—"}
+                      <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 9, background: getStateColor(state), color: "#fff", fontWeight: "bold" }}>
+                        {state || "—"}
                       </span>
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
-                      <div style={{ color: ciclo.reflect_score > 0.7 ? "var(--atlas-green)" : "var(--atlas-amber)", fontWeight: "bold" }}>
-                        {ciclo.reflect_score ? (ciclo.reflect_score * 100).toFixed(1) : "—"}
+                      <div style={{ color: ciclo.reflect_score > 0 ? "var(--atlas-green)" : ciclo.reflect_score < 0 ? "var(--atlas-red)" : "var(--atlas-amber)", fontWeight: "bold" }}>
+                        {ciclo.reflect_score != null ? ciclo.reflect_score.toFixed(4) : "—"}
                       </div>
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
                       <div style={{ color: ciclo.aceleracao > 0 ? "var(--atlas-green)" : ciclo.aceleracao < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)", fontWeight: "bold" }}>
-                        {ciclo.aceleracao?.toFixed(3) || "—"}
+                        {ciclo.aceleracao?.toFixed(4) ?? "—"}
                       </div>
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
                       <div style={{ color: ciclo.delta_ir > 0 ? "var(--atlas-green)" : ciclo.delta_ir < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)", fontWeight: "bold" }}>
-                        {ciclo.delta_ir?.toFixed(3) || "—"}
+                        {ciclo.delta_ir?.toFixed(4) ?? "—"}
                       </div>
                     </td>
                     <td style={{ padding: 8, textAlign: "center", color: "var(--atlas-text-secondary)" }}>
-                      {ciclo.iv_prem_ratio !== null && ciclo.iv_prem_ratio !== undefined ? ciclo.iv_prem_ratio.toFixed(3) : "—"}
+                      {ciclo.iv_prem_ratio != null ? ciclo.iv_prem_ratio.toFixed(4) : "—"}
                     </td>
                     <td style={{ padding: 8, textAlign: "center", color: "var(--atlas-text-secondary)" }}>
-                      {ciclo.ret_vol_ratio !== null && ciclo.ret_vol_ratio !== undefined ? ciclo.ret_vol_ratio.toFixed(3) : "—"}
+                      {ciclo.ret_vol_ratio != null ? ciclo.ret_vol_ratio.toFixed(4) : "—"}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,0 +1,4 @@
+{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-07T20:05:50.239546", "run_id": "dc_20260407_200548"}
+{"modulo": "TAPE", "status": "done", "timestamp": "2026-04-07T20:05:50.321312", "run_id": "dc_20260407_200548", "registros": 6527}
+{"modulo": "ORBIT", "status": "start", "timestamp": "2026-04-07T20:05:54.584873", "run_id": "dc_20260407_200548"}
+{"modulo": "ORBIT", "status": "error", "timestamp": "2026-04-07T20:05:54.586267", "run_id": "dc_20260407_200548", "erro": "name 'tape_ativo_carregar' is not defined"}

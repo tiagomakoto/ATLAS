@@ -91,14 +91,18 @@ export const useSystemStore = create((set) => ({
         case "ativos_parametrizados_loaded":
           return { ativosParametrizados: event.data || [] };
         // v2.7: Handler para atualizar ativo específico durante daily
-        case "daily_ativo_updated":
+        case "daily_ativo_updated": {
           const tickerAtualizado = event.data?.ticker;
           const dadosAtualizados = event.data?.dados;
           if (!tickerAtualizado || !dadosAtualizados) return state;
-          const novosAtivos = state.ativosParametrizados.map(a =>
-            a.ticker === tickerAtualizado ? { ...a, ...dadosAtualizados } : a
-          );
+          const existe = state.ativosParametrizados.some(a => a.ticker === tickerAtualizado);
+          const novosAtivos = existe
+            ? state.ativosParametrizados.map(a =>
+                a.ticker === tickerAtualizado ? { ...a, ...dadosAtualizados } : a
+              )
+            : [...state.ativosParametrizados, { ticker: tickerAtualizado, ...dadosAtualizados }];
           return { ativosParametrizados: novosAtivos };
+        }
         default:
         return state;
     }

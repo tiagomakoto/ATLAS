@@ -187,16 +187,22 @@ def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
               f"{'✓' if defasagem == 0 else '⚠' if defasagem == 1 else '✗'}")
 
     # [3/3] REFLECT
-    reflect_state = dados.get("reflect_state", "B")
-    reflect_score = float(dados.get("reflect_score", 0.0))
-    reflect_hist  = dados.get("reflect_history", [])
+    reflect_state         = dados.get("reflect_state", "B")
+    reflect_score         = float(dados.get("reflect_score", 0.0))
+    reflect_hist          = dados.get("reflect_history", [])
+    reflect_cycle_history = dados.get("reflect_cycle_history", {})
     ultimos = [
         r.get("state", "?")
         for r in sorted(
             reflect_hist,
             key=lambda x: x.get("ciclo_id", ""))[-5:]
     ]
-    if reflect_state in REFLECT_BLOCK_STATES:
+
+    if not reflect_cycle_history:
+        bloqueios.append(
+            "REFLECT sem histórico de ciclos — "
+            "onboarding incompleto ou dados corrompidos")
+    elif reflect_state in REFLECT_BLOCK_STATES:
         bloqueios.append(
             f"REFLECT state={reflect_state} "
             f"score={reflect_score:+.3f} — sizing=0")

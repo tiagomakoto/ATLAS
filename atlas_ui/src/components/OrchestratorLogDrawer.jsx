@@ -156,11 +156,11 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
           if (prev[mod] === "erro") return prev;
           return { ...prev, [mod]: "rodando" };
         });
-        if (mod === "TAPE" && tk) {
+        if (tk) {
           setTicker(tk);
           setTickerTransition(true);
         }
-        setMensagem(`${mod} iniciado`);
+        setMensagem(`${tk ? tk + " — " : ""}${mod} iniciado`);
         return;
       }
 
@@ -170,8 +170,9 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
           [mod]: status === "ok" ? "ok" : "erro"
         }));
         setModuloAtual(null);
+        if (tk) setTicker(tk);
         setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
-        setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
+        setMensagem(`${tk ? tk + " — " : ""}${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
         return;
       }
 
@@ -256,33 +257,28 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
              // dc_module_start — any module (TAPE, ORBIT, GATE, REFLECT)
              // ═════════════════════════════════════════════════════════════
              if (data.type === "dc_module_start") {
-               setModuloAtual(mod);  // Define qual módulo está rodando → luz azul
+               setModuloAtual(mod);
                setModuloStatus(prev => {
-                 if (prev[mod] === "erro") return prev;  // Não sobrescrever erro
-                 return { ...prev, [mod]: "rodando" };   // Status = rodando → azul
+                 if (prev[mod] === "erro") return prev;
+                 return { ...prev, [mod]: "rodando" };
                });
-               
-               // Se é TAPE, mostrar ticker
-               if (mod === "TAPE" && tk) {
+               if (tk) {
                  setTicker(tk);
                  setTickerTransition(true);
                }
-               
-               setMensagem(`${mod} iniciado`);
+               setMensagem(`${tk ? tk + " — " : ""}${mod} iniciado`);
                return;
              }
 
-             // ═════════════════════════════════════════════════════════════
-             // dc_module_complete — any module
-             // ═════════════════════════════════════════════════════════════
               if (data.type === "dc_module_complete") {
                setModuloStatus(prev => ({
                  ...prev,
                  [mod]: status === "ok" ? "ok" : "erro"
                }));
-               setModuloAtual(null);  // Limpar para permitir próximo módulo ficar azul
+               setModuloAtual(null);
+               if (tk) setTicker(tk);
                setProgresso(((MODULOS.findIndex(m => m.id === mod) + 1) / MODULOS.length) * 100);
-               setMensagem(`${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
+               setMensagem(`${tk ? tk + " — " : ""}${mod} ${status === "ok" ? "concluído" : "falhou"} — ${data.data?.descricao || ""}`);
                return;
              }
 
@@ -494,25 +490,27 @@ export default function OrchestratorLogDrawer({ isRunning, isFinished, drawerEve
         }} />
       </div>
 
-      {/* Botão de fechar */}
-      <button
-        onClick={handleClose}
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          background: "transparent",
-          border: "none",
-          color: "var(--atlas-text-secondary)",
-          cursor: "pointer",
-          fontSize: 14,
-          fontFamily: "monospace",
-          padding: 2,
-          zIndex: 10
-        }}
-      >
-        ×
-      </button>
+      {/* Botão de fechar — só aparece após concluir todos os ativos */}
+      {isFinished && (
+        <button
+          onClick={handleClose}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "transparent",
+            border: "none",
+            color: "var(--atlas-text-secondary)",
+            cursor: "pointer",
+            fontSize: 14,
+            fontFamily: "monospace",
+            padding: 2,
+            zIndex: 10
+          }}
+        >
+          ×
+        </button>
+      )}
 
       {/* Cards de Status dos Módulos */}
       <div style={{

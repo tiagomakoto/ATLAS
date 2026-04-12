@@ -1,0 +1,2 @@
+{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-11T23:35:12.764124", "run_id": "dc_20260411_233510"}
+{"modulo": "TAPE", "status": "error", "timestamp": "2026-04-11T23:35:17.833173", "run_id": "dc_20260411_233510", "erro": "OHLCV vazio"}

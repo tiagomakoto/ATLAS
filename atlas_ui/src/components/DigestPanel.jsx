@@ -1,3 +1,5 @@
+import { getRegimeColor } from "../store/regimeColors";
+
 export default function DigestPanel({ digestPorAtivo, timestamp }) {
   const tickers = Object.keys(digestPorAtivo || {});
   if (!tickers.length) return null;
@@ -20,23 +22,8 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     return "var(--atlas-text-secondary)";
   };
 
-  // ═══ Item 3: Cor baseada no REGIME do ORBIT ═══
-  const corRegime = (regime) => {
-    if (!regime || regime === "~") return "var(--atlas-text-secondary)";
-    const cores = {
-      "ALTA": "var(--atlas-green)",
-      "BAIXA": "var(--atlas-red)",
-      "NEUTRO": "var(--atlas-amber)",
-      "NEUTRO_BULL": "#00CED1",      // turquesa
-      "NEUTRO_BEAR": "#FF8C00",     // laranja
-      "NEUTRO_LATERAL": "#9370DB",   // roxo
-      "NEUTRO_TRANSICAO": "#20B2AA", // verdeágua
-      "NEUTRO_MORTO": "#808080",    // cinza
-      "RECUPERACAO": "#32CD32",     // verde limao
-      "PANICO": "#FF1493"            // rosa
-    };
-    return cores[regime] || "var(--atlas-text-secondary)";
-  };
+  // corRegime: usa getRegimeColor de ../store/regimeColors (fonte única)
+  const corRegime = getRegimeColor;
 
   // ═══ Item 3: Cor baseada no STATUS do ativo ═══
   const corStatus = (status) => {
@@ -139,9 +126,39 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
               }}>
                 {ticker}
               </span>
+              {ev.gate_eod === "BLOQUEADO — onboarding não realizado" && (
+                <span style={{ color: "var(--atlas-red)", fontSize: 9, alignSelf: "center" }}>
+                  ✗ BLOQUEADO
+                </span>
+              )}
             </div>
 
-            {/* posição */}
+            {/* motivo (ativos bloqueados) */}
+            {ev.motivo && (
+              <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
+                <span style={{ color: "var(--atlas-red)", width: 10 }}>✗</span>
+                <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>status</span>
+                <span style={{ color: "var(--atlas-red)", fontSize: 9 }}>{ev.motivo}</span>
+              </div>
+            )}
+
+            {/* xlsx eod — sempre mostrar */}
+            <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
+              <span style={{
+                color: ev.xlsx === "ok" ? "var(--atlas-green)" : "var(--atlas-amber)",
+                width: 10
+              }}>
+                {ev.xlsx === "ok" ? "✓" : ev.xlsx ? "✗" : "·"}
+              </span>
+              <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
+                xlsx eod
+              </span>
+              <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
+                {ev.xlsx === "ok" ? "encontrado" : ev.xlsx || "não avaliado"}
+              </span>
+            </div>
+
+            {/* posição — ativos não bloqueados */}
             {ev.posicao && (
               <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
                 <span style={{
@@ -160,26 +177,6 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
                 </span>
               </div>
             )}
-
-            {/* xlsx eod */}
-            {ev.xlsx && (
-              <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
-                <span style={{
-                  color: ev.xlsx === "ok" ? "var(--atlas-green)" : "var(--atlas-amber)",
-                  width: 10
-                }}>
-                  {ev.xlsx === "ok" ? "✓" : "✗"}
-                </span>
-                <span style={{ color: "var(--atlas-text-primary)", width: 80, flexShrink: 0 }}>
-                  xlsx eod
-                </span>
-                <span style={{ color: "var(--atlas-text-secondary)", fontSize: 9 }}>
-                  {ev.xlsx === "ok" ? "encontrado" : "não encontrado"}
-                </span>
-              </div>
-            )}
-
-            {/* tp/stop */}
             {ev.posicao && ev.posicao.tp_stop_status && (
               <div style={{ display: "flex", gap: 12, padding: "2px 0", paddingLeft: 12 }}>
                 <span style={{
