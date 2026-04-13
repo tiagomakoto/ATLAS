@@ -151,13 +151,13 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         except Exception:
             staleness_days = 0
 
-    # ✅ Retornar estrutura completa COM TP E STOP LOSS
+    # ✅ Retornar estrutura completa COM TP E STOP LOSS E ONBOARDING
     return {
         "ticker": ticker,
         "status": status,
         "core": core,
         "historico": historico,
-        "historico_config": len(raw_data.get("historico_config", [])) > 0,  # ← BOOLEANO: true se tem registros
+        "historico_config": len(raw_data.get("historico_config", [])) > 0, # ← BOOLEANO: true se tem registros
         "reflect_historico": reflect_historico,
         "reflect_state": raw_data.get("reflect_state", "B"),
         "staleness_days": staleness_days,
@@ -166,7 +166,17 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         "last_updated": last_updated,
         # ✅ CAMPOS OBRIGATÓRIOS PARA MANUTENÇÃO:
         "take_profit": raw_data.get("take_profit"),
-        "stop_loss": raw_data.get("stop_loss")
+        "stop_loss": raw_data.get("stop_loss"),
+        # ✅ NOVO: campo onboarding com estrutura padrão
+        "onboarding": raw_data.get("onboarding", {
+            "step_atual": 1,
+            "steps": {
+                "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+                "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+            },
+            "ultimo_evento_em": None
+        })
     }
 
 

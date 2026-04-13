@@ -777,3 +777,158 @@ async def dc_reflect_cycle(ticker: str) -> dict:
         action_payload={"ticker": ticker},
         modulo="REFLECT"
     )
+
+
+async def dc_onboarding_iniciar(ticker: str) -> dict:
+    """
+    Inicia onboarding completo de novo ativo.
+    Sequência: backtest_dados → tune → backtest_gate
+    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess
+    """
+    _validar_ticker(ticker)
+    
+    # 1. Criar/Atualizar campo onboarding no master JSON
+    from atlas_backend.core.delta_chaos_reader import get_ativo, update_ativo
+    
+    # Carregar dados atuais
+    dados = get_ativo(ticker)
+    
+    # Inicializar onboarding com estrutura padrão
+    onboarding = {
+        "step_atual": 1,
+        "steps": {
+            "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+            "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+            "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+        },
+        "ultimo_evento_em": None
+    }
+    
+    # Atualizar no master JSON
+    dados["onboarding"] = onboarding
+    
+    # Atualizar no arquivo com escrita atômica
+    path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+    path_tmp = path_ativo.with_suffix(".tmp")
+    
+    with open(path_tmp, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+    os.replace(path_tmp, path_ativo)
+    
+    # 2. Disparar step 1: backtest_dados
+    from atlas_backend.core.dc_runner import dc_orbit_backtest
+    result = await dc_orbit_backtest(ticker)
+    
+    # 3. Atualizar estado no master JSON
+    dados = get_ativo(ticker)
+    dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "running"
+    dados["onboarding"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
+    dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
+    
+    # Atualizar no arquivo com escrita atômica
+    with open(path_tmp, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+    os.replace(path_tmp, path_ativo)
+    
+    return {"status": "started", "step": 1}
+
+
+async def dc_onboarding_retomar(ticker: str) -> dict:
+    """
+    Retoma onboarding do step atual (usado quando status == "paused")
+    Para step 2: Optuna continua do SQLite existente
+    """
+    _validar_ticker(ticker)
+    
+    from atlas_backend.core.delta_chaos_reader import get_ativo
+    
+    # Carregar estado atual
+    dados = get_ativo(ticker)
+    onboarding = dados.get("onboarding", {})
+    step_atual = onboarding.get("step_atual", 1)
+    
+    # Verificar se está pausado
+    step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+    if onboarding.get("steps", {}).get(step_key, {}).get("status") != "paused":
+        raise HTTPException(status_code=400, detail=f"Step {step_atual} não está pausado")
+    
+    # Retomar conforme step
+    if step_atual == 1:
+        # Retomar backtest_dados
+        from atlas_backend.core.dc_runner import dc_orbit_backtest
+        result = await dc_orbit_backtest(ticker)
+        
+        # Atualizar estado
+        dados["onboarding"]["steps"][step_key]["status"] = "running"
+        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        
+    elif step_atual == 2:
+        # Retomar tune
+        from atlas_backend.core.dc_runner import dc_tune
+        result = await dc_tune(ticker)
+        
+        # Atualizar estado
+        dados["onboarding"]["steps"][step_key]["status"] = "running"
+        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        
+    elif step_atual == 3:
+        # Retomar backtest_gate
+        from atlas_backend.core.dc_runner import dc_gate_backtest
+        result = await dc_gate_backtest(ticker)
+        
+        # Atualizar estado
+        dados["onboarding"]["steps"][step_key]["status"] = "running"
+        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        
+    # Atualizar ultimo_evento_em
+    dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
+    
+    # Atualizar no arquivo com escrita atômica
+    path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+    path_tmp = path_ativo.with_suffix(".tmp")
+    
+    with open(path_tmp, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+    os.replace(path_tmp, path_ativo)
+    
+    return {"status": "resumed", "step": step_atual}
+
+
+async def dc_onboarding_progresso_tune(ticker: str) -> dict:
+    """
+    Lê tune_{TICKER}.db via conexão read-only
+    Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
+    Conexão deve ser read-only explícita para evitar conflito com processo de escrita
+    """
+    _validar_ticker(ticker)
+    
+    from pathlib import Path
+    import sqlite3
+    
+    # Caminho do SQLite
+    tmp_dir = Path(__file__).resolve().parent.parent.parent / "tmp"
+    db_path = tmp_dir / f"tune_{ticker}.db"
+    
+    if not db_path.exists():
+        return {"trials_completos": 0, "trials_total": 200, "best_ir": 0.0}
+    
+    # Conexão read-only
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        cursor = conn.cursor()
+        
+        # Contar trials completos
+        cursor.execute("SELECT COUNT(*) FROM trial WHERE state = 'COMPLETE'")
+        trials_completos = cursor.fetchone()[0]
+        
+        # Pegar melhor IR
+        cursor.execute("SELECT MAX(value) FROM trial WHERE state = 'COMPLETE'")
+        best_ir = cursor.fetchone()[0] or 0.0
+        
+        return {
+            "trials_completos": trials_completos,
+            "trials_total": 200,
+            "best_ir": best_ir
+        }
+    finally:
+        conn.close()

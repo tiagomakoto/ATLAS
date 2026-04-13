@@ -447,17 +447,20 @@ def executar_tune(ticker: str) -> dict:
     _melhor_valor = [study.best_value if study.trials else -999.0]
 
     def _early_stop_cb(study, trial):
-        # C3: não conta paciência durante warm-up do TPE
-        # Evita early stop prematuro antes do surrogate model estar ativo
-        if trial.number < OPTUNA_STARTUP:
-            return
-        if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
-            _melhor_valor[0] = study.best_value
-            _sem_melhoria[0] = 0
-        else:
-            _sem_melhoria[0] += 1
-        if _sem_melhoria[0] >= OPTUNA_PATIENCE:
-            study.stop()
+    # C3: não conta paciência durante warm-up do TPE
+    # Evita early stop prematuro antes do surrogate model estar ativo
+    if trial.number < OPTUNA_STARTUP:
+        return
+    if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
+        _melhor_valor[0] = study.best_value
+        _sem_melhoria[0] = 0
+    else:
+        _sem_melhoria[0] += 1
+    # NOVO — emite evento por trial para WebSocket
+    from delta_chaos.edge import emit_event
+    emit_event("TUNE", "trial", trial_number=trial.number + 1, trials_total=OPTUNA_N_TRIALS, best_ir=round(_melhor_valor[0], 4), sem_melhoria=_sem_melhoria[0])
+    if _sem_melhoria[0] >= OPTUNA_PATIENCE:
+        study.stop()
 
     print(f"  Rodando {OPTUNA_N_TRIALS} trials (early stop patience={OPTUNA_PATIENCE})...")
     study.optimize(objective, n_trials=OPTUNA_N_TRIALS, callbacks=[_early_stop_cb])

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import TuneApprovalCard from "./GestaoView/TuneApprovalCard";
+import OnboardingDrawer from "./GestaoView/OnboardingDrawer";
 
 const API_BASE = "http://localhost:8000";
 
@@ -10,6 +11,7 @@ export default function GestaoView() {
   const [carregando, setCarregando] = useState(false);
   const [novoAtivo, setNovoAtivo] = useState("");
   const [onboardingMsg, setOnboardingMsg] = useState("");
+  const [drawerOnboarding, setDrawerOnboarding] = useState(null);
 
   useEffect(() => {
     fetchAtivos();
@@ -46,6 +48,7 @@ export default function GestaoView() {
           : `✗ ${data.detail || "Erro desconhecido"}`
       );
       if (res.ok) {
+        setDrawerOnboarding(novoAtivo.trim().toUpperCase());
         setTimeout(() => {
           setNovoAtivo("");
           fetchAtivos();
@@ -186,7 +189,7 @@ export default function GestaoView() {
   const getStatusAtivo = (ticker) => {
     const ativo = ativos.find(a => a.ticker === ticker);
     if (!ativo) return { cor: "cinza", label: "N/A" };
-    
+
     // Lógica simplificada para demonstração
     // Na implementação real, usar historico_config para determinar estado
     if (ativo.status === "BLOQUEADO") return { cor: "vermelho", label: "Bloqueado" };
@@ -201,167 +204,175 @@ export default function GestaoView() {
       maxWidth: 800,
       padding: 20
     }}>
-      
-      {/* Seção Por Ativo */}
-      <div style={sectionStyle}>
-        <span style={labelStyle}>Seção Por Ativo</span>
-        
-        {/* Onboarding */}
-        <div style={{ marginBottom: 16, padding: 12, background: "rgba(59,130,246,0.08)", borderRadius: 2 }}>
-          <span style={{...labelStyle, marginBottom: 4}}>Onboarding de novo ativo</span>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input
-              value={novoAtivo}
-              onChange={e => setNovoAtivo(e.target.value.toUpperCase())}
-              placeholder="Ex: WEGE3"
-              maxLength={6}
-              style={{
-                flex: 1, padding: "6px 10px",
-                background: "var(--atlas-bg)",
-                border: "1px solid var(--atlas-border)",
-                color: "var(--atlas-text-primary)",
-                fontFamily: "monospace", fontSize: 11,
-                borderRadius: 2,
-                textTransform: "uppercase"
-              }}
-            />
-            <button
-              onClick={handleOnboarding}
-              disabled={!novoAtivo.trim() || carregando}
-              style={{
-                padding: "6px 14px",
-                background: (!novoAtivo.trim() || carregando)
-                  ? "var(--atlas-border)"
-                  : "var(--atlas-blue)",
-                border: "none", color: "#fff",
-                fontFamily: "monospace", fontSize: 10,
-                borderRadius: 2, cursor: "pointer",
-                textTransform: "uppercase"
-              }}
-            >
-              {carregando ? "..." : "Iniciar"}
-            </button>
-          </div>
-          {onboardingMsg && (
-            <div style={{
-              fontFamily: "monospace", fontSize: 10,
-              color: onboardingMsg.startsWith("✓")
-                ? "var(--atlas-green)"
-                : "var(--atlas-red)"
-            }}>
-              {onboardingMsg}
-            </div>
-          )}
-        </div>
 
-        {/* Lista de ativos com status */}
-        <div>
-          <span style={{...labelStyle, marginBottom: 4}}>Ativos</span>
-          {ativos.length === 0 ? (
-            <div style={{fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)"}}>
-              Nenhum ativo carregado
-            </div>
-          ) : (
-            <div style={{display: "flex", flexDirection: "column", gap: 8}}>
-              {ativos.slice(0, 10).map(ativo => {
-                const status = getStatusAtivo(ativo.ticker);
-                return (
-                  <div key={ativo.ticker} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: 8, background: "var(--atlas-bg)",
-                    border: "1px solid var(--atlas-border)", borderRadius: 2
-                  }}>
-                    <div style={{display: "flex", alignItems: "center", gap: 8}}>
-                      <span style={badgeStyle(status.cor)}>{status.label}</span>
-                      <span style={{fontFamily: "monospace", fontSize: 11}}>{ativo.ticker}</span>
-                    </div>
-                    <button
-                      onClick={() => handleExecutarTune(ativo.ticker)}
-                      disabled={carregando}
-                      style={{
-                        padding: "4px 10px",
-                        background: "var(--atlas-surface)",
-                        border: "1px solid var(--atlas-border)",
-                        color: "var(--atlas-text-secondary)",
-                        fontFamily: "monospace", fontSize: 9,
-                        borderRadius: 2, cursor: "pointer",
-                        textTransform: "uppercase"
-                      }}
-                    >
-                      TUNE
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+    {/* Seção Por Ativo */}
+    <div style={sectionStyle}>
+      <span style={labelStyle}>Seção Por Ativo</span>
+
+      {/* Onboarding */}
+      <div style={{ marginBottom: 16, padding: 12, background: "rgba(59,130,246,0.08)", borderRadius: 2 }}>
+        <span style={{...labelStyle, marginBottom: 4}}>Onboarding de novo ativo</span>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input
+            value={novoAtivo}
+            onChange={e => setNovoAtivo(e.target.value.toUpperCase())}
+            placeholder="Ex: WEGE3"
+            maxLength={6}
+            style={{
+              flex: 1, padding: "6px 10px",
+              background: "var(--atlas-bg)",
+              border: "1px solid var(--atlas-border)",
+              color: "var(--atlas-text-primary)",
+              fontFamily: "monospace", fontSize: 11,
+              borderRadius: 2,
+              textTransform: "uppercase"
+            }}
+          />
+          <button
+            onClick={handleOnboarding}
+            disabled={!novoAtivo.trim() || carregando}
+            style={{
+              padding: "6px 14px",
+              background: (!novoAtivo.trim() || carregando)
+                ? "var(--atlas-border)"
+                : "var(--atlas-blue)",
+              border: "none", color: "#fff",
+              fontFamily: "monospace", fontSize: 10,
+              borderRadius: 2, cursor: "pointer",
+              textTransform: "uppercase"
+            }}
+          >
+            {carregando ? "..." : "Iniciar"}
+          </button>
         </div>
+        {onboardingMsg && (
+          <div style={{
+            fontFamily: "monospace", fontSize: 10,
+            color: onboardingMsg.startsWith("✓")
+              ? "var(--atlas-green)"
+              : "var(--atlas-red)"
+          }}>
+            {onboardingMsg}
+          </div>
+        )}
       </div>
 
-      {/* Seção Sistema */}
-      <div style={sectionStyle}>
-        <span style={labelStyle}>Seção Sistema</span>
-        
-        {/* Relatórios */}
-        <div style={{ marginBottom: 12 }}>
-          <span style={{...labelStyle, marginBottom: 4}}>Relatórios</span>
+      {/* Lista de ativos com status */}
+      <div>
+        <span style={{...labelStyle, marginBottom: 4}}>Ativos</span>
+        {ativos.length === 0 ? (
           <div style={{fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)"}}>
-            Ver todos os relatórios gerados em relatorios/
+            Nenhum ativo carregado
           </div>
-        </div>
+        ) : (
+          <div style={{display: "flex", flexDirection: "column", gap: 8}}>
+            {ativos.slice(0, 10).map(ativo => {
+              const status = getStatusAtivo(ativo.ticker);
+              return (
+                <div key={ativo.ticker} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: 8, background: "var(--atlas-bg)",
+                  border: "1px solid var(--atlas-border)", borderRadius: 2
+                }}>
+                  <div style={{display: "flex", alignItems: "center", gap: 8}}>
+                    <span style={badgeStyle(status.cor)}>{status.label}</span>
+                    <span style={{fontFamily: "monospace", fontSize: 11}}>{ativo.ticker}</span>
+                  </div>
+                  <button
+                    onClick={() => handleExecutarTune(ativo.ticker)}
+                    disabled={carregando}
+                    style={{
+                      padding: "4px 10px",
+                      background: "var(--atlas-surface)",
+                      border: "1px solid var(--atlas-border)",
+                      color: "var(--atlas-text-secondary)",
+                      fontFamily: "monospace", fontSize: 9,
+                      borderRadius: 2, cursor: "pointer",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    TUNE
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
 
-        {/* Snapshot */}
-        <div style={{ marginBottom: 12 }}>
-          <span style={{...labelStyle, marginBottom: 4}}>Snapshot</span>
-          <button
-            onClick={handleSnapshot}
-            style={{
-              padding: "6px 14px",
-              background: "var(--atlas-surface)",
-              border: "1px solid var(--atlas-border)",
-              color: "var(--atlas-text-secondary)",
-              fontFamily: "monospace", fontSize: 10,
-              borderRadius: 2, cursor: "pointer",
-              textTransform: "uppercase"
-            }}
-          >
-            Exportar estado atual
-          </button>
-        </div>
+    {/* Seção Sistema */}
+    <div style={sectionStyle}>
+      <span style={labelStyle}>Seção Sistema</span>
 
-        {/* Backup */}
-        <div>
-          <span style={{...labelStyle, marginBottom: 4}}>Backup</span>
-          <button
-            onClick={handleBackup}
-            style={{
-              padding: "6px 14px",
-              background: "var(--atlas-surface)",
-              border: "1px solid var(--atlas-border)",
-              color: "var(--atlas-text-secondary)",
-              fontFamily: "monospace", fontSize: 10,
-              borderRadius: 2, cursor: "pointer",
-              textTransform: "uppercase"
-            }}
-          >
-            Exportar dados operacionais
-          </button>
+      {/* Relatórios */}
+      <div style={{ marginBottom: 12 }}>
+        <span style={{...labelStyle, marginBottom: 4}}>Relatórios</span>
+        <div style={{fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)"}}>
+          Ver todos os relatórios gerados em relatorios/
         </div>
       </div>
 
-      {/* Cartões de aprovação TUNE */}
-      {ativos.some(a => a.tune_pendente) && (
-        <div style={{display: "flex", flexDirection: "column", gap: 8}}>
-          <span style={labelStyle}>Aprovação TUNE Pendente</span>
-          {ativos.filter(a => a.tune_pendente).map(ativo => (
-            <TuneApprovalCard
-              key={ativo.ticker}
-              ticker={ativo.ticker}
-              onAplicar={handleAplicarTune}
-            />
-          ))}
-        </div>
-      )}
+      {/* Snapshot */}
+      <div style={{ marginBottom: 12 }}>
+        <span style={{...labelStyle, marginBottom: 4}}>Snapshot</span>
+        <button
+          onClick={handleSnapshot}
+          style={{
+            padding: "6px 14px",
+            background: "var(--atlas-surface)",
+            border: "1px solid var(--atlas-border)",
+            color: "var(--atlas-text-secondary)",
+            fontFamily: "monospace", fontSize: 10,
+            borderRadius: 2, cursor: "pointer",
+            textTransform: "uppercase"
+          }}
+        >
+          Exportar estado atual
+        </button>
+      </div>
+
+      {/* Backup */}
+      <div>
+        <span style={{...labelStyle, marginBottom: 4}}>Backup</span>
+        <button
+          onClick={handleBackup}
+          style={{
+            padding: "6px 14px",
+            background: "var(--atlas-surface)",
+            border: "1px solid var(--atlas-border)",
+            color: "var(--atlas-text-secondary)",
+            fontFamily: "monospace", fontSize: 10,
+            borderRadius: 2, cursor: "pointer",
+            textTransform: "uppercase"
+          }}
+        >
+          Exportar dados operacionais
+        </button>
+      </div>
+    </div>
+
+    {/* Cartões de aprovação TUNE */}
+    {ativos.some(a => a.tune_pendente) && (
+      <div style={{display: "flex", flexDirection: "column", gap: 8}}>
+        <span style={labelStyle}>Aprovação TUNE Pendente</span>
+        {ativos.filter(a => a.tune_pendente).map(ativo => (
+          <TuneApprovalCard
+            key={ativo.ticker}
+            ticker={ativo.ticker}
+            onAplicar={handleAplicarTune}
+          />
+        ))}
+      </div>
+    )}
+
+    {/* Drawer de Onboarding */}
+    {drawerOnboarding && (
+      <OnboardingDrawer 
+        ticker={drawerOnboarding} 
+        onClose={() => setDrawerOnboarding(null)} 
+      />
+    )}
 
     </div>
   );

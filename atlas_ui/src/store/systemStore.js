@@ -79,19 +79,47 @@ export const useSystemStore = create((set) => ({
          return {
            statusTransitions: [...state.statusTransitions, event]
          };
-        // #3 FIX: Handler para atualizar digest por ativo durante o ciclo
-        case "daily_ativo_complete":
-          return {
-            digestPorAtivo: {
-              ...state.digestPorAtivo,
-              [event.data?.ticker]: event.data?.digest || {}
+            // #3 FIX: Handler para atualizar digest por ativo durante o ciclo
+            case "daily_ativo_complete":
+                return {
+                    digestPorAtivo: {
+                        ...state.digestPorAtivo,
+                        [event.data?.ticker]: event.data?.digest || {}
+                    }
+                };
+            // v2.7: Handler para carregar dados completos dos ativos
+            case "ativos_parametrizados_loaded":
+                return { ativosParametrizados: event.data || [] };
+            // v2.7: Handler para atualizar ativo específico durante daily
+            case "daily_ativo_updated": {
+                const tickerAtualizado = event.data?.ticker;
+                const dadosAtualizados = event.data?.dados;
+                if (!tickerAtualizado || !dadosAtualizados) return state;
+                const existe = state.ativosParametrizados.some(a => a.ticker === tickerAtualizado);
+                const novosAtivos = existe
+                ? state.ativosParametrizados.map(a =>
+                    a.ticker === tickerAtualizado ? { ...a, ...dadosAtualizados } : a
+                )
+                : [...state.ativosParametrizados, { ticker: tickerAtualizado, ...dadosAtualizados }];
+                return { ativosParametrizados: novosAtivos };
             }
-          };
-        // v2.7: Handler para carregar dados completos dos ativos
-        case "ativos_parametrizados_loaded":
-          return { ativosParametrizados: event.data || [] };
-        // v2.7: Handler para atualizar ativo específico durante daily
-        case "daily_ativo_updated": {
+            // NOVO: handler para eventos de trial do TUNE
+            case "TUNE":
+                if (event.status === "trial") {
+                    return {
+                        ...state,
+                        tuneProgress: {
+                            ticker: event.ticker,
+                            trialNumber: event.trial_number,
+                            trialsTotal: event.trials_total,
+                            bestIr: event.best_ir,
+                            semMelhoria: event.sem_melhoria
+                        }
+                    };
+                }
+                return state;
+            default:
+                return state;
           const tickerAtualizado = event.data?.ticker;
           const dadosAtualizados = event.data?.dados;
           if (!tickerAtualizado || !dadosAtualizados) return state;

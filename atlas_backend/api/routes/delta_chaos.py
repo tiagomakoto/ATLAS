@@ -353,9 +353,119 @@ async def tune_aplicar(payload: dict):
                     marcar_aplicado(rel["id"])
                     break
         
-        emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
-        return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
+emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
+    return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
+
+except FileNotFoundError as e:
+    raise HTTPException(status_code=503, detail=str(e))
+except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/onboarding/iniciar")
+async def onboarding_iniciar(payload: OnboardingPayload):
+    """
+    Inicia onboarding completo de novo ativo.
+    Sequência: backtest_dados → tune → backtest_gate
+    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess
+    """
+    _validar_confirm(payload.confirm, payload.description)
+    ticker = payload.ticker.strip().upper()
+    
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ticker inválido: {ticker}"
+        )
+    
+    try:
+        from atlas_backend.core.dc_runner import dc_onboarding_iniciar
+        result = await dc_onboarding_iniciar(ticker)
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/onboarding/{ticker}")
+async def onboarding_status(ticker: str):
+    """
+    Retorna estado atual do onboarding do ativo
+    Inclui reconciliação watchdog: se running + ultimo_evento_em > 10min → paused
+    Retorna: campo onboarding completo do master JSON
+    """
+    _validar_ticker(ticker)
+    
+    try:
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+        from datetime import datetime, timedelta
         
+        dados = get_ativo(ticker)
+        onboarding = dados.get("onboarding", {})
+        
+        # Reconciliação watchdog: se running e ultimo_evento_em > 10min → paused
+        if onboarding.get("step_atual") and onboarding.get("steps"):
+            for step_key, step_info in onboarding["steps"].items():
+                if step_info.get("status") == "running":
+                    ultimo_evento = onboarding.get("ultimo_evento_em")
+                    if ultimo_evento:
+                        ultimo_dt = datetime.fromisoformat(ultimo_evento)
+                        if datetime.now() - ultimo_dt > timedelta(minutes=10):
+                            # Atualizar para paused
+                            step_info["status"] = "paused"
+                            onboarding["ultimo_evento_em"] = datetime.now().isoformat()
+                            
+                            # Atualizar no arquivo com escrita atômica
+                            path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+                            path_tmp = path_ativo.with_suffix(".tmp")
+                            
+                            with open(path_tmp, "w", encoding="utf-8") as f:
+                                json.dump(dados, f, indent=2, ensure_ascii=False)
+                            os.replace(path_tmp, path_ativo)
+                            
+                            # Atualizar dados locais
+                            dados["onboarding"] = onboarding
+        
+        return onboarding
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/onboarding/{ticker}/retomar")
+async def onboarding_retomar(ticker: str):
+    """
+    Retoma onboarding do step atual (usado quando status == "paused")
+    Para step 2: Optuna continua do SQLite existente
+    Retorna: { "status": "resumed", "step": N }
+    """
+    _validar_ticker(ticker)
+    
+    try:
+        from atlas_backend.core.dc_runner import dc_onboarding_retomar
+        result = await dc_onboarding_retomar(ticker)
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/onboarding/{ticker}/progresso-tune")
+async def onboarding_progresso_tune(ticker: str):
+    """
+    Lê tune_{TICKER}.db via conexão read-only
+    Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
+    Conexão deve ser read-only explícita para evitar conflito com processo de escrita
+    """
+    _validar_ticker(ticker)
+    
+    try:
+        from atlas_backend.core.dc_runner import dc_onboarding_progresso_tune
+        result = await dc_onboarding_progresso_tune(ticker)
+        return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
