@@ -1,11 +1,11 @@
 ---
-uid: mod-atlas-011
-version: 1.0.1
+uid: mod-atlas-019
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_ui/src/components/AtivoView.jsx
+file: atlas_backend/core/relatorios.py
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,6 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-13: código modificado — AtivoView.jsx
-  - 2026-04-12 — módulo criado automaticamente a partir de atlas_ui/src/components/AtivoView.jsx
+  - 2026-04-13 — módulo criado automaticamente a partir de atlas_backend/core/relatorios.py
   - <edge cases ou riscos>

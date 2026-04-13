@@ -270,3 +270,24 @@ def obter_vol_premium(ticker: str):
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# NOVO ENDPOINT — Relatório de TUNE (SPEC_RELATORIO_TUNE_v1.0.md)
+# =============================================================================
+@router.get("/{ticker}/relatorio-tune", response_model=Dict[str, Any])
+def obter_relatorio_tune(ticker: str, historico: bool = Query(False, description="Retornar todos os TUNEs")):
+    """
+    Retorna relatório de TUNE do ativo.
+    
+    Se historico=true, retorna lista de todos os TUNEs executados.
+    """
+    try:
+        from atlas_backend.core.relatorios import gerar_relatorio_tune
+        return gerar_relatorio_tune(ticker, historico=historico)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

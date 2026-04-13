@@ -5,6 +5,7 @@ import ACFChart from "../components/ACFChart";
 import TailMetrics from "../components/TailMetrics";
 import Tooltip from "../components/Tooltip";
 import { getRegimeColor, getRegimeBgColor } from "../store/regimeColors";
+import RelatorioTab from "./RelatorioTab";
 
 const API_BASE = "http://localhost:8000";
 
@@ -1129,7 +1130,7 @@ export default function AtivoView({ activeTicker, analytics, onTickerChange }) {
 
         {/* Tabs — SEM linha azul */}
         <div style={{ display: "flex", gap: 8 }}>
-          {["orbit", "reflect", "ciclos", "analytics"].map((tab) => (
+          {["orbit", "reflect", "ciclos", "analytics", "relatorio"].map((tab) => (
             <button
               key={tab}
               onClick={() => setSubTab(tab)}
@@ -1153,10 +1154,11 @@ export default function AtivoView({ activeTicker, analytics, onTickerChange }) {
 
       {/* Conteúdo das Tabs */}
       <div>
-        {subTab === "orbit" && <OrbitTab ticker={activeTicker} data={data} />}
-        {subTab === "reflect" && <ReflectTab ticker={activeTicker} data={data} />}
-        {subTab === "ciclos" && <CiclosTab ticker={activeTicker} data={data} />}
-        {subTab === "analytics" && <AnalyticsTab ticker={activeTicker} data={data} analytics={analytics} />}
+{subTab === "orbit" && <OrbitTab ticker={activeTicker} data={data} />}
+    {subTab === "reflect" && <ReflectTab ticker={activeTicker} data={data} />}
+    {subTab === "ciclos" && <CiclosTab ticker={activeTicker} data={data} />}
+    {subTab === "analytics" && <AnalyticsTab ticker={activeTicker} data={data} analytics={analytics} />}
+    {subTab === "relatorio" && <RelatorioTab ticker={activeTicker} data={data} />}
       </div>
     </div>
   );
