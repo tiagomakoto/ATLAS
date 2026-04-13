@@ -102,9 +102,11 @@ export default function AtivosTable() {
           
           <th style={{ padding: 8 }}>Regime</th>
           <th style={{ padding: 8 }}>Confiança</th>
-          <th style={{ padding: 8 }}>REFLECT</th>
-        </tr>
-      </thead>
+            <th style={{ padding: 8 }}>REFLECT</th>
+            <th style={{ padding: 8 }}>TP</th>
+            <th style={{ padding: 8 }}>STOP</th>
+          </tr>
+        </thead>
       <tbody>
         {ativos.map((ativo) => {
           const ticker = ativo.ticker || "DESCONHECIDO";
@@ -196,12 +198,18 @@ export default function AtivosTable() {
               <td style={{ padding: 8 }}>
                 {score ? `${Math.abs(score * 100).toFixed(1)}%` : "—"}
               </td>
-              <td style={{ padding: 8, textAlign: "center" }}>
-                <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 9, background: reflectColor, color: "#fff", fontWeight: "bold" }}>
-                  {reflectState}
-                </span>
-              </td>
-            </tr>
+            <td style={{ padding: 8, textAlign: "center" }}>
+              <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 9, background: reflectColor, color: "#fff", fontWeight: "bold" }}>
+                {reflectState}
+              </span>
+            </td>
+            <td style={{ padding: 8, textAlign: "right", fontFamily: "monospace" }}>
+              {ativo.take_profit != null ? ativo.take_profit.toFixed(2) : <span style={{ color: "var(--atlas-text-secondary)" }}>—</span>}
+            </td>
+            <td style={{ padding: 8, textAlign: "right", fontFamily: "monospace" }}>
+              {ativo.stop_loss != null ? ativo.stop_loss.toFixed(2) : <span style={{ color: "var(--atlas-text-secondary)" }}>—</span>}
+            </td>
+          </tr>
           );
         })}
       </tbody>
