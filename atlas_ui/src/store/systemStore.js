@@ -120,19 +120,6 @@ export const useSystemStore = create((set) => ({
                 return state;
             default:
                 return state;
-          const tickerAtualizado = event.data?.ticker;
-          const dadosAtualizados = event.data?.dados;
-          if (!tickerAtualizado || !dadosAtualizados) return state;
-          const existe = state.ativosParametrizados.some(a => a.ticker === tickerAtualizado);
-          const novosAtivos = existe
-            ? state.ativosParametrizados.map(a =>
-                a.ticker === tickerAtualizado ? { ...a, ...dadosAtualizados } : a
-              )
-            : [...state.ativosParametrizados, { ticker: tickerAtualizado, ...dadosAtualizados }];
-          return { ativosParametrizados: novosAtivos };
         }
-        default:
-        return state;
-    }
-  }),
+    }),
 }));

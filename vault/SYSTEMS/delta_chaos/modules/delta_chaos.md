@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-010
-version: 1.0
+version: 1.0.1
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,5 +30,6 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-13: código modificado — delta_chaos.py
   - 2026-04-13 — módulo criado automaticamente a partir de atlas_backend/api/routes/delta_chaos.py
   - <edge cases ou riscos>

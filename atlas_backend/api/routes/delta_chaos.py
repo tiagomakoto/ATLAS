@@ -353,13 +353,13 @@ async def tune_aplicar(payload: dict):
                     marcar_aplicado(rel["id"])
                     break
         
-emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
-    return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
+        emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
+        return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
 
-except FileNotFoundError as e:
-    raise HTTPException(status_code=503, detail=str(e))
-except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/onboarding/iniciar")

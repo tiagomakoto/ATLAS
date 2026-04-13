@@ -178,9 +178,52 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     }
   };
   
-  if (!onboarding) return null;
+const calculateElapsedTime = (iniciado_em) => {
+  if (!iniciado_em) return "0s";
+  const start = new Date(iniciado_em);
+  const now = new Date();
+  const diff = now - start;
+  const seconds = Math.floor(diff / 1000) % 60;
+  const minutes = Math.floor(diff / (1000 * 60)) % 60;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
   
-  return (
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+};
+
+const calculateAverageTime = (iniciado_em, trials_completos) => {
+  if (!iniciado_em || trials_completos <= 0) return "0s";
+  const start = new Date(iniciado_em);
+  const now = new Date();
+  const diff = now - start;
+  const avgMs = diff / trials_completos;
+  const seconds = Math.floor(avgMs / 1000);
+  
+  return `${seconds}s`;
+};
+
+const calculateEstimatedTime = (iniciado_em, trials_completos, trials_total) => {
+  if (!iniciado_em || trials_completos <= 0) return "0s";
+  const start = new Date(iniciado_em);
+  const now = new Date();
+  const diff = now - start;
+  const avgMs = diff / trials_completos;
+  const remainingTrials = trials_total - trials_completos;
+  const remainingMs = remainingTrials * avgMs;
+  
+  const seconds = Math.floor(remainingMs / 1000) % 60;
+  const minutes = Math.floor(remainingMs / (1000 * 60)) % 60;
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+  
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+};
+
+if (!onboarding) return null;
+
+return (
     <div style={{
       position: "fixed",
       top: 0,
@@ -443,6 +486,36 @@ export default function OnboardingDrawer({ ticker, onClose }) {
                     background: "var(--atlas-blue)",
                     width: `${(onboarding.steps["2_tune"].trials_completos || 0) / onboarding.steps["2_tune"].trials_total * 100}%`
                   }} />
+                </div>
+                
+                {/* Tempo decorrido e estimativas */}
+                <div style={{
+                  marginTop: 8,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 9,
+                  fontFamily: "monospace",
+                  color: "var(--atlas-text-secondary)"
+                }}>
+                  <span>
+                    Tempo decorrido: {calculateElapsedTime(onboarding.steps["2_tune"].iniciado_em)}
+                  </span>
+                  <span>
+                    Estimativa restante: {calculateEstimatedTime(onboarding.steps["2_tune"].iniciado_em, onboarding.steps["2_tune"].trials_completos, onboarding.steps["2_tune"].trials_total)}
+                  </span>
+                </div>
+                
+                <div style={{
+                  marginTop: 4,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 9,
+                  fontFamily: "monospace",
+                  color: "var(--atlas-text-secondary)"
+                }}>
+                  <span>
+                    Tempo médio/trial: {calculateAverageTime(onboarding.steps["2_tune"].iniciado_em, onboarding.steps["2_tune"].trials_completos)}
+                  </span>
                 </div>
               </div>
             )}
