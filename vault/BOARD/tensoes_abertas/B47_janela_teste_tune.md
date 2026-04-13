@@ -1,12 +1,12 @@
 ---
 uid: B47
 title: Janela de teste TUNE — critério de definição não formalizado
-status: open
+status: closed
 opened_at: 2026-04-12
-closed_at:
+closed_at: 2026-04-13
 opened_in: [[BOARD/atas/2026-04-12_tune_v2_escopo]]
-closed_in:
-decided_by:
+closed_in: [[BOARD/atas/2026-04-12_tune_v2_escopo]]
+decided_by: CEO
 system: delta_chaos
 
 description: >

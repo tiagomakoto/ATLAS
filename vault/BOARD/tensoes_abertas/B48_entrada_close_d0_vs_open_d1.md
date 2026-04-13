@@ -1,12 +1,12 @@
 ---
 uid: B48
 title: Entrada close d0 vs open d1 — viés de simulação no TUNE
-status: open
+status: closed
 opened_at: 2026-04-12
-closed_at:
+closed_at: 2026-04-12
 opened_in: [[BOARD/atas/2026-04-12_tune_v2_escopo]]
-closed_in:
-decided_by:
+closed_in: [[BOARD/atas/2026-04-12_tune_v2_escopo]]
+decided_by: CEO
 system: delta_chaos
 
 description: >
@@ -28,7 +28,30 @@ impacted_modules:
   - [[SYSTEMS/delta_chaos/modules/FIRE]]
   - [[SYSTEMS/delta_chaos/modules/GATE]]
 
-resolution:
+resolution: >
+  Resolvido — sessão 2026-04-12.
+
+  DIAGNÓSTICO FINAL:
+  tune.py: sem bug. Fechamento d0 como proxy de abertura d1 é correto
+  para backtest — é o melhor dado disponível para simular open d1.
+
+  fire.py + book.py: bug confirmado e corrigido.
+  O campo premio_entrada em Leg registrava sempre o fechamento d0.
+  Em modo paper/real, o CEO executa no open d1 com preço diferente —
+  a referência de P&L para gatilhos de TP/STOP estava incorreta.
+
+  CORREÇÃO IMPLEMENTADA:
+  - Leg recebe novo campo opcional `premio_executado` (book.py)
+  - _leg() em fire.py inicializa premio_executado = None por padrão
+  - verificar() em fire.py usa premio_executado como referência
+    quando preenchido; fallback para premio_entrada (backtest/paper)
+  - Serialização/deserialização atualizada em _op_to_dict/_dict_to_op
+  - No modo real: preencher premio_executado via book após confirmação
+    de execução pelo CEO
+
+  Arquivos alterados: fire.py, book.py
+  Backward compatible: premio_executado = None em todos os registros
+  existentes — comportamento idêntico ao anterior.
 
 notes:
   - Taleb: viés é maior em dias de vol elevada — exatamente quando o sinal é mais forte

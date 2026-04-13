@@ -3,7 +3,7 @@
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "nvidia/z-ai/glm5",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas_plannerv2.txt}",
       "description": "Analisa specs e decompõe em tarefas atômicas para o BUILD. Não escreve código.",

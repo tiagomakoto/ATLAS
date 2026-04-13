@@ -7,14 +7,16 @@ import os
 # MIGRADO (P3): TICKER=input() → executar_tune(ticker: str) -> dict
 # MIGRADO (P4): raise SystemExit → raise ValueError
 # MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
-# MANTIDO: Opção B SCAN, 6 combinações, proxy intradiário, registro historico_config
+# FASE 2: grade fixa de 6 combinações → Optuna TPE 200 trials (B23)
+#         espaço: TP [0.40,0.95] step 0.05 | STOP [1.0,3.0] step 0.25 | janela [3,10] anos
+# FASE 3: máscara REFLECT exclui ciclos Edge C/D/E da simulação (B30)
+#         lê reflect_state por ciclo de reflect_cycle_history[] — fallback permissivo 'B'
 # ════════════════════════════════════════════════════════════════════
 
+from delta_chaos.edge import TMP_DIR
 from delta_chaos.init import (
     CONFIG_PATH,
-    CONFIG_PATH,
-    CONFIG_PATH,
-    carregar_config, ATIVOS_DIR, DRIVE_BASE, CONFIG_PATH,
+    carregar_config, ATIVOS_DIR, DRIVE_BASE, BOOK_DIR,
 )
 from delta_chaos.tape import (
     tape_ativo_carregar, tape_historico_carregar, tape_externas_carregar,
@@ -32,83 +34,88 @@ except ImportError:
     _atlas_disponivel = False
 
 
-
 def executar_tune(ticker: str) -> dict:
     """
-    Executa calibração TUNE completa para o ticker informado.
-    Retorna dict com resultados de todas as combinações e a melhor.
+    Executa calibração TUNE v2.0 para o ticker informado.
+    Fase 2: Optuna substitui grade fixa de 6 combinações.
+            Espaço: TP [0.40, 0.95] step 0.05 | STOP [1.0, 3.0] step 0.25 | janela [3, 10] anos.
+            200 trials TPE | early stopping patience=50 min_delta=0.001.
+    Fase 3: Máscara REFLECT exclui ciclos Edge C/D/E da simulação.
+            Lê reflect_state por ciclo de reflect_cycle_history[] com fallback permissivo 'B'.
     Registra no historico_config[] do master JSON — não aplica automaticamente.
     Lança ValueError se ORBIT não gerou histórico.
     """
     TICKER = ticker.strip().upper()
+    from pathlib import Path as _Path
+    _TMP_DIR = _Path(__file__).resolve().parent.parent / "tmp"
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    _study_db = _TMP_DIR / f"tune_{TICKER}.db"
 
     emit_log(f"TUNE PING — {TICKER} | conexão WebSocket ativa", level="debug")
 
-    import json, os
+    import json, os, tempfile
     import pandas as pd
     import numpy as np
     from datetime import datetime
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     # ═══════════════════════════════════════════════════════════════════
     # CONFIGURAÇÃO
     # ═══════════════════════════════════════════════════════════════════
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
 
+    ANO_WARMUP = 2004
+    ano_atual  = datetime.now().year
+    ANOS       = list(range(2002, ano_atual + 1))
 
-    # TICKER recebido como argumento de executar_tune()
-    ANO_WARMUP    = 2004
-    ANO_TESTE_INI = 2019
-    ano_atual     = datetime.now().year
-    ANOS          = list(range(2002, ano_atual + 1))
+    # Fase 2 — Optuna (B23 fechada)
+    OPTUNA_N_TRIALS  = 200
+    OPTUNA_STARTUP   = 50
+    OPTUNA_PATIENCE  = 50
+    OPTUNA_MIN_DELTA = 0.001
+    OPTUNA_SEED      = 42
+    TP_MIN,   TP_MAX,   TP_STEP   = 0.40, 0.95, 0.05
+    STOP_MIN, STOP_MAX, STOP_STEP = 1.0,  3.0,  0.25
+    JANELA_MIN, JANELA_MAX        = 3, 10
 
-    COMBINACOES = [
-        {"tp": 0.50, "stop": 2.0, "label": "baseline"},
-        {"tp": 0.50, "stop": 1.5, "label": "TP=0.50 STOP=1.5"},
-        {"tp": 0.75, "stop": 1.0, "label": "TP=0.75 STOP=1.0"},
-        {"tp": 0.75, "stop": 1.5, "label": "TP=0.75 STOP=1.5"},
-        {"tp": 0.90, "stop": 1.5, "label": "TP=0.90 STOP=1.5"},
-        {"tp": 0.90, "stop": 2.0, "label": "TP=0.90 STOP=2.0"},
-    ]
+    # Fase 3 — Máscara REFLECT (B3 resolvido)
+    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "E"}
 
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
+    # ═══════════════════════════════════════════════════════════════════
     # ETAPA 1 — carrega tudo uma vez
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
-    
-    emit_log(f"TUNE [{TICKER}] Etapa 1/4: carregando TAPE/SELIC/ORBIT", level="info")
-    
+    # ═══════════════════════════════════════════════════════════════════
+
+    emit_log(f"TUNE [{TICKER}] Etapa 1/3: carregando TAPE/SELIC/ORBIT/REFLECT", level="info")
+
     print("=" * 60)
-    print(f"  TUNE v1.1 — {TICKER}")
-    print(f"  Opção B SCAN: proxy intradiário via mínimo/máximo")
+    print(f"  TUNE v2.0 — {TICKER}")
+    print(f"  Fase 2: Optuna TPE {OPTUNA_N_TRIALS} trials")
+    print(f"  Fase 3: Máscara REFLECT (bloqueia Edge C/D/E)")
     print(f"  Warmup:       descartar ciclos < {ANO_WARMUP}")
-    print(f"  Período teste: {ANO_TESTE_INI}–{ano_atual} (7 anos)")
+    print(f"  Janela teste: hiperparâmetro Optuna [{JANELA_MIN}–{JANELA_MAX} anos]")
     print("=" * 60)
 
-    # TAPE — uma vez
     print(f"\n  [1/4] TAPE...")
     df_tape_c = tape_historico_carregar(
-        ativos = [TICKER],
-        anos   = ANOS,
-        forcar = False)
+        ativos=[TICKER], anos=ANOS, forcar=False)
     print(f"  ✓ {len(df_tape_c):,} registros carregados")
 
-    # SELIC — uma vez
     print(f"\n  [2/4] SELIC...")
-    df_selic_c = _obter_selic(min(ANOS), max(ANOS))
+    # df_selic carregado para uso futuro (vencimento com preço de exercício)
+    # Não usado na simulação Optuna atual — mantido para extensibilidade
+    _obter_selic(min(ANOS), max(ANOS))
     print(f"  ✓ SELIC carregada")
 
-    # Config do ativo — sem take_profit/stop_loss para não sobrescrever TUNE
     print(f"\n  [3/4] Config ativo...")
     cfg_ativo = tape_ativo_carregar(TICKER)
     cfg_ativo.pop("take_profit", None)
     cfg_ativo.pop("stop_loss",   None)
-    print(f"  ✓ {TICKER} config carregado (take_profit/stop_loss removidos para TUNE)")
+    print(f"  ✓ {TICKER} config carregado")
 
-    # Datas únicas — uma vez
     datas = sorted(df_tape_c["data"].unique())
     print(f"  ✓ {len(datas):,} pregões")
 
-    # Regimes do ORBIT — uma vez
-    print(f"\n  [4/4] Regimes ORBIT...")
+    print(f"\n  [4/4] Regimes ORBIT + REFLECT...")
     path_ativo = os.path.join(ATIVOS_DIR, f"{TICKER}.json")
     with open(path_ativo) as f:
         dados_ativo = json.load(f)
@@ -123,27 +130,31 @@ def executar_tune(ticker: str) -> dict:
             dados_ativo = json.load(f)
         historico_c = pd.DataFrame(dados_ativo["historico"])
         if len(historico_c) == 0:
-            print(f"  ✗ ORBIT não gerou histórico para {TICKER} — verifique os dados do TAPE")
             raise ValueError(f"TUNE bloqueado em {TICKER}: ORBIT não gerou histórico")
         print(f"  ✓ ORBIT calculado — {len(historico_c)} ciclos")
 
     historico_c["ciclo_id"] = historico_c["ciclo_id"].astype(str)
 
-    # Filtro de warmup
+    # Warmup
     n_antes = len(historico_c)
     historico_c = historico_c[
         pd.to_datetime(historico_c["data_ref"]).dt.year >= ANO_WARMUP
     ].copy()
-    n_depois = len(historico_c)
-    print(f"  ✓ Warmup: {n_antes} → {n_depois} ciclos "
-          f"(descartados {n_antes - n_depois} ciclos < {ANO_WARMUP})")
-
-    # Deduplicar ciclos por ciclo_id (manter último)
     historico_c = historico_c.drop_duplicates(subset="ciclo_id", keep="last")
     regime_idx_c = historico_c.set_index("ciclo_id").to_dict("index")
-    print(f"  ✓ {len(historico_c)} ciclos em uso")
+    print(f"  ✓ Warmup: {n_antes} → {len(historico_c)} ciclos em uso")
 
-    # Lê baseline para restaurar ao final
+    # Fase 3 — carrega máscara REFLECT por ciclo
+    # reflect_cycle_history: {ciclo_id: {reflect_state, score_reflect, ...}}
+    # Fallback permissivo: ciclo ausente → estado 'B' (não bloqueia)
+    reflect_cycle_hist = dados_ativo.get("reflect_cycle_history", {})
+    n_mask = sum(
+        1 for cid in historico_c["ciclo_id"]
+        if reflect_cycle_hist.get(cid, {}).get("reflect_state", "B")
+        in REFLECT_ESTADOS_BLOQUEADOS
+    )
+    print(f"  ✓ REFLECT mask: {n_mask}/{len(historico_c)} ciclos bloqueados (Edge C/D/E)")
+
     with open(CONFIG_PATH) as f:
         _cfg_baseline = json.load(f)
     tp_baseline_ant   = _cfg_baseline["fire"]["take_profit"]
@@ -151,67 +162,68 @@ def executar_tune(ticker: str) -> dict:
 
     print(f"\n  ✓ Etapa 1 concluída — tudo em memória")
 
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
-    # ETAPA 2 — simulação intradiária com mínimo/máximo
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
+    # ═══════════════════════════════════════════════════════════════════
+    # ETAPA 2 — simulação intradiária via Optuna (Fases 2 + 3)
+    # ═══════════════════════════════════════════════════════════════════
     # Lógica Opção B (SCAN — Sarah Hamilton):
-    #   — Para cada posição aberta, em cada pregão:
-    #     — Usa mínimo da opção vendida como proxy do menor prêmio do dia
-    #     — Se minimo <= premio_entrada * (1 - TP) → TP atingido intraday
-    #     — Usa maximo da opção vendida como proxy do maior prêmio do dia
-    #     — Se maximo >= premio_entrada * (1 + STOP) → STOP atingido intraday
-    #   — Ordem de verificação: STOP primeiro (conservador), depois TP
-    #     (na prática o dia ruim bate STOP antes do TP)
-    # ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
+    #   STOP primeiro (proxy: máximo do dia), depois TP (proxy: mínimo do dia)
+    # Fase 3: antes de abrir posição, verifica reflect_state do ciclo.
+    #   Edge C/D/E → pula abertura (ciclo mascarado).
+    #   Edge A/B ou ausente → opera normalmente.
+    # ═══════════════════════════════════════════════════════════════════
 
-
-    emit_log(f"TUNE [{TICKER}] Etapa 2/4: simulando {len(COMBINACOES)} combinações...", level="info")
+    emit_log(f"TUNE [{TICKER}] Etapa 2/3: Optuna {OPTUNA_N_TRIALS} trials...", level="info")
     print(f"\n{'=' * 60}")
-    print(f"  Etapa 2 — Simulação intradiária: {len(COMBINACOES)} combinações")
+    print(f"  Etapa 2 — Optuna Fases 2+3")
     print(f"{'=' * 60}")
 
-    # Pré-processa df_tape indexado por data e ticker para lookup O(1)
-    df_ops_idx = df_tape_c[
-        df_tape_c["tipo"].isin(["CALL", "PUT"])
-    ].copy()
+    # Pré-computa lookup O(1): (data_str, ticker) → {fechamento, minimo, maximo}
+    df_ops_idx = df_tape_c[df_tape_c["tipo"].isin(["CALL", "PUT"])].copy()
     df_ops_idx["data_str"] = df_ops_idx["data"].astype(str).str[:10]
-
-    # à ndice: (data_str, ticker) → row
     tape_lookup = df_ops_idx.groupby(
         ["data_str", "ticker"])[["fechamento", "minimo", "maximo"]].first()
 
-    # Ã ndice de regime por ciclo
+    # C2 — pré-computa df_dia por data fora de _simular()
+    # Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
+    df_dias = {str(data)[:10]: df_tape_c[df_tape_c["data"] == data].copy()
+               for data in datas}
+
+    # C1 — constantes do BOOK extraídas uma vez fora de _simular()
+    # Evita carregar_config() dentro do loop de 200 trials × N_pregões
+    _cfg_book_tune = carregar_config()["book"]
+    _RT = _cfg_book_tune["risco_trade"]
+    _FM = _cfg_book_tune["fator_margem"]
+    _NM = _cfg_book_tune["n_contratos_minimo"]
+
     def _get_regime(ciclo_id):
         raw = regime_idx_c.get(ciclo_id, {})
         return {
-            "regime":  raw.get("regime", "DESCONHECIDO"),
-            "ir":      float(raw.get("ir", 0.0)),
-            "sizing":  float(raw.get("sizing", 0.0)),
+            "regime": raw.get("regime", "DESCONHECIDO"),
+            "ir":     float(raw.get("ir", 0.0)),
+            "sizing": float(raw.get("sizing", 0.0)),
         }
 
-    # Constantes do FIRE para filtros de entrada
-    _cfg_f       = carregar_config()["fire"]
-    DIAS_MIN     = _cfg_f["dias_min"]
-    DIAS_MAX     = _cfg_f["dias_max"]
-    PREMIO_MIN   = _cfg_f["premio_minimo"]
-    COOLING_OFF  = _cfg_f["cooling_off_dias"]
-    IV_MINIMO    = _cfg_f["iv_minimo"]
+    def _reflect_bloqueado(ciclo_id):
+        """Fase 3: retorna True se ciclo está em Edge C/D/E."""
+        estado = reflect_cycle_hist.get(ciclo_id, {}).get("reflect_state", "B")
+        return estado in REFLECT_ESTADOS_BLOQUEADOS
 
-    # Estratégias por regime — lê do master JSON
-    _estrategias = cfg_ativo.get("estrategias", {})
-    _reg_sizing  = cfg_ativo.get("regimes_sizing", {})
+    _cfg_f      = carregar_config()["fire"]
+    DIAS_MIN    = _cfg_f["dias_min"]
+    DIAS_MAX    = _cfg_f["dias_max"]
+    PREMIO_MIN  = _cfg_f["premio_minimo"]
+    COOLING_OFF = _cfg_f["cooling_off_dias"]
+    IV_MINIMO   = _cfg_f["iv_minimo"]
 
+    _estrategias    = cfg_ativo.get("estrategias", {})
+    _reg_sizing     = cfg_ativo.get("regimes_sizing", {})
     _delta_alvo_cfg = carregar_config()["fire"]["delta_alvo"]
     DELTA_ALVO_TUNE = {
-        "CSP":             {"PUT":  _delta_alvo_cfg["CSP"]["put_vendida"]},
-        "BULL_PUT_SPREAD": {"PUT":  _delta_alvo_cfg["BULL_PUT_SPREAD"]["put_vendida"]},
-        "BEAR_CALL_SPREAD":{"CALL": _delta_alvo_cfg["BEAR_CALL_SPREAD"]["call_vendida"]},
+        "CSP":              {"PUT":  _delta_alvo_cfg["CSP"]["put_vendida"]},
+        "BULL_PUT_SPREAD":  {"PUT":  _delta_alvo_cfg["BULL_PUT_SPREAD"]["put_vendida"]},
+        "BEAR_CALL_SPREAD": {"CALL": _delta_alvo_cfg["BEAR_CALL_SPREAD"]["call_vendida"]},
     }
 
-    # S6 — espelho intencional de FIRE._melhor()
-    # Mantidas separadas por diferença de contexto:
-    # TUNE não usa iv_rank, FIRE usa.
-    # Se FIRE._melhor() for alterada, atualizar aqui também.
     def _melhor_opcao(df_dia, ativo, tipo, delta_alvo):
         cands = df_dia[
             (df_dia["ativo_base"] == ativo) &
@@ -228,345 +240,280 @@ def executar_tune(ticker: str) -> dict:
         cands["dist"] = (cands["delta"] - delta_alvo).abs()
         return cands.nsmallest(1, "dist").iloc[0]
 
-    resultados = {}
+    def _simular(tp: float, stop: float, janela_anos: int) -> dict:
+        """
+        Roda simulação completa para um par (TP, STOP, janela_anos).
+        Retorna dict com métricas. Chamado pelo Optuna a cada trial.
+        Usa df_dias, tape_lookup, _RT/_FM/_NM pré-computados (C1+C2).
+        """
+        ano_teste_ini  = ano_atual - janela_anos
+        posicao_aberta = None
+        ultimo_stop_dt = None
+        trades         = []
 
-    for combo in COMBINACOES:
-        label   = combo["label"]
-        TP      = combo["tp"]
-        STOP    = combo["stop"]
-        print(f"\n  Testando {label} (TP={TP} STOP={STOP})...")
+        for data in datas:
+            data_str = str(data)[:10]
+            ciclo_id = data_str[:7]
+            df_dia   = df_dias[data_str]  # C2: lookup O(1), sem filtro
 
-        # Estado da simulação
-        posicao_aberta  = None   # dict com dados da posição
-        ultimo_stop_dt  = None   # data do último stop
-        trades          = []     # lista de trades fechados
+            # ── Verifica posição aberta ───────────────────────────────
+            if posicao_aberta is not None:
+                leg        = posicao_aberta["leg"]
+                ticker_op  = leg["ticker"]
+                premio_ref = leg["premio_entrada"]
+                venc_dt    = pd.Timestamp(leg["vencimento"])
+                data_ts    = pd.Timestamp(data_str)
+                dias_rest  = (venc_dt - data_ts).days
 
-        from tqdm.auto import tqdm as _tqdm
-        with _tqdm(total=len(datas), desc=f"  {label}",
-                   unit="pregão", ncols=None) as pbar:
+                key = (data_str, ticker_op)
+                if key in tape_lookup.index:
+                    row_op = tape_lookup.loc[key]
+                    if isinstance(row_op, pd.DataFrame):
+                        row_op = row_op.iloc[0]
+                    p_min_op = float(row_op["minimo"])
+                    p_max_op = float(row_op["maximo"])
+                else:
+                    p_min_op = premio_ref
+                    p_max_op = premio_ref
 
-            for data in datas:
-                data_str = str(data)[:10]
-                ciclo_id = data_str[:7]
-                df_dia   = df_tape_c[df_tape_c["data"] == data].copy()
+                fechou = False
 
-                # ── Verifica posição aberta ───────────────────────────
-                if posicao_aberta is not None:
-                    leg        = posicao_aberta["leg"]
-                    ticker_op  = leg["ticker"]
-                    premio_ref = leg["premio_entrada"]
-                    venc_dt    = pd.Timestamp(leg["vencimento"])
-                    data_ts    = pd.Timestamp(data_str)
-                    dias_rest  = (venc_dt - data_ts).days
-
-                    # Busca preços do dia via lookup
-                    key = (data_str, ticker_op)
-                    if key in tape_lookup.index:
-                        row_op = tape_lookup.loc[key]
-                        if isinstance(row_op, pd.DataFrame):
-                            row_op = row_op.iloc[0]
-                        p_fech   = float(row_op["fechamento"])
-                        p_min_op = float(row_op["minimo"])
-                        p_max_op = float(row_op["maximo"])
-                    else:
-                        p_fech   = premio_ref
-                        p_min_op = premio_ref
-                        p_max_op = premio_ref
-
-                    # Preço ação para vencimento
+                # Vencimento
+                if dias_rest <= 0:
+                    strike   = leg["strike"]
+                    tipo_leg = leg["tipo"]
                     acao = df_dia[
                         (df_dia["ativo_base"] == TICKER) &
                         (df_dia["tipo"] == "ACAO")
                     ]["fechamento"]
-                    preco_acao = float(acao.iloc[0]) if not acao.empty else 0.0
-
-                    fechou = False
-
-                    # Vencimento
-                    if dias_rest <= 0:
-                      strike   = leg["strike"]
-                      tipo_leg = leg["tipo"]
-
-                      acao = df_dia[
-                          (df_dia["ativo_base"] == TICKER) &
-                          (df_dia["tipo"] == "ACAO")
-                      ]["fechamento"]
-
-                      if acao.empty:
-                          p_saida = 0.0  # sem preço — assume OTM
-                      else:
-                          preco_acao = float(acao.iloc[0])
-                          if tipo_leg == "PUT":
-                              p_saida = max(0, strike - preco_acao)
-                          else:
-                              p_saida = max(0, preco_acao - strike)
-
-                      pnl = (premio_ref - p_saida) * posicao_aberta["n"]
-                      trades.append({
-                          "data_entrada": posicao_aberta["data_entrada"],
-                          "data_saida":   data_str,
-                          "motivo":       "VENCIMENTO",
-                          "pnl":          round(pnl, 4),
-                          "premio_ref":   premio_ref,
-                      })
-                      posicao_aberta = None
-                      fechou = True
-
-                    # STOP — usa máximo do dia (proxy intraday)
-                    # pnl_pct = (entrada - maximo) / entrada
-                    # se maximo >> entrada → pnl_pct muito negativo → STOP
-                    if not fechou:
-                        pnl_pct_stop = (premio_ref - p_max_op) / (premio_ref + 1e-10)
-                        if pnl_pct_stop <= -STOP:
-                            pnl = (premio_ref - p_max_op) * posicao_aberta["n"]
-                            trades.append({
-                                "data_entrada": posicao_aberta["data_entrada"],
-                                "data_saida":   data_str,
-                                "motivo":       "STOP",
-                                "pnl":          round(pnl, 4),
-                                "premio_ref":   premio_ref,
-                            })
-                            ultimo_stop_dt = pd.Timestamp(data_str)
-                            posicao_aberta = None
-                            fechou = True
-
-                    # TP — usa mínimo do dia (proxy intraday)
-                    # pnl_pct = (entrada - minimo) / entrada
-                    # se minimo << entrada → pnl_pct positivo → TP
-                    if not fechou:
-                        pnl_pct_tp = (premio_ref - p_min_op) / (premio_ref + 1e-10)
-                        if pnl_pct_tp >= TP:
-                            pnl = (premio_ref - p_min_op) * posicao_aberta["n"]
-                            trades.append({
-                                "data_entrada": posicao_aberta["data_entrada"],
-                                "data_saida":   data_str,
-                                "motivo":       "TP",
-                                "pnl":          round(pnl, 4),
-                                "premio_ref":   premio_ref,
-                            })
-                            posicao_aberta = None
-                            fechou = True
-
-                # ── Tenta abrir posição ───────────────────────────
-                if posicao_aberta is None:
-                    orbit = _get_regime(ciclo_id)
-                    regime = orbit["regime"]
-
-                    # Cooling off
-                    if ultimo_stop_dt is not None:
-                        dias_desde_stop = (
-                            pd.Timestamp(data_str) - ultimo_stop_dt).days
-                        if dias_desde_stop < COOLING_OFF:
-                            pbar.update(1)
-                            continue
-
-                    # Sizing
-                    sizing_config = float(_reg_sizing.get(regime, 0.0))
-                    sizing_orbit  = orbit["sizing"]
-                    if sizing_config <= 0.0 or sizing_orbit <= 0.0:
-                        pbar.update(1)
-                        continue
-
-                    # Estratégia
-                    estrategia = _estrategias.get(regime)
-                    if not estrategia:
-                        pbar.update(1)
-                        continue
-
-                    # Seleciona opção
-                    if estrategia in ("CSP", "BULL_PUT_SPREAD"):
-                        tipo_op     = "PUT"
-                        delta_alvo  = DELTA_ALVO_TUNE[estrategia]["PUT"]
-                    elif estrategia == "BEAR_CALL_SPREAD":
-                        tipo_op     = "CALL"
-                        delta_alvo  = DELTA_ALVO_TUNE[estrategia]["CALL"]
+                    if acao.empty:
+                        p_saida = 0.0
                     else:
-                        pbar.update(1)
+                        preco_acao = float(acao.iloc[0])
+                        p_saida = max(0, strike - preco_acao) if tipo_leg == "PUT" \
+                                  else max(0, preco_acao - strike)
+                    pnl = (premio_ref - p_saida) * posicao_aberta["n"]
+                    trades.append({
+                        "data_entrada": posicao_aberta["data_entrada"],
+                        "data_saida":   data_str,
+                        "motivo":       "VENCIMENTO",
+                        "pnl":          round(pnl, 4),
+                    })
+                    posicao_aberta = None
+                    fechou = True
+
+                # STOP — proxy: máximo do dia
+                if not fechou:
+                    pnl_pct_stop = (premio_ref - p_max_op) / (premio_ref + 1e-10)
+                    if pnl_pct_stop <= -stop:
+                        pnl = (premio_ref - p_max_op) * posicao_aberta["n"]
+                        trades.append({
+                            "data_entrada": posicao_aberta["data_entrada"],
+                            "data_saida":   data_str,
+                            "motivo":       "STOP",
+                            "pnl":          round(pnl, 4),
+                        })
+                        ultimo_stop_dt = pd.Timestamp(data_str)
+                        posicao_aberta = None
+                        fechou = True
+
+                # TP — proxy: mínimo do dia
+                if not fechou:
+                    pnl_pct_tp = (premio_ref - p_min_op) / (premio_ref + 1e-10)
+                    if pnl_pct_tp >= tp:
+                        pnl = (premio_ref - p_min_op) * posicao_aberta["n"]
+                        trades.append({
+                            "data_entrada": posicao_aberta["data_entrada"],
+                            "data_saida":   data_str,
+                            "motivo":       "TP",
+                            "pnl":          round(pnl, 4),
+                        })
+                        posicao_aberta = None
+
+            # ── Tenta abrir posição ───────────────────────────────────
+            if posicao_aberta is None:
+                # Fase 3 — máscara REFLECT: bloqueia ciclos Edge C/D/E
+                if _reflect_bloqueado(ciclo_id):
+                    continue
+
+                orbit  = _get_regime(ciclo_id)
+                regime = orbit["regime"]
+
+                # Cooling off
+                if ultimo_stop_dt is not None:
+                    if (pd.Timestamp(data_str) - ultimo_stop_dt).days < COOLING_OFF:
                         continue
 
-                    melhor = _melhor_opcao(df_dia, TICKER, tipo_op, delta_alvo)
-                    if melhor is None:
-                        pbar.update(1)
-                        continue
+                sizing_config = float(_reg_sizing.get(regime, 0.0))
+                sizing_orbit  = orbit["sizing"]
+                if sizing_config <= 0.0 or sizing_orbit <= 0.0:
+                    continue
 
-                    premio_liq = float(melhor["fechamento"])
-                    if premio_liq < PREMIO_MIN:
-                        pbar.update(1)
-                        continue
+                estrategia = _estrategias.get(regime)
+                if not estrategia:
+                    continue
 
-                    # Contratos
-                    _rt     = carregar_config()["book"]["risco_trade"]
-                    _fm     = carregar_config()["book"]["fator_margem"]
-                    _nm     = carregar_config()["book"]["n_contratos_minimo"]
-                    capital = 10_000
-                    n = max(int(capital * _rt * sizing_orbit * sizing_config /
-                                (premio_liq * _fm + 1e-10)), _nm)
+                if estrategia in ("CSP", "BULL_PUT_SPREAD"):
+                    tipo_op    = "PUT"
+                    delta_alvo = DELTA_ALVO_TUNE[estrategia]["PUT"]
+                elif estrategia == "BEAR_CALL_SPREAD":
+                    tipo_op    = "CALL"
+                    delta_alvo = DELTA_ALVO_TUNE[estrategia]["CALL"]
+                else:
+                    continue
 
-                    posicao_aberta = {
-                        "data_entrada": data_str,
-                        "n":            n,
-                        "leg": {
-                            "ticker":        str(melhor["ticker"]),
-                            "tipo":          tipo_op,
-                            "strike":        float(melhor["strike"]),
-                            "vencimento":    str(melhor["vencimento"])[:10],
-                            "premio_entrada": premio_liq,
-                        }
+                melhor = _melhor_opcao(df_dia, TICKER, tipo_op, delta_alvo)
+                if melhor is None:
+                    continue
+
+                premio_liq = float(melhor["fechamento"])
+                if premio_liq < PREMIO_MIN:
+                    continue
+
+                n = max(int(10_000 * _RT * sizing_orbit * sizing_config /
+                            (premio_liq * _FM + 1e-10)), _NM)
+
+                posicao_aberta = {
+                    "data_entrada": data_str,
+                    "n":            n,
+                    "leg": {
+                        "ticker":         str(melhor["ticker"]),
+                        "tipo":           tipo_op,
+                        "strike":         float(melhor["strike"]),
+                        "vencimento":     str(melhor["vencimento"])[:10],
+                        "premio_entrada": premio_liq,
                     }
+                }
 
-                pbar.update(1)
-                pbar.set_postfix(
-                    aberta   = 1 if posicao_aberta else 0,
-                    fechados = len(trades))
+        # Métricas
+        if not trades:
+            return {"ir_valido": 0.0, "pnl_valido": 0.0, "trades_valido": 0,
+                    "ir_total": 0.0, "trades_total": 0, "acerto_valido": 0.0,
+                    "n_stops": 0, "tp": tp, "stop": stop, "janela_anos": janela_anos,
+                    "ano_teste_ini": ano_teste_ini}
 
-        # ── Coleta resultados ─────────────────────────────────────────
-        df_tr = pd.DataFrame(trades)
+        df_tr   = pd.DataFrame(trades)
+        valido  = df_tr[pd.to_datetime(df_tr["data_entrada"]).dt.year >= ano_teste_ini]
 
-        if df_tr.empty:
-            print(f"  ✗ {label} — nenhum trade")
-            resultados[label] = {k: 0 for k in [
-                "tp","stop","trades","pnl","acerto","ir",
-                "n_tp","ganho_medio","n_venc","venc_medio",
-                "n_stops","perda_media","pnl_valido",
-                "trades_valido","acerto_valido","ir_valido",
-                "n_tp_valido","n_venc_valido","n_stops_valido",
-                "perda_media_valido"]}
-            resultados[label]["tp"]   = TP
-            resultados[label]["stop"] = STOP
-            continue
-
-        fechadas = df_tr.copy()
-        valido   = fechadas[
-            pd.to_datetime(fechadas["data_entrada"])
-            .dt.year >= ANO_TESTE_INI
-        ]
-
-        pnls   = fechadas["pnl"].values
+        pnls   = df_tr["pnl"].values
         pnls_v = valido["pnl"].values if len(valido) > 0 else np.array([])
 
-        ir = (float(np.mean(pnls) / (np.std(pnls) + 1e-10) *
-              np.sqrt(252/21)) if len(pnls) > 5 else 0.0)
+        ir_total  = (float(np.mean(pnls) / (np.std(pnls) + 1e-10) *
+                     np.sqrt(252/21)) if len(pnls) > 5 else 0.0)
         ir_valido = (float(np.mean(pnls_v) / (np.std(pnls_v) + 1e-10) *
                      np.sqrt(252/21)) if len(pnls_v) > 5 else 0.0)
 
-        tp_t   = fechadas[fechadas["motivo"] == "TP"]
-        venc_t = fechadas[fechadas["motivo"] == "VENCIMENTO"]
-        stop_t = fechadas[fechadas["motivo"] == "STOP"]
-        tp_v   = valido[valido["motivo"] == "TP"]
-        venc_v = valido[valido["motivo"] == "VENCIMENTO"]
-        stop_v = valido[valido["motivo"] == "STOP"]
-
-        resultados[label] = {
-            "tp":              TP,
-            "stop":            STOP,
-            "trades":          len(fechadas),
-            "pnl":             fechadas["pnl"].sum(),
-            "acerto":          (fechadas["pnl"] > 0).mean() * 100,
-            "ir":              ir,
-            "n_tp":            len(tp_t),
-            "ganho_medio":     tp_t["pnl"].mean()   if len(tp_t)   > 0 else 0,
-            "n_venc":          len(venc_t),
-            "venc_medio":      venc_t["pnl"].mean() if len(venc_t) > 0 else 0,
-            "n_stops":         len(stop_t),
-            "perda_media":     stop_t["pnl"].mean() if len(stop_t) > 0 else 0,
-            "pnl_valido":      valido["pnl"].sum()  if len(valido) > 0 else 0,
-            "trades_valido":   len(valido),
-            "acerto_valido":   (valido["pnl"] > 0).mean() * 100
-                               if len(valido) > 0 else 0,
-            "ir_valido":       ir_valido,
-            "n_tp_valido":     len(tp_v),
-            "n_venc_valido":   len(venc_v),
-            "n_stops_valido":  len(stop_v),
-            "perda_media_valido": stop_v["pnl"].mean()
-                                  if len(stop_v) > 0 else 0,
+        return {
+            "ir_valido":     ir_valido,
+            "pnl_valido":    float(valido["pnl"].sum()) if len(valido) > 0 else 0.0,
+            "trades_valido": len(valido),
+            "ir_total":      ir_total,
+            "trades_total":  len(df_tr),
+            "acerto_valido": float((valido["pnl"] > 0).mean() * 100) if len(valido) > 0 else 0.0,
+            "n_stops":       int((df_tr["motivo"] == "STOP").sum()),
+            "tp":            tp,
+            "stop":          stop,
+            "janela_anos":   janela_anos,
+            "ano_teste_ini": ano_teste_ini,
         }
 
-        print(f"  ✓ {label:22} "
-              f"IR={ir:+.3f}  "
-              f"IR válido={ir_valido:+.3f}  "
-              f"P&L válido=R${valido['pnl'].sum():+,.0f}  "
-              f"trades={len(fechadas)}  "
-              f"stops={len(stop_t)}")
+    # ── Função objetivo Optuna ────────────────────────────────────────
+    def objective(trial):
+        tp          = trial.suggest_float("tp",   TP_MIN,   TP_MAX,   step=TP_STEP)
+        stop        = trial.suggest_float("stop", STOP_MIN, STOP_MAX, step=STOP_STEP)
+        janela_anos = trial.suggest_int("janela_anos", JANELA_MIN, JANELA_MAX)
+        res = _simular(tp, stop, janela_anos)
+        # Reporta métricas como user_attrs para relatório final
+        for k, v in res.items():
+            trial.set_user_attr(k, v)
+        return res["ir_valido"]
 
-    # =====================================
-    # ETAPA 3 — tabela comparativa
-    # =====================================
-    print(f"\n{'═ ' * 88}")
-    print(f"  {TICKER} — TUNE v1.1 — TP e STOP screening (proxy intradiário)")
-    print(f"  Warmup: < {ANO_WARMUP} | Teste: {ANO_TESTE_INI}–{ano_atual} (7 anos)")
-    print(f"{'═ ' * 88}")
+    # ── Executa estudo Optuna ─────────────────────────────────────────
+    sampler = optuna.samplers.TPESampler(
+        n_startup_trials=OPTUNA_STARTUP,
+        seed=OPTUNA_SEED
+    )
+    _study_db = TMP_DIR / f"tune_{TICKER}.db"
+    study = optuna.create_study(
+        storage=f"sqlite:///{_study_db}",
+        study_name=TICKER,
+        load_if_exists=True,
+        direction="maximize",
+        sampler=sampler,
+    )
 
-    colunas = list(resultados.keys())
-    col_w   = 17
+    # Early stopping: patience=50 trials sem melhoria de min_delta
+    _sem_melhoria = [0]
+    _melhor_valor = [study.best_value if study.trials else -999.0]
 
-    print(f"  {'Métrica':28}", end="")
-    for label in colunas:
-        print(f"  {label:>{col_w}}", end="")
-    print()
-    print(f"  {'─' * (28 + (col_w + 2) * len(colunas))}")
+    def _early_stop_cb(study, trial):
+        # C3: não conta paciência durante warm-up do TPE
+        # Evita early stop prematuro antes do surrogate model estar ativo
+        if trial.number < OPTUNA_STARTUP:
+            return
+        if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
+            _melhor_valor[0] = study.best_value
+            _sem_melhoria[0] = 0
+        else:
+            _sem_melhoria[0] += 1
+        if _sem_melhoria[0] >= OPTUNA_PATIENCE:
+            study.stop()
 
-    metricas = [
-        ("TP",                   "tp",                "{:.2f}"),
-        ("STOP",                 "stop",              "{:.1f}x"),
-        ("─" * 26,               None,                None),
-        ("── HISTÓRICO COMPLETO",None,                None),
-        ("Trades totais",         "trades",            "{:.0f}"),
-        ("P&L total",             "pnl",               "R${:,.0f}"),
-        ("Acerto %",              "acerto",            "{:.1f}%"),
-        ("IR realizado",          "ir",                "{:+.3f}"),
-        ("n TP",                  "n_tp",              "{:.0f}"),
-        ("Ganho médio (TP)",      "ganho_medio",       "R${:,.0f}"),
-        ("n VENCIMENTO",          "n_venc",            "{:.0f}"),
-        ("Venc médio",            "venc_medio",        "R${:,.0f}"),
-        ("n STOP",                "n_stops",           "{:.0f}"),
-        ("Perda média",           "perda_media",       "R${:,.0f}"),
-        ("─" * 26,               None,                None),
-        (f"── TESTE {ANO_TESTE_INI}–{ano_atual}",None,        None),
-        ("Trades válidos",        "trades_valido",     "{:.0f}"),
-        ("P&L válido",            "pnl_valido",        "R${:,.0f}"),
-        ("Acerto válido %",       "acerto_valido",     "{:.1f}%"),
-        ("IR válido",             "ir_valido",         "{:+.3f}"),
-        ("n TP válido",           "n_tp_valido",       "{:.0f}"),
-        ("n VENC válido",         "n_venc_valido",     "{:.0f}"),
-        ("n STOP válido",         "n_stops_valido",    "{:.0f}"),
-        ("Perda média válida",    "perda_media_valido","R${:,.0f}"),
-    ]
+    print(f"  Rodando {OPTUNA_N_TRIALS} trials (early stop patience={OPTUNA_PATIENCE})...")
+    study.optimize(objective, n_trials=OPTUNA_N_TRIALS, callbacks=[_early_stop_cb])
 
-    for nome, chave, fmt in metricas:
-        if chave is None:
-            if "─" in nome:
-                print(f"  {'─' * 26}", end="")
-                for _ in colunas:
-                    print(f"  {'─' * col_w}", end="")
-                print()
-            else:
-                print(f"\n  {nome}")
-            continue
-        print(f"  {nome:28}", end="")
-        for label in colunas:
-            val = resultados[label][chave]
-            print(f"  {fmt.format(val):>{col_w}}", end="")
-        print()
+    trials_rodados = len(study.trials)
+    melhor_trial   = study.best_trial
+    melhor_attrs   = melhor_trial.user_attrs
 
-    print(f"\n  {'─' * 50}")
-    melhor_ir   = max(resultados.items(), key=lambda x: x[1]["ir"])
-    melhor_ir_v = max(resultados.items(), key=lambda x: x[1]["ir_valido"])
-    melhor_pnl  = max(resultados.items(), key=lambda x: x[1]["pnl"])
-    melhor_pnl_v= max(resultados.items(), key=lambda x: x[1]["pnl_valido"])
+    print(f"  ✓ Optuna concluído: {trials_rodados} trials rodados")
+    print(f"  ✓ Melhor: TP={melhor_attrs['tp']:.2f} "
+          f"STOP={melhor_attrs['stop']:.2f} "
+          f"janela={melhor_attrs['janela_anos']}a "
+          f"IR válido={melhor_attrs['ir_valido']:+.3f} "
+          f"P&L=R${melhor_attrs['pnl_valido']:+,.0f} "
+          f"trades={melhor_attrs['trades_valido']}")
 
-    print(f"  Melhor IR total:    {melhor_ir[0]:24} IR={melhor_ir[1]['ir']:+.3f}")
-    print(f"  Melhor IR válido:   {melhor_ir_v[0]:24} IR={melhor_ir_v[1]['ir_valido']:+.3f}")
-    print(f"  Melhor P&L total:   {melhor_pnl[0]:24} R${melhor_pnl[1]['pnl']:,.0f}")
-    print(f"  Melhor P&L válido:  {melhor_pnl_v[0]:24} R${melhor_pnl_v[1]['pnl_valido']:,.0f}")
-    print(f"\n  ⚠ Métrica de decisão: IR válido e P&L válido")
-    print(f"    (período {ANO_TESTE_INI}–{ano_atual} — proxy intradiário via mínimo/máximo)")
-    print(f"\n{'═ ' * 88}")
+    # ═══════════════════════════════════════════════════════════════════
+    # ETAPA 3 — relatório e registro
+    # ═══════════════════════════════════════════════════════════════════
 
-    # ==========================================
-    # ETAPA 4 registro no historico_config
-    # ===========================================
-    melhor = melhor_ir_v
+    emit_log(f"TUNE [{TICKER}] Etapa 3/3: relatório e registro", level="info")
 
+    ano_teste_ini = melhor_attrs["ano_teste_ini"]
+
+    # Sistema graduado de confiança por N (PE-001)
+    n_trades = melhor_attrs["trades_valido"]
+    if n_trades >= 50:
+        confianca = "alta"
+    elif n_trades >= 20:
+        confianca = "baixa"
+    else:
+        confianca = "amostra_insuficiente"
+
+    print(f"\n{'═' * 60}")
+    print(f"  {TICKER} — TUNE v2.0 — Resultado Optuna")
+    print(f"{'═' * 60}")
+    print(f"  TP:             {melhor_attrs['tp']:.2f}")
+    print(f"  STOP:           {melhor_attrs['stop']:.2f}x")
+    print(f"  Janela teste:   {melhor_attrs['janela_anos']} anos "
+          f"({ano_teste_ini}–{ano_atual})")
+    print(f"  IR válido:      {melhor_attrs['ir_valido']:+.3f}")
+    print(f"  P&L válido:     R${melhor_attrs['pnl_valido']:+,.0f}")
+    print(f"  Trades válidos: {n_trades}")
+    print(f"  Acerto válido:  {melhor_attrs['acerto_valido']:.1f}%")
+    print(f"  Stops totais:   {melhor_attrs['n_stops']}")
+    print(f"  Confiança N:    {confianca} (PE-001)")
+    print(f"  REFLECT mask:   {n_mask} ciclos excluídos (Edge C/D/E)")
+    print(f"  Trials rodados: {trials_rodados}/{OPTUNA_N_TRIALS}")
+    if confianca == "amostra_insuficiente":
+        print(f"\n  ⚠ AMOSTRA INSUFICIENTE (N={n_trades} < 20)")
+        print(f"    Resultado não confiável — TP/STOP default mantido")
+    elif confianca == "baixa":
+        print(f"\n  ⚠ CONFIANÇA BAIXA (N={n_trades}, 20–49) — interpretar com cautela")
+    print(f"{'═' * 60}")
+
+    # Registro no historico_config[]
     with open(path_ativo) as f:
         dados = json.load(f)
 
@@ -575,40 +522,45 @@ def executar_tune(ticker: str) -> dict:
 
     dados["historico_config"].append({
         "data":          str(datetime.now())[:10],
-        "modulo":        "TUNE v1.1",
-        "parametro":     "take_profit / stop_loss",
+        "modulo":        "TUNE v2.0",
+        "parametro":     "take_profit / stop_loss / janela_anos",
         "valor_ant":     f"TP={tp_baseline_ant} STOP={stop_baseline_ant}",
-        "valor_novo":    f"TP={melhor[1]['tp']} STOP={melhor[1]['stop']}",
-        "motivo":        (f"TUNE v1.1 — IR válido ({ANO_TESTE_INI}–{ano_atual}) "
-                         f"IR={melhor[1]['ir_valido']:+.3f} "
-                         f"P&L=R${melhor[1]['pnl_valido']:,.0f} "
-                         f"trades={melhor[1]['trades_valido']} "
-                         f"proxy=intraday_min_max"),
-        "combinacao":    melhor[0],
-        "warmup":        ANO_WARMUP,
-        "periodo_teste": f"{ANO_TESTE_INI}-{ano_atual}",
-        "metodo":        "proxy_intraday_min_max",
+        "valor_novo":    f"TP={melhor_attrs['tp']} STOP={melhor_attrs['stop']}",
+        "motivo":        (f"TUNE v2.0 Optuna — IR válido ({ano_teste_ini}–{ano_atual}) "
+                         f"IR={melhor_attrs['ir_valido']:+.3f} "
+                         f"P&L=R${melhor_attrs['pnl_valido']:,.0f} "
+                         f"trades={n_trades} confianca={confianca} "
+                         f"reflect_mask={n_mask}ciclos"),
+        "janela_anos":   melhor_attrs["janela_anos"],
+        "ano_teste_ini": ano_teste_ini,
+        "trials":        trials_rodados,
+        "confianca_n":   confianca,
+        "reflect_mask":  n_mask,
+        "metodo":        "optuna_v2",
     })
     dados["atualizado_em"] = str(datetime.now())[:19]
 
-    with open(path_ativo, "w") as f:
-        json.dump(dados, f, indent=2, ensure_ascii=False, default=str)
+    dir_ = os.path.dirname(path_ativo)
+    with tempfile.NamedTemporaryFile(
+            "w", dir=dir_, suffix=".tmp",
+            delete=False, encoding="utf-8") as tf:
+        json.dump(dados, tf, indent=2, ensure_ascii=False, default=str)
+        tmp_path = tf.name
+    os.replace(tmp_path, path_ativo)
 
     print(f"  ✓ Resultado registrado no master JSON de {TICKER}")
-    print(f"    Melhor: {melhor[0]} — "
-          f"IR válido={melhor[1]['ir_valido']:+.3f} "
-          f"P&L válido=R${melhor[1]['pnl_valido']:,.0f}")
 
-    _tp_aplicar   = melhor[1]['tp']
-    _stop_aplicar = melhor[1]['stop']
+    _tp_aplicar   = melhor_attrs["tp"]
+    _stop_aplicar = melhor_attrs["stop"]
 
-    print(f"{'=' * 52}")  
-    print(f"  ⚠ Aplicar requer decisão explícita do CEO")
-    print(f"  Para aplicar, cole e execute a célula abaixo:")
-    print(f"{'=' * 52}")  
-    print(f"""
-    # Aplicar TUNE v1.1 — {TICKER}
-    # TP={_tp_aplicar} STOP={_stop_aplicar} — IR válido={melhor[1]['ir_valido']:+.3f}
+    if confianca != "amostra_insuficiente":
+        print(f"\n{'=' * 52}")
+        print(f"  ⚠ Aplicar requer decisão explícita do CEO")
+        print(f"  Para aplicar, cole e execute a célula abaixo:")
+        print(f"{'=' * 52}")
+        print(f"""
+    # Aplicar TUNE v2.0 — {TICKER}
+    # TP={_tp_aplicar} STOP={_stop_aplicar} — IR válido={melhor_attrs['ir_valido']:+.3f}
     import json
     _path = f"{{ATIVOS_DIR}}/{TICKER}.json"
     with open(_path) as f:
@@ -618,27 +570,250 @@ def executar_tune(ticker: str) -> dict:
     with open(_path, "w") as f:
         json.dump(_cfg, f, indent=2, ensure_ascii=False)
     print("✓ TP={_tp_aplicar} STOP={_stop_aplicar} aplicado em {TICKER}")
-    """)
-    print(f"{'=' * 52}")  
+        """)
+        print(f"{'=' * 52}")
 
-    # RETORNO DA FUNÇÃO
     return {
-        "ticker":      TICKER,
-        "resultados":  resultados,
-        "melhor_ir_valido": {
-            "label": melhor_ir_v[0],
-            "tp":    melhor_ir_v[1]["tp"],
-            "stop":  melhor_ir_v[1]["stop"],
-            "ir_valido": melhor_ir_v[1]["ir_valido"],
-            "pnl_valido": melhor_ir_v[1]["pnl_valido"],
-        },
-        "melhor_pnl_valido": {
-            "label": melhor_pnl_v[0],
-            "tp":    melhor_pnl_v[1]["tp"],
-            "stop":  melhor_pnl_v[1]["stop"],
-            "pnl_valido": melhor_pnl_v[1]["pnl_valido"],
+        "ticker":   TICKER,
+        "melhor": {
+            "tp":            _tp_aplicar,
+            "stop":          _stop_aplicar,
+            "janela_anos":   melhor_attrs["janela_anos"],
+            "ano_teste_ini": ano_teste_ini,
+            "ir_valido":     melhor_attrs["ir_valido"],
+            "pnl_valido":    melhor_attrs["pnl_valido"],
+            "trades_valido": n_trades,
+            "confianca_n":   confianca,
+            "reflect_mask":  n_mask,
+            "trials":        trials_rodados,
         },
     }
+
+
+def tune_diagnostico_estrategia(ticker: str) -> dict:
+    """
+    Fase 4 de B42 — Diagnóstico de estratégia vencedora por regime.
+
+    Analisa o histórico completo de trades do BOOK (backtest) agrupado
+    por regime × estratégia e identifica qual estratégia tem melhor
+    P&L médio, acerto e IR em cada regime.
+
+    Nível 2 da hierarquia doutrinária: precede TUNE global de TP/STOP.
+    Não altera JSON automaticamente — exige confirmação do CEO.
+    Células com N < 20 marcadas como 'amostra_insuficiente' (PE-001).
+
+    Retorna:
+        dict com chave por regime, valor com estratégia vencedora e métricas.
+    """
+    import json, os
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime
+
+    TICKER = ticker.strip().upper()
+
+    emit_log(f"TUNE DIAG [{TICKER}] iniciando diagnóstico de estratégia por regime",
+             level="info")
+
+    # ── Carrega BOOK backtest ─────────────────────────────────────────
+    book_path = os.path.join(BOOK_DIR, "book_backtest.json")
+
+    if not os.path.exists(book_path):
+        raise FileNotFoundError(
+            f"book_backtest.json não encontrado em {BOOK_DIR}. "
+            f"Execute EDGE backtest antes do diagnóstico.")
+
+    with open(book_path) as f:
+        book_raw = json.load(f)
+
+    ops = book_raw.get("ops", [])
+    if not ops:
+        raise ValueError(f"BOOK backtest vazio para {TICKER}.")
+
+    # ── Monta DataFrame de trades fechados do ativo ───────────────────
+    rows = []
+    for op in ops:
+        core  = op.get("core", {})
+        orbit = op.get("orbit", {})
+
+        # Filtra: apenas fechadas, apenas o ativo, sem não-entradas
+        if core.get("motivo_nao_entrada"):
+            continue
+        if core.get("motivo_saida") is None:
+            continue
+        if core.get("ativo") != TICKER:
+            continue
+
+        rows.append({
+            "regime":     orbit.get("regime_entrada", "DESCONHECIDO"),
+            "estrategia": core.get("estrategia", "DESCONHECIDO"),
+            "pnl":        float(core.get("pnl") or 0.0),
+            "motivo":     core.get("motivo_saida", ""),
+            "data":       core.get("data_entrada", ""),
+        })
+
+    if not rows:
+        raise ValueError(f"Nenhum trade fechado encontrado para {TICKER} no BOOK.")
+
+    df = pd.DataFrame(rows)
+
+    # ── Agrega por regime × estratégia ───────────────────────────────
+    resultado = {}
+    aviso_n_baixo = []
+
+    for regime in sorted(df["regime"].unique()):
+        df_reg = df[df["regime"] == regime]
+        estrategias_no_regime = df_reg["estrategia"].unique()
+
+        celulas = {}
+        for estrategia in estrategias_no_regime:
+            df_cel = df_reg[df_reg["estrategia"] == estrategia]
+            n      = len(df_cel)
+            pnls   = df_cel["pnl"].values
+
+            # PE-001: sistema graduado de confiança por N
+            if n >= 50:
+                confianca = "alta"
+            elif n >= 20:
+                confianca = "baixa"
+                aviso_n_baixo.append(f"{regime} × {estrategia} (N={n})")
+            else:
+                confianca = "amostra_insuficiente"
+                aviso_n_baixo.append(f"{regime} × {estrategia} (N={n} < 20)")
+
+            ir = (float(np.mean(pnls) / (np.std(pnls) + 1e-10) *
+                  np.sqrt(252/21)) if n > 5 else 0.0)
+
+            celulas[estrategia] = {
+                "n":          n,
+                "pnl_medio":  round(float(np.mean(pnls)), 4),
+                "pnl_total":  round(float(np.sum(pnls)), 4),
+                "acerto_pct": round(float((pnls > 0).mean() * 100), 1),
+                "ir":         round(ir, 4),
+                "confianca":  confianca,
+            }
+
+        # Vencedora: maior IR entre células com confianca != 'amostra_insuficiente'
+        candidatas = {
+            e: v for e, v in celulas.items()
+            if v["confianca"] != "amostra_insuficiente"
+        }
+
+        if candidatas:
+            vencedora = max(candidatas, key=lambda e: candidatas[e]["ir"])
+            status    = "ok"
+        else:
+            # Todas as células com N insuficiente — usa maior N como fallback
+            vencedora = max(celulas, key=lambda e: celulas[e]["n"]) if celulas else None
+            status    = "amostra_insuficiente"
+
+        resultado[regime] = {
+            "vencedora": vencedora,
+            "status":    status,
+            "celulas":   celulas,
+        }
+
+    # ── Relatório ─────────────────────────────────────────────────────
+    print(f"\n{'═' * 60}")
+    print(f"  {TICKER} — Diagnóstico de Estratégia por Regime (Fase 4)")
+    print(f"{'═' * 60}")
+    print(f"  {'Regime':20} {'Vencedora':18} {'N':>5} "
+          f"{'P&L méd':>10} {'Acerto':>8} {'IR':>8} {'Conf':>10}")
+    print(f"  {'─' * 80}")
+
+    for regime, dados in sorted(resultado.items()):
+        venc = dados["vencedora"]
+        if venc and venc in dados["celulas"]:
+            cel = dados["celulas"][venc]
+            print(f"  {regime:20} {venc:18} {cel['n']:>5} "
+                  f"R${cel['pnl_medio']:>8,.2f} "
+                  f"{cel['acerto_pct']:>7.1f}% "
+                  f"{cel['ir']:>+8.3f} "
+                  f"{cel['confianca']:>10}")
+        else:
+            print(f"  {regime:20} {'SEM DADOS':18}")
+
+    if aviso_n_baixo:
+        print(f"\n  ⚠ Células com amostra baixa ou insuficiente:")
+        for av in aviso_n_baixo:
+            print(f"    • {av}")
+
+    print(f"\n  Não aplicado automaticamente — requer confirmação do CEO.")
+    print(f"  Para aplicar, use: tune_aplicar_estrategias('{TICKER}', resultado)")
+    print(f"{'═' * 60}")
+
+    return {
+        "ticker":    TICKER,
+        "resultado": resultado,
+        "avisos":    aviso_n_baixo,
+    }
+
+
+def tune_aplicar_estrategias(ticker: str, diagnostico: dict) -> None:
+    """
+    Aplica resultado do tune_diagnostico_estrategia() no master JSON.
+    Atualiza campo 'estrategias' por regime com a vencedora diagnosticada.
+    Só aplica regimes com status == 'ok' — regimes com amostra_insuficiente
+    mantêm a estratégia atual.
+    Exige confirmação explícita do CEO antes de chamar.
+    """
+    import json, os, tempfile
+    from datetime import datetime
+
+    TICKER = ticker.strip().upper()
+    path_ativo = os.path.join(ATIVOS_DIR, f"{TICKER}.json")
+
+    with open(path_ativo) as f:
+        dados = json.load(f)
+
+    if "estrategias" not in dados:
+        dados["estrategias"] = {}
+
+    aplicados   = []
+    ignorados   = []
+    resultado   = diagnostico.get("resultado", {})
+
+    for regime, dados_regime in resultado.items():
+        if dados_regime["status"] != "ok":
+            ignorados.append(f"{regime} (amostra_insuficiente)")
+            continue
+        vencedora = dados_regime["vencedora"]
+        if vencedora is None:
+            ignorados.append(f"{regime} (sem vencedora)")
+            continue
+        anterior = dados["estrategias"].get(regime, "N/A")
+        dados["estrategias"][regime] = vencedora
+        aplicados.append(f"{regime}: {anterior} → {vencedora}")
+
+    # Registra no historico_config[]
+    if "historico_config" not in dados:
+        dados["historico_config"] = []
+    dados["historico_config"].append({
+        "data":     str(datetime.now())[:10],
+        "modulo":   "TUNE v2.0 Fase 4",
+        "parametro": "estrategias por regime",
+        "aplicados": aplicados,
+        "ignorados": ignorados,
+        "metodo":   "diagnostico_pnl_regime",
+    })
+    dados["atualizado_em"] = str(datetime.now())[:19]
+
+    # Escrita atômica
+    dir_ = os.path.dirname(path_ativo)
+    with tempfile.NamedTemporaryFile(
+            "w", dir=dir_, suffix=".tmp",
+            delete=False, encoding="utf-8") as tf:
+        json.dump(dados, tf, indent=2, ensure_ascii=False, default=str)
+        tmp_path = tf.name
+    os.replace(tmp_path, path_ativo)
+
+    print(f"\n  ✓ Estratégias aplicadas em {TICKER}:")
+    for a in aplicados:
+        print(f"    • {a}")
+    if ignorados:
+        print(f"  ~ Ignorados (amostra insuficiente):")
+        for i in ignorados:
+            print(f"    • {i}")
 
 
 if __name__ == "__main__":
@@ -646,7 +821,8 @@ if __name__ == "__main__":
     t = (sys.argv[1] if len(sys.argv) > 1
          else input("Ticker para TUNE: ").strip().upper())
     resultado = executar_tune(t)
-    melhor = resultado["melhor_ir_valido"]
-    print(f"\n  Melhor IR válido: {melhor['label']} "
-          f"TP={melhor['tp']} STOP={melhor['stop']} "
-          f"IR={melhor['ir_valido']:+.3f}")
+    m = resultado["melhor"]
+    print(f"\n  Melhor: TP={m['tp']} STOP={m['stop']} "
+          f"janela={m['janela_anos']}a "
+          f"IR={m['ir_valido']:+.3f} "
+          f"confiança={m['confianca_n']}")

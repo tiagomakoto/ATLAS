@@ -129,6 +129,9 @@ class FIRE:
             strike         = float(row["strike"]),
             vencimento     = str(row["vencimento"])[:10],
             premio_entrada = float(row["fechamento"]),
+            # B48 — premio_executado: None por padrão (backtest/paper sem execução real).
+            # No modo real, preencher via book.registrar_execucao() após confirmação.
+            premio_executado = None,
             delta   = float(row["delta"])
                       if pd.notna(row.get("delta")) else None,
             gamma   = float(row["gamma"])
@@ -414,9 +417,13 @@ class FIRE:
                 else (p - leg.premio_entrada)
                 for leg, p in zip(op.legs, precos_hoje))
 
+            # B48 — referencia de P&L: usa premio_executado se disponível,
+            # caso contrário cai para premio_entrada (backtest/paper sem execução real).
             premio_liq = sum(
-                leg.premio_entrada if leg.posicao == "vendida"
-                else -leg.premio_entrada
+                (leg.premio_executado if leg.premio_executado is not None
+                 else leg.premio_entrada) if leg.posicao == "vendida"
+                else -(leg.premio_executado if leg.premio_executado is not None
+                       else leg.premio_entrada)
                 for leg in op.legs)
             premio_ref = max(premio_liq, 0.01)
             pnl_pct    = pnl_atual / premio_ref

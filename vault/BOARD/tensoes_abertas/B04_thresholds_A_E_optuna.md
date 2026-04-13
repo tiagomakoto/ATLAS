@@ -28,4 +28,9 @@ notes:
   - Célula de calibração a ser implementada por Chan
   - Roda sobre reflect_all_cycles_history
   - Placeholders atuais conservadores o suficiente para operar durante coleta
+  - 2026-04-13: reflect_state agora é salvo por ciclo em reflect_cycle_history[]
+    junto ao score_reflect (patch edge.py sessão hoje). Derivado dos thresholds
+    atuais — quando B4 for calibrado, reflect_cycle_history[] precisa ser
+    rerrodado para todos os ciclos históricos com os novos thresholds.
+    O TUNE v2.0 Fase 3 usa reflect_state por ciclo como máscara — depende de B4.
 ---

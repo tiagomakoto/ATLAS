@@ -1,12 +1,12 @@
 ---
 uid: B30
 title: TUNE v2.0 — máscara REFLECT e dimensão de estratégias alternativas
-status: open
+status: closed
 opened_at: 2026-03-23
-closed_at:
+closed_at: 2026-04-13
 opened_in: [[BOARD/atas/2026-03-23_paper_trading]]
-closed_in:
-decided_by:
+closed_in: [[BOARD/atas/2026-04-12_tune_v2_escopo]]
+decided_by: CEO
 system: delta_chaos
 
 description: >
@@ -36,7 +36,7 @@ resolution: >
   as duas dimensões são pré-requisito uma da outra para entrega coerente.
 
 notes:
-  - TUNE v2.0 deve rodar com máscara REFLECT — resultado sem máscara é subótimo
-  - TUNE por regime explicitamente descartado — parâmetros TP/STOP permanecem globais por ativo
-  - Diagnóstico estratégia × regime é pré-TUNE, usa full history disponível
-  - TUNE global usa janela deslizante de 126 dias úteis — escalas temporais distintas por design
+  - Diagnóstico estratégia × regime: tune_diagnostico_estrategia() implementado
+  - Máscara REFLECT: reflect_state salvo por ciclo em reflect_cycle_history[] (edge.py patch 2026-04-13)
+  - Ambas as dimensões entregues e aprovadas por SCAN em 2026-04-13
+---

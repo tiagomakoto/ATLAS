@@ -178,6 +178,91 @@ Condição de revisão:
 
 ---
 
-*Dalio (Relojoeiro) — criado em 2026-04-12*
+### PE-005 — Thresholds de transição entre estados REFLECT A–E
+Data: 2026-04-13
+Tensão relacionada: [[BOARD/tensoes_abertas/B04_thresholds_A_E_optuna]]
+
+Decisão adotada:
+  Thresholds de classificação do score_reflect em estados Edge:
+  A  → score ≥  0.70
+  B  → score ∈ [-0.30, 0.70)
+  C  → score ∈ [-0.70, -0.30)
+  D  → score ∈ [-1.20, -0.70)
+  E  → score <  -1.20
+  (valores em delta_chaos_config.json → reflect.thresholds)
+
+Justificativa formal:
+  Nenhuma derivação teórica. Os thresholds não emergem de distribuição
+  estatística conhecida do score_reflect. A distribuição empírica do score
+  ao longo dos ciclos históricos não foi diagnosticada antes da fixação
+  dos valores — o que significa que os cortes A/B/C/D/E não correspondem
+  necessariamente a percentis significativos da distribuição real.
+
+Limitação conhecida:
+  Com thresholds arbitrários sobre uma distribuição não diagnosticada,
+  a frequência de ciclos em cada estado é desconhecida. Pode haver
+  concentração excessiva em B (estado neutro) ou em A (estado ótimo),
+  tornando os estados C/D/E raramente atingidos — ou o inverso.
+  O score_reflect histórico foi calculado sem o componente de divergência
+  IV (divergencia_disponivel: False em ~100% dos ciclos históricos),
+  o que significa que a distribuição atual do score é parcial e mudará
+  quando o componente de divergência for ativado com dados EOD reais.
+  Os thresholds foram calibrados intuitivamente para uma distribuição
+  que ainda não existe de forma completa.
+
+Compromisso operacional:
+  Placeholders conservadores suficientes para operar durante o período
+  de coleta de dados. Estado B como default é seguro — não bloqueia
+  nem amplifica sizing sem evidência. A fixação foi consciente:
+  operar com thresholds provisórios é melhor que não operar.
+
+Condição de revisão:
+  Após 15 ciclos EOD com divergência ativa (componente IV/Prêmio e
+  Ret/Vol preenchidos). Calibrar via Optuna maximizando Calmar ratio
+  sobre a distribuição empírica completa do score. Quando recalibrado,
+  reflect_cycle_history[] deve ser rerrodado para todos os ciclos
+  históricos com os novos thresholds — o campo reflect_state salvo
+  por ciclo (patch 2026-04-13) será atualizado nesse momento.
+
+### PE-006 — Pesos dos componentes REFLECT (aceleração / divergência / delta_IR)
+Data: 2026-04-13
+Tensão relacionada: [[BOARD/tensoes_abertas/B11_pesos_reflect_optuna]]
+
+Decisão adotada:
+  Pesos iniciais: aceleração=0.33, divergência=0.33, delta_IR=0.33
+  (prior de máxima ignorância — distribuição uniforme entre componentes)
+  (valores em delta_chaos_config.json → reflect.weights)
+
+Justificativa formal:
+  Sem teoria que prescreva pesos ótimos entre os três componentes.
+  Prior uniforme é o único estado epistêmico honesto na ausência de
+  dados: afirmar que qualquer componente é mais informativo que outro
+  sem evidência seria introduzir viés sem fundamento.
+
+Limitação conhecida:
+  0.33/0.33/0.33 não significa que os componentes têm igual impacto
+  real sobre a qualidade do edge — significa que não sabemos qual
+  importa mais. O componente de divergência (IV/Prêmio e Ret/Vol)
+  está inativo em praticamente todos os ciclos históricos
+  (divergencia_disponivel: False), o que significa que o peso de 0.33
+  para divergência é nominal — na prática os outros dois dividem 1.0
+  via renormalização automática. O prior uniforme está sendo aplicado
+  sobre três componentes dos quais apenas dois funcionam atualmente.
+
+Compromisso operacional:
+  Mínimo de 24 ciclos com os três componentes ativos simultaneamente
+  antes de qualquer recalibração. Condição de melhoria mínima: 20%
+  de ganho no Calmar ratio como critério para mudar pesos — proteção
+  contra overfitting em amostra pequena.
+
+Condição de revisão:
+  Após primeiro trimestre de paper trading com componente de divergência
+  ativo. Optuna como stack compartilhado com TUNE v2.0 — mesma
+  biblioteca, mesma filosofia, implementação conjunta (decisão B11
+  sessão 2026-04-12).
+
+---
+
+*Dalio (Relojoeiro) — atualizado em 2026-04-13*
 *Este documento deve ser atualizado sempre que o board tomar decisão empírica consciente.*
 *Convenção de uid: PE-XXX sequencial por data de registro.*

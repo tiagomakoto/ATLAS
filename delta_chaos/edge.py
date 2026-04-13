@@ -270,6 +270,20 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         delta_ir * w["delta_ir"]
     )
 
+    # Deriva reflect_state a partir do score e dos thresholds do config
+    # B48-REFLECT: estado salvo junto ao score para lookup direto na Fase 3 do TUNE v2.0
+    _thr = carregar_config()["reflect"]["thresholds"]
+    if reflect_score >= _thr["A"]:
+        reflect_state = "A"
+    elif reflect_score >= _thr["B_lower"]:
+        reflect_state = "B"
+    elif reflect_score >= _thr["C"]:
+        reflect_state = "C"
+    elif reflect_score >= _thr["D"]:
+        reflect_state = "D"
+    else:
+        reflect_state = "E"
+
     # Salvar no master JSON
     if "reflect_cycle_history" not in cfg:
         cfg["reflect_cycle_history"] = {}
@@ -280,6 +294,7 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         "rv_media": rv_media,
         "delta_ir": delta_ir,
         "score_reflect": reflect_score,
+        "reflect_state": reflect_state,
         "data_calc": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "fonte_divergencia": fonte_divergencia,
         "divergencia_disponivel": divergencia_disponivel

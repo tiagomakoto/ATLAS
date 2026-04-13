@@ -27,12 +27,14 @@ except ImportError:
     _atlas_disponivel = False
 
 # ════════════════════════════════════════════════════════════════════
-# DELTA CHAOS — ORBIT v3.5
-# Alterações em relação à v3.3:
-# CORRIGIDO (SCAN-10): removida importação morta de tape_reflect_cycle
-#   tape_reflect_cycle é chamado pelo EDGE, não pelo ORBIT
-# CORRIGIDO: pbar.set_postfix estava após continue — nunca executava
-# MANTIDO: todo o restante idêntico à v3.3
+# DELTA CHAOS — ORBIT v3.6
+# Alterações em relação à v3.5:
+# FASE 5 (B42): iv_rank por ciclo adicionado ao resultado de orbit_ativo_processar
+#   Proxy: vol_garch_21d (ou vol_21d como fallback) do OHLCV
+#   Percentil da vol atual sobre a janela histórica do próprio ativo
+#   iv_rank = None se vol indisponível — não bloqueia o ciclo
+#   Consumidores usam .get("iv_rank") — backward compatible
+# MANTIDO: todo o restante idêntico à v3.5
 # ════════════════════════════════════════════════════════════════════
 
 import os, math, warnings
@@ -58,6 +60,10 @@ VEL_RECUPERACAO     = _cfg["vel_recuperacao"]
 VEL_PANICO          = _cfg["vel_panico"]
 VOL_PANICO          = _cfg["vol_panico"]
 CICLOS_NEG_MIN      = _cfg["ciclos_neg_min"]
+
+# Fase 5 — iv_rank_janela extraído como constante de módulo
+# Evita carregar_config() dentro de orbit_ativo_processar() a cada ciclo × ativo
+IV_RANK_JANELA = carregar_config()["tape"]["iv_rank_janela"]
 
 # SCAN-10: tape_reflect_cycle removido — é chamado pelo EDGE, não pelo ORBIT
 # P2: imports explícitos abaixo (substituem escopo global do notebook)
@@ -432,7 +438,7 @@ class ORBIT:
     def __init__(self, universo: dict):
         self.universo = universo
         self.ativos   = list(universo.keys())
-        print(f"  ORBIT v3.5 — {len(self.ativos)} ativos")
+        print(f"  ORBIT v3.6 — {len(self.ativos)} ativos")
         print(f"  5 regimes | S6 unificada | dados via TAPE")
 
     def orbit_rodar(self, df_tape, anos, modo="pipeline", externas_dict=None, ciclos_forcados=None):
@@ -656,6 +662,23 @@ class ORBIT:
         pesos_at = ph[-1]["pesos"]
         pct_n    = (pred=="NEUTRO").mean()*100
 
+        # Fase 5 — iv_rank por ciclo (B42)
+        # IV disponível via vol_garch_21d do OHLCV como proxy de vol impliedada.
+        # iv_rank = percentil da vol atual sobre a janela histórica do próprio ativo
+        # (nunca threshold absoluto — conforme B47 e PE-005).
+        # Se vol_garch_21d indisponível: iv_rank = None (não bloqueia o ciclo).
+        iv_rank_ciclo = None
+        _col_vol = "vol_garch_21d" if "vol_garch_21d" in df_at.columns else \
+                   "vol_21d"       if "vol_21d"       in df_at.columns else None
+        if _col_vol is not None:
+            _serie_vol = df_at[_col_vol].dropna()
+            if len(_serie_vol) >= 2:
+                _vol_atual   = float(_serie_vol.iloc[-1])
+                _janela_rank = min(len(_serie_vol), IV_RANK_JANELA)
+                _hist_vol    = _serie_vol.iloc[-_janela_rank:].values
+                iv_rank_ciclo = round(
+                    float(np.mean(_hist_vol <= _vol_atual)), 4)
+
         return {
             "ciclo_id":   str(ciclo_id),
             "ativo":      ativo,
@@ -670,6 +693,7 @@ class ORBIT:
             "vol_21d":    round(float(vol_21d_atual),4),
             "vol_63d":    round(float(vol_63d_atual),4),
             "pct_neutro": round(float(pct_n),      1),
+            "iv_rank":    iv_rank_ciclo,
             "s1": round(float(pesos_at.get("s1",0)),4),
             "s2": round(float(pesos_at.get("s2",0)),4),
             "s3": round(float(pesos_at.get("s3",0)),4),
@@ -689,7 +713,7 @@ class ORBIT:
         ciclo_ant   = ciclos[-2] if len(ciclos)>=2 else None
         sep = "═"*60
         print(f"\n{sep}")
-        print(f"  ORBIT v3.5 — Relatório {ciclo_atual}")
+        print(f"  ORBIT v3.6 — Relatório {ciclo_atual}")
         print(sep)
         df_m0 = df_regimes[
             df_regimes["ciclo_id"]==ciclo_atual]

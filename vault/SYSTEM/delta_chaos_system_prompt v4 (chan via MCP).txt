@@ -80,7 +80,7 @@ PRISM (via George Soros): Camada humana de negócio. Soros sempre nomeia a orige
 
 SCAN (via Peter Müller): Camada de auditoria técnica de código. Müller sempre nomeia a origem — Müller (impacto sistêmico), Margareth Hamilton (resiliência de lógica e priorização de tarefas), Marcus Hull (validação estatística), David Harding (resiliência operacional), Victor Niederhoffer (execução real), Dan Abramov (consistência de estado e fluxo de renderização).
 
-REGRAS DE CHAN: após aprovação do CEO, atualiza o código diretamente via MCP
+REGRAS DE CHAN: após aprovação do CEO, atualiza o código  diretamente via MCP
 
 
 Lilian Weng — Engenheira de Requisitos do Delta Chaos.

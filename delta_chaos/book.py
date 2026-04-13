@@ -89,6 +89,11 @@ class Leg:
     vencimento:          str
     premio_entrada:      float
     premio_saida:        Optional[float] = None
+    # B48 — preço real de execução (paper/real).
+    # None = backtest ou paper sem confirmação de execução.
+    # Quando preenchido, verificar() usa este valor como
+    # referência de P&L em vez de premio_entrada.
+    premio_executado:    Optional[float] = None
     delta:               Optional[float] = None
     gamma:               Optional[float] = None
     theta:               Optional[float] = None
@@ -627,9 +632,10 @@ class BOOK:
                     "ticker":         leg.ticker,
                     "strike":         leg.strike,
                     "vencimento":     leg.vencimento,
-                    "premio_entrada": leg.premio_entrada,
-                    "premio_saida":   leg.premio_saida,
-                    "delta":          leg.delta,
+                    "premio_entrada":  leg.premio_entrada,
+                    "premio_saida":    leg.premio_saida,
+                    "premio_executado": leg.premio_executado,
+                    "delta":           leg.delta,
                     "gamma":          leg.gamma,
                     "theta":          leg.theta,
                     "vega":           leg.vega,
@@ -649,9 +655,10 @@ class BOOK:
                     ticker          = l["ticker"],
                     strike          = l["strike"],
                     vencimento      = l["vencimento"],
-                    premio_entrada  = l["premio_entrada"],
-                    premio_saida    = l.get("premio_saida"),
-                    delta           = l.get("delta"),
+                    premio_entrada   = l["premio_entrada"],
+                    premio_saida     = l.get("premio_saida"),
+                    premio_executado = l.get("premio_executado"),
+                    delta            = l.get("delta"),
                     gamma           = l.get("gamma"),
                     theta           = l.get("theta"),
                     vega            = l.get("vega"),
