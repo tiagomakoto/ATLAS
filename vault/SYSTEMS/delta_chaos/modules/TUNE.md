@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-007
-version: 1.1.1
+version: 1.1.2
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - Pinta celula pronta para aplicar TP/STOP ao final do screening
 
 notes:
+  - 2026-04-13: código modificado — tune.py
   - 2026-04-13: código modificado — tune.py
   - VALE3 — TP=0.90 STOP=2.0 — IR valido +4.211 (2019-2025) — 63 trades, 2 stops, 4 regimes
   - PETR4 — TP=0.90 STOP=2.0 — IR valido +2.931 — 24 trades validos, STOP=1.5x inoperavel

@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-001
-version: 1.0
+version: 1.0.1
 status: validated
 owner: Chan
 
@@ -37,6 +37,7 @@ constraints:
   - Evento de "dc_module_complete" em "GATE" com status "error" é emitido se o ativo não tiver historico_config (onboarding incompleto).
 
 notes:
+  - 2026-04-13: código modificado — dc_runner.py
   - _dc_running é usado para bloqueio/concorrência global no namespace.
   - dc_daily orquestra nativamente o fallback de meses (orbit update) se o ciclo virar.
 ---

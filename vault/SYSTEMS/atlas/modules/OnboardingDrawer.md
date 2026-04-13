@@ -1,11 +1,11 @@
 ---
-uid: mod-delta-009
-version: 1.0.1
+uid: mod-atlas-018
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_backend/core/delta_chaos_reader.py
+file: atlas_ui/src/components/GestaoView/OnboardingDrawer.jsx
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,6 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-13: código modificado — delta_chaos_reader.py
-  - 2026-04-12 — módulo criado automaticamente a partir de atlas_backend/core/delta_chaos_reader.py
+  - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/OnboardingDrawer.jsx
   - <edge cases ou riscos>
