@@ -46,6 +46,7 @@ COVERAGE_MAP = {
     "delta_chaos/gate.py":   "GATE",
     "delta_chaos/gate_eod":  "GATE",
     "delta_chaos/tune.py":   "TUNE",
+    "delta_chaos/reflect.py": "REFLECT",
 
     # Advantage — Data Layer
     "advantage/src/data_layer/db/":          "DATA_LAYER",
@@ -55,11 +56,12 @@ COVERAGE_MAP = {
     "advantage/src/data_layer/utils":        "COLLECTORS",
 
     # Atlas backend
-    "atlas_backend/core/dc_runner":    "dc_runner",
-    "atlas_backend/core/event_bus":    "event_bus",
-    "atlas_backend/core/config":       "config_manager",
-    "atlas_backend/api/routes/":       "api_routes",
-    "atlas_backend/api/websocket/":    "websocket",
+    "atlas_backend/core/dc_runner":          "ATLAS_DC_RUNNER",
+    "atlas_backend/core/delta_chaos_reader": "delta_chaos_reader",
+    "atlas_backend/core/event_bus":          "EVENT_BUS",
+    "atlas_backend/core/config":             "CONFIG_MANAGER",
+    "atlas_backend/api/routes/":             "API_ROUTES",
+    "atlas_backend/api/websocket/":          "WEBSOCKET",
 }
 
 # Extensões ignoradas — não geram .md
@@ -92,22 +94,33 @@ def should_ignore(file_path: str) -> bool:
     path = Path(file_path)
     normalized = file_path.lower().replace("\\", "/")
 
-    # Pastas ignoradas no caminho
+    # Pastas ignoradas no caminho completo
     ignored_dirs = {"/tests/", "/test/", "/__pycache__/", "/.git/", "/node_modules/"}
     for d in ignored_dirs:
         if d in normalized:
             return True
+    # Cobre também caminhos que terminam com /tests ou /test (sem trailing slash)
+    if normalized.endswith("/tests") or normalized.endswith("/test"):
+        return True
 
     # Extensão ignorada
     if path.suffix.lower() in IGNORED_EXTENSIONS:
         return True
 
-    # Nome ignorado
+    # Nome do arquivo ignorado (stem ou name)
     for pattern in IGNORED_PATTERNS:
         if pattern.lower() in path.name.lower():
             return True
 
-    return True if path.name.startswith("test_") else False
+    # Prefixo test_ no stem (cobre test_foo.py, test_bar.py etc.)
+    if path.stem.lower().startswith("test_"):
+        return True
+
+    # Arquivos de configuração de teste por nome exato
+    if path.name.lower() in {"conftest.py", "pytest.ini", "setup.cfg", "tox.ini"}:
+        return True
+
+    return False
 
 
 def find_coverage(file_path: str, system: str) -> Optional[str]:
@@ -176,9 +189,12 @@ def increment_version(version_str: str) -> str:
 
 def needs_board_review(content: str) -> list:
     """Retorna lista de campos que precisam de revisão."""
+    if "[BOARD_REVIEW_REQUIRED]" not in content:
+        return []
     review_needed = []
     for field in ["intent", "constraints", "role", "function"]:
-        pattern = rf"^{field}[:\s].*\[BOARD_REVIEW_REQUIRED\]"
+        # O marcador pode estar na mesma linha do campo ou na linha seguinte (bloco YAML)
+        pattern = rf"^{field}[:\s].*\[BOARD_REVIEW_REQUIRED\]|^{field}:\s*\n\s+.*\[BOARD_REVIEW_REQUIRED\]"
         if re.search(pattern, content, re.MULTILINE | re.IGNORECASE):
             review_needed.append(field)
     return review_needed

@@ -19,7 +19,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B08_calendar_spread_neutro_lateral\|B8]] | Calendar Spread NEUTRO_LATERAL — não implementado | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B09_tail_hedge_estrutural\|B9]] | Tail Hedge estrutural — aprovado, não implementado | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B10_gate_eifert_camadas_adicionais\|B10]] | Camadas adicionais gate Eifert | Fase 2 com API de vol | 2026-03-22 |
-| [[BOARD/tensoes_abertas/B11_pesos_reflect_optuna\|B11]] | Pesos REFLECT 0.33/0.33/0.33 — calibração Optuna | 24 ciclos com 3 componentes ativos | 2026-03-22 |
+| [[BOARD/tensoes_abertas/B11_pesos_reflect_optuna\|B11]] | Pesos REFLECT 0.33/0.33/0.33 — Optuna stack compartilhado TUNE+REFLECT | 24 ciclos com 3 componentes ativos | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B14_pilares_pre_paper\|B14]] | Seis pilares pré-paper — capital segregado e protocolo | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B15_documentacao_sistema\|B15]] | Documentação técnica e executiva | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B17_proximos_ativos\|B17]] | Próximos ativos — expansão do universo | BBAS3: Edge B por 2-3 ciclos | 2026-03-22 |
@@ -51,6 +51,19 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/Q10_S6_VALE3_congelado\|Q10]] | S6 VALE3 congelado 2024-Q1 | investigação imediata | 2026-03-23 |
 | [[BOARD/tensoes_abertas/Q11_TUNE_VALE3_afetado_Q10\|Q11]] | TUNE v1.1 VALE3 afetado por Q10 | resolução de Q10 | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B46_advantage_integracao_dados_externos\|B46]] | ADVANTAGE — integração de dados externos ao Delta Chaos | fim do 1º trimestre paper | 2026-04-11 |
+| [[BOARD/tensoes_abertas/B47_janela_teste_tune\|B47]] | Janela de teste TUNE — critério não formalizado (3 candidatos) | TUNE v2.0 | 2026-04-12 |
+| [[BOARD/tensoes_abertas/B48_entrada_close_d0_vs_open_d1\|B48]] | Entrada close d0 vs open d1 — viés de simulação | obrigatório pré-capital real | 2026-04-12 |
+| [[BOARD/tensoes_abertas/B49_slippage_revisao_paper\|B49]] | Slippage 10% — revisão após dados reais de paper trading | fim 1º trimestre paper | 2026-04-12 |
+
+---
+
+## Sessões registradas
+
+| data | tema | tipo |
+|------|------|------|
+| [[BOARD/atas/2026-03-23_paper_trading\|2026-03-23]] | paper trading — início | board |
+| [[BOARD/atas/2026-04-12_vault_scm_manutencao\|2026-04-12]] | vault SCM — manutenção e correções | off-ata |
+| [[BOARD/atas/2026-04-12_tune_v2_escopo\|2026-04-12]] | TUNE v2.0 — escopo e gestão aba | board |
 
 ---
 

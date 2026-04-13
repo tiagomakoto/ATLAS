@@ -13,28 +13,40 @@ Sua única responsabilidade: garantir que código e vault estejam sincronizados 
 
 ### 1. Identificar arquivos modificados
 
+Rode os três comandos abaixo e **concatene todos os resultados** em uma única lista de arquivos:
+
 ```bash
+# Arquivos modificados ou deletados (rastreados, ainda não staged)
 git -C C:\Users\tiago\OneDrive\Documentos\ATLAS diff --name-only HEAD
+
+# Arquivos staged (prontos para commit mas ainda não commitados)
+git -C C:\Users\tiago\OneDrive\Documentos\ATLAS diff --name-only --cached
+
+# Arquivos novos não rastreados
 git -C C:\Users\tiago\OneDrive\Documentos\ATLAS ls-files --others --exclude-standard
 ```
 
-Liste os arquivos. Se não houver nenhum, informe e encerre.
+Deduplique a lista resultante. Se estiver vazia após deduplicação, informe e encerre.
 
 ### 2. Atualizar o vault SCM
 
-Rode o script com a lista de arquivos modificados:
+Passe a lista completa e deduplicada do Passo 1 para o script:
 
 ```bash
 python C:\Users\tiago\OneDrive\Documentos\ATLAS\vault\scripts\update_scm.py <arquivo1> <arquivo2> ...
 ```
 
-Leia a saída do script:
-- Arquivos SCM criados → anote
-- Arquivos SCM atualizados → anote
-- Campos [BOARD_REVIEW_REQUIRED] → liste ao CEO antes de continuar
+Isso garante que arquivos novos, modificados e staged sejam todos processados pelo SCM.
 
-Se houver campos [BOARD_REVIEW_REQUIRED], pause e informe o CEO.
-Aguarde confirmação antes de prosseguir com o commit.
+Leia a saída do script e classifique os resultados em três categorias:
+
+**A. Atualizados** — `.md` existentes com versão incrementada e nota adicionada. Nenhuma ação adicional necessária.
+
+**B. Criados (draft)** — `.md` novos gerados a partir de arquivos sem cobertura semântica prévia. Todos os campos críticos estão marcados como `[BOARD_REVIEW_REQUIRED]`. Requerem preenchimento pelo Gemini.
+
+**C. Criados (draft) com campos pendentes em módulo existente** — módulo existente cujos campos `intent`, `constraints`, `role` ou `function` ainda estão como `[BOARD_REVIEW_REQUIRED]`. Requerem preenchimento pelo Gemini.
+
+Se houver arquivos nas categorias B ou C, **não bloqueie o commit** — registre e siga. O log para o Gemini é gerado no Passo 6.
 
 ### 3. Compor a mensagem de commit
 
@@ -72,11 +84,36 @@ git -C C:\Users\tiago\OneDrive\Documentos\ATLAS push
 
 Formato obrigatório:
 
+```
 ✅ COMMIT concluído
 - Hash: <primeiros 7 chars do hash>
 - Arquivos commitados: <N>
 - Vault SCM: <N criados> criados | <N atualizados> atualizados
-- Campos pendentes de revisão do board: <lista ou "nenhum">
+```
+
+Se houver arquivos nas categorias B ou C do Passo 2, adicione obrigatoriamente o bloco abaixo após o anúncio:
+
+```
+📋 PENDÊNCIAS SEMÂNTICAS — requerem preenchimento pelo Gemini
+
+Arquivos draft (módulos novos sem semântica):
+  - SYSTEMS/<sistema>/modules/<arquivo>.md
+    arquivo de código: <caminho do .py original>
+    campos pendentes: function, role, intent, constraints
+
+Arquivos com campos pendentes em módulos existentes:
+  - SYSTEMS/<sistema>/modules/<arquivo>.md
+    campos pendentes: <lista>
+
+Próximo passo: entregar este log ao Gemini com o código dos arquivos acima
+para preenchimento semântico. Usar o prompt em:
+vault/scripts/update_scm.py (referência de formato de módulo)
+```
+
+Se não houver pendências semânticas:
+```
+📋 Semântica do vault: completa — nenhum campo pendente de revisão.
+```
 
 ---
 
@@ -85,6 +122,7 @@ Formato obrigatório:
 - NUNCA commita sem rodar update_scm.py primeiro
 - NUNCA faz commit com mensagem genérica ("update", "fix", "changes")
 - NUNCA faz push sem commit bem-sucedido
+- Campos [BOARD_REVIEW_REQUIRED] não bloqueiam o commit — são registrados no log do Passo 6 e entregues ao CEO
+- O log de pendências semânticas é sempre o último item do anúncio — nunca omitido
 - Se git push falhar, reporte o erro sem tentar resolver autonomamente
 - Se update_scm.py falhar, reporte o erro e não prossiga com o commit
-- Campos [BOARD_REVIEW_REQUIRED] nunca são bloqueadores do commit — são informativos para o CEO

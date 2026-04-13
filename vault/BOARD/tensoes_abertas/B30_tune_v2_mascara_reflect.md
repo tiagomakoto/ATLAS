@@ -23,8 +23,20 @@ impacted_modules:
   - [[SYSTEMS/delta_chaos/modules/TUNE]]
   - [[SYSTEMS/delta_chaos/modules/REFLECT]]
 
-resolution:
+resolution: >
+  Resolução parcial — sessão 2026-04-12.
+  Dimensão 2 (estratégias alternativas por regime): direção confirmada pelo CEO.
+  Abordagem: diagnóstico de estratégia vencedora por regime via análise histórica
+  de P&L — não otimização de TP/STOP por regime. TUNE por regime descartado
+  formalmente. A seleção de estratégia por regime (Nível 2) precede o TUNE global
+  de TP/STOP (Nível 3) — hierarquia doutrinária confirmada por Thorp, Simons,
+  Buffett e PRISM.
+  Dimensão 1 (máscara REFLECT): pendente de implementação em TUNE v2.0.
+  O diagnóstico de estratégia por regime requer TUNE v2.0 implementado —
+  as duas dimensões são pré-requisito uma da outra para entrega coerente.
 
 notes:
   - TUNE v2.0 deve rodar com máscara REFLECT — resultado sem máscara é subótimo
----
+  - TUNE por regime explicitamente descartado — parâmetros TP/STOP permanecem globais por ativo
+  - Diagnóstico estratégia × regime é pré-TUNE, usa full history disponível
+  - TUNE global usa janela deslizante de 126 dias úteis — escalas temporais distintas por design

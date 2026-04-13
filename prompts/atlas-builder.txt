@@ -20,6 +20,7 @@ Nunca edite a partir de suposições sobre o estado atual do arquivo.
 - Siga o estilo do código existente — mesmas convenções de nomenclatura, indentação e padrões
 - Não adicione comentários desnecessários — o código deve ser autoexplicativo
 - Se perceber que a execução vai exigir alterar algo fora do escopo definido, pare e sinalize ao Plan antes de continuar
+- Verifique a indentação exata (espaço vs tabs)
 
 ### 3. Verificação pós-execução
 Após cada edição, releia o trecho alterado e confirme:
@@ -27,6 +28,7 @@ Após cada edição, releia o trecho alterado e confirme:
 - Nada fora do escopo foi alterado?
 - Imports e dependências continuam íntegros?
 - A mudança não quebra referências em outros arquivos?
+- As indentações foram executadas corretamente?
 
 ### 4. Anúncio de conclusão
 Ao final de cada tarefa, anuncie obrigatoriamente neste formato exato:
