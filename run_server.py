@@ -76,7 +76,7 @@ if sys.platform == "win32":
 
 if __name__ == "__main__":
     # Sempre resetar ciclos para 2025-02 — permite debugar bloco mensal indefinidamente
-    reset_historico_ativos()
+    ##reset_historico_ativos()
 
     print("🚀 Iniciando ATLAS Server com WindowsProactor (Suporte a Subprocessos AsyncHabilitado)")
     uvicorn.run("atlas_backend.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -214,7 +214,7 @@ def obter_todos_relatorios() -> list:
 # NOVO: RELATÓRIO DE TUNE v2.0 (SPEC_RELATORIO_TUNE_v1.0.md)
 # =============================================================================
 
-def gerar_diagnostico_executivo(dados_tune: Dict[str, Any]) -> str:
+def gerar_diagnostico_executivo(dados_tune: dict[str, any]) -> str:
     """
     Gera diagnóstico executivo em linguagem natural baseado em regras determinísticas.
     
@@ -261,7 +261,7 @@ def gerar_diagnostico_executivo(dados_tune: Dict[str, Any]) -> str:
     
     return diagnóstico
 
-def gerar_relatorio_tune(ticker: str, historico: bool = False) -> Dict[str, Any]:
+def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]:
     """
     Lê historico_config[] do master JSON e monta payload completo do relatório.
     
@@ -520,7 +520,7 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> Dict[str, Any]
     
     return payload
 
-def formatar_relatorio_markdown(dados: Dict[str, Any]) -> str:
+def formatar_relatorio_markdown(dados: dict[str, any]) -> str:
     """
     Formata relatório completo em Markdown para exportação.
     """

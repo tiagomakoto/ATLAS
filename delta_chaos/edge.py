@@ -87,6 +87,7 @@ def emit_event(modulo, status, **kwargs):
 
 from delta_chaos.tape import (
     tape_ativo_carregar, tape_ativo_salvar,
+    tape_historico_carregar,
     tape_eod_carregar, tape_ohlcv_carregar, tape_ibov_carregar, tape_externas_carregar,
     _obter_selic,
 )
@@ -96,13 +97,13 @@ from .fire import FIRE
 from .gate_eod import gate_eod_verificar
 
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
-try:
-    from atlas_backend.core.terminal_stream import emit_log, emit_error
-    _atlas_disponivel = True
-except ImportError:
-    def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}")
-    def emit_error(e): print(f"[ERROR] {e}")
-    _atlas_disponivel = False
+# edge.py roda como subprocess do dc_runner. emit_log deve usar print()
+# com flush=True para que o dc_runner capture stdout linha a linha.
+# Nao importar atlas_backend.terminal_stream aqui: o processo filho
+# nao tem acesso ao event_bus/loop do uvicorn pai.
+def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}", flush=True)
+def emit_error(e): print(f"[ERROR] {e}", flush=True)
+_atlas_disponivel = False
 
 # Eventos estruturados do Delta Chaos (DESATIVADO — quem emite é o dc_runner)
 # try:
@@ -775,8 +776,8 @@ if __name__ == "__main__":
             emit_event("ORBIT", "start")
             cfg_ativo = tape_ativo_carregar(args.ticker)
             orbit = ORBIT(universo={args.ticker: cfg_ativo})
-            orbit.orbit_rodar(df_tape, anos, modo="mensal", externas_dict=externas)
-            if orbit.df_regimes is None or orbit.df_regimes.empty:
+            df_regimes_result = orbit.orbit_rodar(df_tape, anos, modo="mensal", externas_dict=externas)
+            if df_regimes_result is None or df_regimes_result.empty:
                 print("  ✗ ORBIT vazio. Abortando.")
                 emit_event("ORBIT", "error", erro="ORBIT vazio")
                 sys.exit(1)

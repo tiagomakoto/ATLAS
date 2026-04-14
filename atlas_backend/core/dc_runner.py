@@ -71,11 +71,10 @@ async def _stream_subprocess(
     TMP_DIR = ATLAS_ROOT / "tmp"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Emitir evento de início do módulo ──
-    # REMOVIDO: O _watch_events já emite dc_module_start ao ler do JSONL do subprocess
-    # Emitir manualmente causava duplicação de eventos no frontend
-    # if modulo:
-    # emit_dc_event("dc_module_start", modulo, "running", **action_payload)
+    # Emite dc_module_start imediatamente antes de lancar o subprocess
+    # O _watch_events_inner emite dc_module_complete ao ler o JSONL
+    if modulo:
+        emit_dc_event("dc_module_start", modulo, "running", **action_payload)
 
     main_loop = asyncio.get_running_loop()
 
@@ -155,6 +154,7 @@ async def _stream_subprocess(
         # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
+        env["PYTHONUNBUFFERED"] = "1"  # garante flush imediato de cada print
 
         # Gerar run_id único e passar para subprocesso
         run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -206,7 +206,7 @@ async def _stream_subprocess(
         watch_thread.start()
 
         proc = subprocess.Popen(
-            [sys.executable] + args,
+            [sys.executable, "-u"] + args,
             cwd=str(cwd.parent),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -474,7 +474,7 @@ async def dc_daily(tickers: list) -> dict:
 
     for ticker in tickers:
         emit_log(f"[DAILY] Processando {ticker}...", level="info")
-        ticker_digest = {"ticker": ticker, "xlsx": None}
+        ticker_digest = {"ticker": ticker, "xlsx": None, "bloco_mensal": None}
 
         # ═══ NOVO: Verificar se ativo tem historico_config (onboarding feito) ═══
         from atlas_backend.core.delta_chaos_reader import get_ativo
@@ -563,9 +563,8 @@ async def dc_daily(tickers: list) -> dict:
                 _atualizar_ativo_store(ticker)
                 continue
 
-        # Após bloco mensal, continuar para XLSX
-        ticker_digest["bloco_mensal"] = bloco_mensal
-        emit_log(f"[DAILY] {ticker}: bloco mensal concluído, continuando para XLSX", level="info")
+        # Após bloco mensal (se executou), continuar para XLSX
+        emit_log(f"[DAILY] {ticker}: continuando para XLSX", level="info")
 
         # 3. GATE EOD (apenas avaliação, sem bloco mensal)
         try:
@@ -718,7 +717,7 @@ async def dc_tune(ticker: str) -> dict:
         cwd=script.parent,
         action_name="dc_tune",
         action_payload={"ticker": ticker},
-        modulo=None # TUNE é configuração, não módulo do fluxo principal
+        modulo="TUNE"  # emite dc_module_start/complete para o drawer
     )
 
 async def dc_gate_backtest(ticker: str) -> dict:
@@ -783,54 +782,162 @@ async def dc_onboarding_iniciar(ticker: str) -> dict:
     """
     Inicia onboarding completo de novo ativo.
     Sequência: backtest_dados → tune → backtest_gate
-    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess
+    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess EM BACKGROUND
     """
-    _validar_ticker(ticker)
+    # Validação básica do ticker
+    import re
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise ValueError(f"Ticker inválido: {ticker}")
     
     # 1. Criar/Atualizar campo onboarding no master JSON
     from atlas_backend.core.delta_chaos_reader import get_ativo, update_ativo
+    from atlas_backend.core.paths import get_paths
+    from pathlib import Path
+    import json
+    from datetime import datetime
     
-    # Carregar dados atuais
-    dados = get_ativo(ticker)
+    # Verificar se ativo existe, criar se necessário
+    paths = get_paths()
+    config_path = Path(paths["config_dir"]) / f"{ticker}.json"
     
-    # Inicializar onboarding com estrutura padrão
-    onboarding = {
-        "step_atual": 1,
-        "steps": {
-            "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
-            "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
-            "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
-        },
-        "ultimo_evento_em": None
-    }
+    if not config_path.exists():
+        # Criar ativo com estrutura básica
+        dados = {
+            "ticker": ticker,
+            "status": "MONITORAR",
+            "onboarding": {
+                "step_atual": 1,
+                "steps": {
+                    "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                    "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+                    "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+                },
+                "ultimo_evento_em": None
+            },
+            "historico": [],
+            "historico_config": [],
+            "atualizado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Criar arquivo
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+    else:
+        # Carregar dados atuais
+        dados = get_ativo(ticker)
+        
+        # Inicializar onboarding com estrutura padrão
+        onboarding = {
+            "step_atual": 1,
+            "steps": {
+                "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+                "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+            },
+            "ultimo_evento_em": None
+        }
+        
+        # Atualizar no master JSON usando versão simplificada
+        def _update_ativo_simples(ticker: str, updates: dict):
+            """Versão simplificada de update_ativo para onboarding."""
+            from atlas_backend.core.paths import get_paths
+            import json
+            import os
+            from datetime import datetime
+            
+            paths = get_paths()
+            config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
+            
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current = json.load(f)
+            
+            current.update(updates)
+            current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Criar arquivo temporário
+            tmp_path = config_path + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(current, f, indent=2, ensure_ascii=False)
+            
+            # Substituir arquivo original
+            os.replace(tmp_path, config_path)
+        
+        _update_ativo_simples(ticker, {"onboarding": onboarding})
     
-    # Atualizar no master JSON
-    dados["onboarding"] = onboarding
+    # 2. Disparar step 1 EM BACKGROUND (não bloquear resposta HTTP)
+    import asyncio
+    asyncio.create_task(_executar_onboarding_step1(ticker))
     
-    # Atualizar no arquivo com escrita atômica
-    path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
-    path_tmp = path_ativo.with_suffix(".tmp")
-    
-    with open(path_tmp, "w", encoding="utf-8") as f:
-        json.dump(dados, f, indent=2, ensure_ascii=False)
-    os.replace(path_tmp, path_ativo)
-    
-    # 2. Disparar step 1: backtest_dados
-    from atlas_backend.core.dc_runner import dc_orbit_backtest
-    result = await dc_orbit_backtest(ticker)
-    
-    # 3. Atualizar estado no master JSON
-    dados = get_ativo(ticker)
-    dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "running"
-    dados["onboarding"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
-    dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
-    
-    # Atualizar no arquivo com escrita atômica
-    with open(path_tmp, "w", encoding="utf-8") as f:
-        json.dump(dados, f, indent=2, ensure_ascii=False)
-    os.replace(path_tmp, path_ativo)
-    
+    # 3. Retornar IMEDIATAMENTE para frontend abrir drawer
     return {"status": "started", "step": 1}
+
+async def _executar_onboarding_step1(ticker: str):
+    """Executa step 1 do onboarding em background."""
+    from atlas_backend.core.delta_chaos_reader import get_ativo
+    from datetime import datetime
+    import json
+    import os
+    
+    def _update_ativo_simples(ticker: str, updates: dict):
+        """Versão simplificada de update_ativo para onboarding."""
+        from atlas_backend.core.paths import get_paths
+        paths = get_paths()
+        config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
+        
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            current = json.load(f)
+        
+        current.update(updates)
+        current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Criar arquivo temporário
+        tmp_path = config_path + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+        
+        # Substituir arquivo original
+        os.replace(tmp_path, config_path)
+    
+    try:
+        # 1. Atualizar status para "running"
+        dados = get_ativo(ticker)
+        dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "running"
+        dados["onboarding"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
+        dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
+        _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
+        
+        # 2. Executar backtest
+        from atlas_backend.core.dc_runner import dc_orbit_backtest
+        result = await dc_orbit_backtest(ticker)
+        
+        # 3. Atualizar status para "done" ou "error"
+        dados = get_ativo(ticker)
+        if result.get("status") == "OK":
+            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "done"
+        else:
+            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "error"
+            dados["onboarding"]["steps"]["1_backtest_dados"]["erro"] = result.get("output", "Erro desconhecido")
+        
+        dados["onboarding"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
+        dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
+        _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
+        
+    except Exception as e:
+        # Marcar como erro em caso de exceção
+        try:
+            dados = get_ativo(ticker)
+            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "error"
+            dados["onboarding"]["steps"]["1_backtest_dados"]["erro"] = str(e)
+            dados["onboarding"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
+            _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
+        except:
+            pass  # Se falhar, pelo menos tentamos
 
 
 async def dc_onboarding_retomar(ticker: str) -> dict:
@@ -838,7 +945,10 @@ async def dc_onboarding_retomar(ticker: str) -> dict:
     Retoma onboarding do step atual (usado quando status == "paused")
     Para step 2: Optuna continua do SQLite existente
     """
-    _validar_ticker(ticker)
+    # Validação básica do ticker
+    import re
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise ValueError(f"Ticker inválido: {ticker}")
     
     from atlas_backend.core.delta_chaos_reader import get_ativo
     
@@ -900,7 +1010,10 @@ async def dc_onboarding_progresso_tune(ticker: str) -> dict:
     Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
     Conexão deve ser read-only explícita para evitar conflito com processo de escrita
     """
-    _validar_ticker(ticker)
+    # Validação básica do ticker
+    import re
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise ValueError(f"Ticker inválido: {ticker}")
     
     from pathlib import Path
     import sqlite3

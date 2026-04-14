@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-018
-version: 1.0.1
+version: 1.0.2
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,6 +30,7 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-14: código modificado — OnboardingDrawer.jsx
   - 2026-04-13: código modificado — OnboardingDrawer.jsx
   - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/OnboardingDrawer.jsx
   - <edge cases ou riscos>

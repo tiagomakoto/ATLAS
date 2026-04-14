@@ -61,6 +61,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-12_vault_scm_manutencao\|2026-04-12]] | vault SCM — manutenção e correções | off-ata |
 | [[BOARD/atas/2026-04-12_tune_v2_escopo\|2026-04-12]] | TUNE v2.0 — escopo e gestão aba | board |
 | [[BOARD/atas/2026-04-13_atlas_onboarding_drawer_relatorio_tune\|2026-04-13]] | ATLAS — drawer onboarding + relatório TUNE | board |
+| [[BOARD/atas/2026-04-13_regime_padronizacao\|2026-04-13]] | regime_estrategia → regime — padronização e migração | off-ata |
 
 ---
 
@@ -77,3 +78,4 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B47_janela_teste_tune\|B47]] | Janela de teste TUNE — janela como hiperparâmetro Optuna | implementado em TUNE v2.0 Fase 2 | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B30_tune_v2_mascara_reflect\|B30]] | TUNE v2.0 máscara REFLECT + diagnóstico estratégia | Fases 3 e 4 implementadas e aprovadas por SCAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B42_TUNE_v2\|B42]] | TUNE v2.0 — 5 fases implementadas | Fases 1a/2/3/4/5 aprovadas por SCAN; Fase 1b aguarda B49 | 2026-04-13 |
+| [[BOARD/decisoes/Q12_regime_estrategia_padronizado_regime\|Q12]] | regime_estrategia renomeado para regime — padronização global | orbit.py corrigido + 2119 ciclos migrados | 2026-04-13 |

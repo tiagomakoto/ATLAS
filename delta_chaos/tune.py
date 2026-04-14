@@ -13,7 +13,6 @@ import os
 #         lê reflect_state por ciclo de reflect_cycle_history[] — fallback permissivo 'B'
 # ════════════════════════════════════════════════════════════════════
 
-from delta_chaos.edge import TMP_DIR
 from delta_chaos.init import (
     CONFIG_PATH,
     carregar_config, ATIVOS_DIR, DRIVE_BASE, BOOK_DIR,
@@ -25,13 +24,13 @@ from delta_chaos.tape import (
 from delta_chaos.orbit import ORBIT
 
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
-try:
-    from atlas_backend.core.terminal_stream import emit_log, emit_error
-    _atlas_disponivel = True
-except ImportError:
-    def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}")
-    def emit_error(e): print(f"[ERROR] {e}")
-    _atlas_disponivel = False
+# tune.py roda como subprocess do dc_runner. emit_log deve usar print()
+# com flush=True para que o dc_runner capture stdout linha a linha.
+# Nao importar atlas_backend.terminal_stream aqui: o processo filho
+# nao tem acesso ao event_bus/loop do uvicorn pai.
+def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}", flush=True)
+def emit_error(e): print(f"[ERROR] {e}", flush=True)
+_atlas_disponivel = False
 
 
 def executar_tune(ticker: str) -> dict:
@@ -426,6 +425,12 @@ def executar_tune(ticker: str) -> dict:
         # Reporta métricas como user_attrs para relatório final
         for k, v in res.items():
             trial.set_user_attr(k, v)
+        # Print por trial — visível no terminal durante warmup e TPE
+        n = trial.number + 1
+        fase = "warmup" if n <= OPTUNA_STARTUP else "TPE"
+        print(f"  trial {n:>3}/{OPTUNA_N_TRIALS} [{fase}] "
+              f"tp={tp:.2f} stop={stop:.2f} janela={janela_anos}a "
+              f"ir={res['ir_valido']:+.3f}")
         return res["ir_valido"]
 
     # ── Executa estudo Optuna ─────────────────────────────────────────
@@ -433,7 +438,6 @@ def executar_tune(ticker: str) -> dict:
         n_startup_trials=OPTUNA_STARTUP,
         seed=OPTUNA_SEED
     )
-    _study_db = TMP_DIR / f"tune_{TICKER}.db"
     study = optuna.create_study(
         storage=f"sqlite:///{_study_db}",
         study_name=TICKER,
@@ -447,20 +451,23 @@ def executar_tune(ticker: str) -> dict:
     _melhor_valor = [study.best_value if study.trials else -999.0]
 
     def _early_stop_cb(study, trial):
-    # C3: não conta paciência durante warm-up do TPE
-    # Evita early stop prematuro antes do surrogate model estar ativo
-    if trial.number < OPTUNA_STARTUP:
-        return
-    if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
-        _melhor_valor[0] = study.best_value
-        _sem_melhoria[0] = 0
-    else:
-        _sem_melhoria[0] += 1
-    # NOVO — emite evento por trial para WebSocket
-    from delta_chaos.edge import emit_event
-    emit_event("TUNE", "trial", trial_number=trial.number + 1, trials_total=OPTUNA_N_TRIALS, best_ir=round(_melhor_valor[0], 4), sem_melhoria=_sem_melhoria[0])
-    if _sem_melhoria[0] >= OPTUNA_PATIENCE:
-        study.stop()
+        # C3: não conta paciência durante warm-up do TPE
+        # Evita early stop prematuro antes do surrogate model estar ativo
+        if trial.number < OPTUNA_STARTUP:
+            return
+        if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
+            _melhor_valor[0] = study.best_value
+            _sem_melhoria[0] = 0
+        else:
+            _sem_melhoria[0] += 1
+        # NOVO — emite evento por trial para WebSocket/EventFeed do ATLAS
+        emit_log(
+            f"TUNE [{TICKER}] trial {trial.number + 1}/{OPTUNA_N_TRIALS} "
+            f"best_ir={_melhor_valor[0]:+.4f} sem_melhoria={_sem_melhoria[0]}",
+            level="info"
+        )
+        if _sem_melhoria[0] >= OPTUNA_PATIENCE:
+            study.stop()
 
     print(f"  Rodando {OPTUNA_N_TRIALS} trials (early stop patience={OPTUNA_PATIENCE})...")
     study.optimize(objective, n_trials=OPTUNA_N_TRIALS, callbacks=[_early_stop_cb])

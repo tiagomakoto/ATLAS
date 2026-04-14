@@ -29,32 +29,42 @@ export default function GestaoView() {
 
   async function handleOnboarding() {
     if (!novoAtivo.trim()) return;
+    
+    const ticker = novoAtivo.trim().toUpperCase();
+    
+    // 1. ABRIR DRAWER IMEDIATAMENTE (não aguardar resposta HTTP)
+    setDrawerOnboarding(ticker);
+    
+    // 2. Chamar endpoint (não bloquear UI)
     setCarregando(true);
     setOnboardingMsg("");
     try {
-      const res = await fetch(`${API_BASE}/delta-chaos/onboarding`, {
+      const res = await fetch(`${API_BASE}/delta-chaos/onboarding/iniciar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ticker: novoAtivo.trim().toUpperCase(),
+          ticker: ticker,
           confirm: true,
-          description: `Onboarding ${novoAtivo.trim().toUpperCase()}`
+          description: `Onboarding ${ticker}`
         })
       });
-      const data = await res.json();
-      setOnboardingMsg(
-        res.ok
-          ? `✓ ${novoAtivo.toUpperCase()} — onboarding iniciado`
-          : `✗ ${data.detail || "Erro desconhecido"}`
-      );
-      if (res.ok) {
-        setDrawerOnboarding(novoAtivo.trim().toUpperCase());
+      
+      if (!res.ok) {
+        // Se erro HTTP, fechar drawer e mostrar mensagem
+        setDrawerOnboarding(null);
+        const data = await res.json();
+        setOnboardingMsg(`✗ ${data.detail || "Erro desconhecido"}`);
+      } else {
+        // Sucesso - manter drawer aberto
+        setOnboardingMsg(`✓ ${ticker} — onboarding iniciado`);
         setTimeout(() => {
           setNovoAtivo("");
           fetchAtivos();
         }, 2000);
       }
     } catch (e) {
+      // Se erro de rede, fechar drawer
+      setDrawerOnboarding(null);
       setOnboardingMsg(`✗ Erro: ${e.message}`);
     } finally {
       setCarregando(false);

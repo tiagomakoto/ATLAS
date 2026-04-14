@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { useSystemStore } from "../../store/systemStore";
+import useWebSocket from "../../hooks/useWebSocket";
 
 export default function OnboardingDrawer({ ticker, onClose }) {
   const [onboarding, setOnboarding] = useState(null);
   const [watchdogAlert, setWatchdogAlert] = useState(null);
-  const tuneProgress = useSystemStore(s => s.tuneProgress);
+  const [trialAtual, setTrialAtual] = useState(0);
+  const [trialTotal, setTrialTotal] = useState(0);
+  const [bestIr, setBestIr] = useState(0);
+  const [ultimoEventoEm, setUltimoEventoEm] = useState(0);
+  const [step2IniciadoEm, setStep2IniciadoEm] = useState(0);
+  const [steps, setSteps] = useState({
+    "1_backtest_dados": { status: "idle", iniciado_em: null, concluido_em: null },
+    "2_tune": { status: "idle", iniciado_em: null, concluido_em: null },
+    "3_backtest_gate": { status: "idle", iniciado_em: null, concluido_em: null }
+  });
   
   // Carregar estado inicial do onboarding
   useEffect(() => {
@@ -14,54 +23,136 @@ export default function OnboardingDrawer({ ticker, onClose }) {
         if (res.ok) {
           const data = await res.json();
           setOnboarding(data);
+          // Inicializar steps com base no estado carregado
+          if (data?.steps) {
+            setSteps({
+              "1_backtest_dados": { 
+                status: data.steps["1_backtest_dados"]?.status || "idle", 
+                iniciado_em: data.steps["1_backtest_dados"]?.iniciado_em || null, 
+                concluido_em: data.steps["1_backtest_dados"]?.concluido_em || null 
+              },
+              "2_tune": { 
+                status: data.steps["2_tune"]?.status || "idle", 
+                iniciado_em: data.steps["2_tune"]?.iniciado_em || null, 
+                concluido_em: data.steps["2_tune"]?.concluido_em || null 
+              },
+              "3_backtest_gate": { 
+                status: data.steps["3_backtest_gate"]?.status || "idle", 
+                iniciado_em: data.steps["3_backtest_gate"]?.iniciado_em || null, 
+                concluido_em: data.steps["3_backtest_gate"]?.concluido_em || null 
+              }
+            });
+          }
+          // Inicializar métricas de TUNE se disponíveis
+          if (data.steps?.["2_tune"]?.trials_completos) {
+            setTrialAtual(data.steps["2_tune"].trials_completos);
+          }
+          if (data.steps?.["2_tune"]?.trials_total) {
+            setTrialTotal(data.steps["2_tune"].trials_total);
+          }
+          if (data.steps?.["2_tune"]?.best_ir) {
+            setBestIr(data.steps["2_tune"].best_ir);
+          }
+          if (data.ultimo_evento_em) {
+            setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
+          }
+          if (data.steps?.["2_tune"]?.iniciado_em) {
+            setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar onboarding:", error);
       }
     };
-    
-    fetchOnboarding();
-    
-    // Atualizar periodicamente
-    const interval = setInterval(fetchOnboarding, 5000);
-    return () => clearInterval(interval);
-  }, [ticker]);
-  
-  // Monitorar progresso do TUNE
-  useEffect(() => {
-    if (tuneProgress && tuneProgress.ticker === ticker) {
-      setOnboarding(prev => {
-        if (!prev) return prev;
-        const newOnboarding = { ...prev };
-        newOnboarding.steps["2_tune"].trials_completos = tuneProgress.trialNumber;
-        newOnboarding.steps["2_tune"].best_ir = tuneProgress.bestIr;
-        return newOnboarding;
-      });
+
+    if (ticker) {
+      fetchOnboarding();
     }
-  }, [tuneProgress, ticker]);
+  }, [ticker]);
   
   // Watchdog: alerta se sem sinal por 5 minutos
   useEffect(() => {
-    if (!onboarding) return;
+    if (!ultimoEventoEm || !step2IniciadoEm) return;
     
-    const step2 = onboarding.steps["2_tune"];
-    if (step2.status === "running" && onboarding.ultimo_evento_em) {
-      const lastEvent = new Date(onboarding.ultimo_evento_em);
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const minutesSinceLastEvent = Math.floor((now - ultimoEventoEm) / 60000);
       
-      if (lastEvent < fiveMinutesAgo && !watchdogAlert) {
-        setWatchdogAlert("Processo sem sinal há 5 minutos — verifique o terminal");
-      } else if (lastEvent >= fiveMinutesAgo && watchdogAlert) {
+      if (steps["2_tune"].status === "running" && minutesSinceLastEvent >= 5 && !watchdogAlert) {
+        setWatchdogAlert(`⚠ Sem sinal há ${minutesSinceLastEvent}min — processo pode ter sido interrompido`);
+      } else if (steps["2_tune"].status === "running" && minutesSinceLastEvent < 5 && watchdogAlert) {
         setWatchdogAlert(null);
       }
+    }, 60000); // Verifica a cada minuto
+    
+    return () => clearInterval(interval);
+  }, [ultimoEventoEm, step2IniciadoEm, steps["2_tune"].status, watchdogAlert]);
+
+  // Conexão WebSocket para eventos em tempo real
+  const wsUrl = `ws://${window.location.hostname}:${window.location.port || '8000'}/ws/events`;
+  useWebSocket(wsUrl, (evento) => {
+    handleEvento(evento);
+  });
+
+  const handleEvento = (evento) => {
+    console.log("[ONBOARDING] Evento recebido:", evento.type, evento.data);
+    
+    const stepMap = {
+      "ORBIT": "1_backtest_dados",
+      "TUNE": "2_tune",
+      "GATE": "3_backtest_gate"
+    };
+    
+    if (evento.type === "dc_module_start") {
+      const modulo = evento.data?.modulo;
+      const stepKey = stepMap[modulo];
+      if (stepKey) {
+        setSteps(prev => ({
+          ...prev,
+          [stepKey]: {
+            ...prev[stepKey],
+            status: "running",
+            iniciado_em: evento.data?.timestamp || new Date().toISOString()
+          }
+        }));
+        if (stepKey === "2_tune") {
+          setStep2IniciadoEm(new Date().getTime());
+        }
+      }
     }
-  }, [onboarding, watchdogAlert]);
-  
-  const getStepStatus = (stepKey) => {
-    if (!onboarding) return "idle";
-    return onboarding.steps[stepKey]?.status || "idle";
+
+    if (evento.type === "dc_module_complete") {
+      const modulo = evento.data?.modulo;
+      const status = evento.data?.status;
+      const stepKey = stepMap[modulo];
+      if (stepKey) {
+        setSteps(prev => ({
+          ...prev,
+          [stepKey]: {
+            ...prev[stepKey],
+            status: status === "ok" ? "done" : "error",
+            concluido_em: evento.data?.timestamp || new Date().toISOString()
+          }
+        }));
+      }
+    }
+
+    if (evento.type === "terminal_log") {
+      const msg = evento.data.message;
+      const match = msg.match(/TUNE \[\w+\] trial (\d+)\/(\d+) best_ir=([+-]?\d+\.\d+)/);
+      if (match) {
+        setTrialAtual(parseInt(match[1]));
+        setTrialTotal(parseInt(match[2]));
+        setBestIr(parseFloat(match[3]));
+        setUltimoEventoEm(Date.now());
+      }
+    }
   };
-  
+
+  const getStepStatus = (stepKey) => {
+    return steps[stepKey]?.status || "idle";
+  };
+
   const getStepLabel = (stepKey) => {
     const status = getStepStatus(stepKey);
     const labels = {
@@ -73,7 +164,7 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     };
     return labels[status] || "PENDENTE";
   };
-  
+
   const getStepIcon = (stepKey) => {
     const status = getStepStatus(stepKey);
     const icons = {
@@ -85,7 +176,7 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     };
     return icons[status] || "○";
   };
-  
+
   const getStepColor = (stepKey) => {
     const status = getStepStatus(stepKey);
     const colors = {
@@ -97,7 +188,7 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     };
     return colors[status] || "var(--atlas-text-secondary)";
   };
-  
+
   const getStepColorBg = (stepKey) => {
     const status = getStepStatus(stepKey);
     const colors = {
@@ -109,7 +200,7 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     };
     return colors[status] || "rgba(156,163,175,0.1)";
   };
-  
+
   const getStepDescription = (stepKey) => {
     const status = getStepStatus(stepKey);
     const descriptions = {
@@ -121,38 +212,45 @@ export default function OnboardingDrawer({ ticker, onClose }) {
     };
     return descriptions[status] || "Aguardando início";
   };
-  
+
   const getStepTime = (stepKey) => {
     const status = getStepStatus(stepKey);
-    if (status === "done" && onboarding?.steps[stepKey]?.concluido_em) {
-      return new Date(onboarding.steps[stepKey].concluido_em).toLocaleString("pt-BR");
+    if (status === "done" && steps[stepKey]?.concluido_em) {
+      return new Date(steps[stepKey].concluido_em).toLocaleString("pt-BR");
     }
     return "";
   };
-  
+
   const handleRetomar = async () => {
     try {
       const res = await fetch(`/delta-chaos/onboarding/${ticker}/retomar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
-      if (res.ok) {
-        const data = await res.json();
-        // Atualizar estado
-        setOnboarding(prev => {
-          if (!prev) return prev;
-          const newOnboarding = { ...prev };
-          newOnboarding.steps["2_tune"].status = "running";
-          newOnboarding.steps["2_tune"].iniciado_em = new Date().toISOString();
-          newOnboarding.ultimo_evento_em = new Date().toISOString();
-          return newOnboarding;
-        });
+      if (!res.ok) {
+        // Apenas em caso de erro, atualizar estado
+        setSteps(prev => ({
+          ...prev,
+          "2_tune": {
+            ...prev["2_tune"],
+            status: "error"
+          }
+        }));
+        console.error("Erro ao retomar onboarding:", res.statusText);
       }
+      // Em caso de sucesso, NÃO atualizar - aguardar evento WebSocket
     } catch (error) {
       console.error("Erro ao retomar:", error);
+      setSteps(prev => ({
+        ...prev,
+        "2_tune": {
+          ...prev["2_tune"],
+          status: "error"
+        }
+      }));
     }
   };
-  
+
   const handleIniciar = async () => {
     try {
       const res = await fetch("/delta-chaos/onboarding/iniciar", {
@@ -160,70 +258,93 @@ export default function OnboardingDrawer({ ticker, onClose }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker, confirm: true, description: "Iniciar onboarding" })
       });
-      if (res.ok) {
-        const data = await res.json();
-        // Atualizar estado
-        setOnboarding(prev => {
-          if (!prev) return prev;
-          const newOnboarding = { ...prev };
-          newOnboarding.step_atual = 1;
-          newOnboarding.steps["1_backtest_dados"].status = "running";
-          newOnboarding.steps["1_backtest_dados"].iniciado_em = new Date().toISOString();
-          newOnboarding.ultimo_evento_em = new Date().toISOString();
-          return newOnboarding;
-        });
+      if (!res.ok) {
+        // Apenas em caso de erro, atualizar estado
+        setSteps(prev => ({
+          ...prev,
+          "1_backtest_dados": {
+            ...prev["1_backtest_dados"],
+            status: "error"
+          }
+        }));
+        console.error("Erro ao iniciar onboarding:", res.statusText);
       }
+      // Em caso de sucesso, NÃO atualizar - aguardar evento WebSocket
     } catch (error) {
       console.error("Erro ao iniciar:", error);
+      setSteps(prev => ({
+        ...prev,
+        "1_backtest_dados": {
+          ...prev["1_backtest_dados"],
+          status: "error"
+        }
+      }));
     }
   };
-  
-const calculateElapsedTime = (iniciado_em) => {
-  if (!iniciado_em) return "0s";
-  const start = new Date(iniciado_em);
-  const now = new Date();
-  const diff = now - start;
-  const seconds = Math.floor(diff / 1000) % 60;
-  const minutes = Math.floor(diff / (1000 * 60)) % 60;
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-};
 
-const calculateAverageTime = (iniciado_em, trials_completos) => {
-  if (!iniciado_em || trials_completos <= 0) return "0s";
-  const start = new Date(iniciado_em);
-  const now = new Date();
-  const diff = now - start;
-  const avgMs = diff / trials_completos;
-  const seconds = Math.floor(avgMs / 1000);
-  
-  return `${seconds}s`;
-};
+  const calculateElapsedTime = (iniciado_em) => {
+    if (!iniciado_em) return "0s";
+    const start = new Date(iniciado_em);
+    const now = new Date();
+    const diff = now - start;
+    const seconds = Math.floor(diff / 1000) % 60;
+    const minutes = Math.floor(diff / (1000 * 60)) % 60;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
 
-const calculateEstimatedTime = (iniciado_em, trials_completos, trials_total) => {
-  if (!iniciado_em || trials_completos <= 0) return "0s";
-  const start = new Date(iniciado_em);
-  const now = new Date();
-  const diff = now - start;
-  const avgMs = diff / trials_completos;
-  const remainingTrials = trials_total - trials_completos;
-  const remainingMs = remainingTrials * avgMs;
-  
-  const seconds = Math.floor(remainingMs / 1000) % 60;
-  const minutes = Math.floor(remainingMs / (1000 * 60)) % 60;
-  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
-  
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-};
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  };
 
-if (!onboarding) return null;
+  const calculateAverageTime = (iniciado_em, trials_completos) => {
+    if (!iniciado_em || trials_completos <= 0) return "0s";
+    const start = new Date(iniciado_em);
+    const now = new Date();
+    const diff = now - start;
+    const avgMs = diff / trials_completos;
+    const seconds = Math.floor(avgMs / 1000);
 
-return (
+    return `${seconds}s`;
+  };
+
+  const calculateEstimatedTime = (iniciado_em, trials_completos, trials_total) => {
+    if (!iniciado_em || trials_completos <= 0) return "0s";
+    const start = new Date(iniciado_em);
+    const now = new Date();
+    const diff = now - start;
+    const avgMs = diff / trials_completos;
+    const remainingTrials = trials_total - trials_completos;
+    const remainingMs = remainingTrials * avgMs;
+
+    const seconds = Math.floor(remainingMs / 1000) % 60;
+    const minutes = Math.floor(remainingMs / (1000 * 60)) % 60;
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  };
+
+  // TAREFA 5: Implementar botões de conclusão
+  const handleConfirmarOperar = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/ativos/" + ticker + "/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OPERAR" })
+      });
+      if (res.ok) {
+        onClose();
+      }
+    } catch (error) {
+      console.error("Erro ao confirmar OPERAR:", error);
+    }
+  };
+
+  // Não bloquear renderização — WebSocket precisa montar independente do fetch
+  // if (!onboarding) return null;
+
+  return (
     <div style={{
       position: "fixed",
       top: 0,
@@ -290,7 +411,7 @@ return (
             fontSize: 11,
             color: "var(--atlas-text-secondary)"
           }}>
-            Step {onboarding.step_atual}
+            Step {getStepStatus("1_backtest_dados") === "done" ? 1 : getStepStatus("1_backtest_dados") === "running" ? 1 : getStepStatus("2_tune") === "running" ? 2 : getStepStatus("3_backtest_gate") === "running" ? 3 : 1}
           </span>
           <span style={{
             margin: "0 8px",
@@ -317,7 +438,7 @@ return (
             fontSize: 11,
             color: "var(--atlas-text-secondary)"
           }}>
-            Step {onboarding.step_atual + 1}
+            Step {getStepStatus("1_backtest_dados") === "done" ? 2 : getStepStatus("2_tune") === "running" ? 2 : getStepStatus("3_backtest_gate") === "running" ? 3 : 1}
           </span>
           <span style={{
             margin: "0 8px",
@@ -344,7 +465,7 @@ return (
             fontSize: 11,
             color: "var(--atlas-text-secondary)"
           }}>
-            Step {onboarding.step_atual + 2}
+            Step {getStepStatus("2_tune") === "done" ? 3 : getStepStatus("3_backtest_gate") === "running" ? 3 : 2}
           </span>
           <span style={{
             margin: "0 8px",
@@ -464,14 +585,14 @@ return (
                     fontSize: 9,
                     color: "var(--atlas-text-secondary)"
                   }}>
-                    {onboarding.steps["2_tune"].trials_completos || 0} / {onboarding.steps["2_tune"].trials_total} trials
+                    {trialAtual} / {trialTotal} trials
                   </span>
                   <span style={{
                     fontFamily: "monospace",
                     fontSize: 9,
                     color: "var(--atlas-text-secondary)"
                   }}>
-                    IR: {onboarding.steps["2_tune"].best_ir?.toFixed(4) || "0.0000"}
+                    IR: {bestIr.toFixed(4) || "0.0000"}
                   </span>
                 </div>
                 <div style={{
@@ -484,7 +605,7 @@ return (
                   <div style={{
                     height: "100%",
                     background: "var(--atlas-blue)",
-                    width: `${(onboarding.steps["2_tune"].trials_completos || 0) / onboarding.steps["2_tune"].trials_total * 100}%`
+                    width: `${trialAtual / trialTotal * 100}%`
                   }} />
                 </div>
                 
@@ -498,10 +619,10 @@ return (
                   color: "var(--atlas-text-secondary)"
                 }}>
                   <span>
-                    Tempo decorrido: {calculateElapsedTime(onboarding.steps["2_tune"].iniciado_em)}
+                    Tempo decorrido: {calculateElapsedTime(step2IniciadoEm)}
                   </span>
                   <span>
-                    Estimativa restante: {calculateEstimatedTime(onboarding.steps["2_tune"].iniciado_em, onboarding.steps["2_tune"].trials_completos, onboarding.steps["2_tune"].trials_total)}
+                    Estimativa restante: {calculateEstimatedTime(step2IniciadoEm, trialAtual, trialTotal)}
                   </span>
                 </div>
                 
@@ -514,7 +635,7 @@ return (
                   color: "var(--atlas-text-secondary)"
                 }}>
                   <span>
-                    Tempo médio/trial: {calculateAverageTime(onboarding.steps["2_tune"].iniciado_em, onboarding.steps["2_tune"].trials_completos)}
+                    Tempo médio/trial: {calculateAverageTime(step2IniciadoEm, trialAtual)}
                   </span>
                 </div>
               </div>
@@ -608,11 +729,7 @@ return (
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={() => {
-                // Implementar confirmação de entrada em OPERAR
-                alert("Confirmação de entrada em OPERAR implementada");
-                onClose();
-              }}
+              onClick={handleConfirmarOperar}
               style={{
                 flex: 1,
                 padding: "6px 12px",
@@ -628,11 +745,7 @@ return (
               Confirmar entrada
             </button>
             <button
-              onClick={() => {
-                // Implementar manter em MONITORAR
-                alert("Manter em MONITORAR implementado");
-                onClose();
-              }}
+              onClick={onClose}
               style={{
                 flex: 1,
                 padding: "6px 12px",

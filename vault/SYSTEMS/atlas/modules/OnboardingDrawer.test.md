@@ -1,11 +1,11 @@
 ---
-uid: mod-atlas-017
-version: 1.0.1
+uid: mod-atlas-021
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_ui/src/components/GestaoView.jsx
+file: atlas_ui/src/components/GestaoView/__tests__/OnboardingDrawer.test.jsx
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,6 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-14: código modificado — GestaoView.jsx
-  - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView.jsx
+  - 2026-04-14 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/__tests__/OnboardingDrawer.test.jsx
   - <edge cases ou riscos>

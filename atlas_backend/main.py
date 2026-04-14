@@ -14,7 +14,7 @@ import asyncio
 
 from atlas_backend.api.routes import config, modules, mode, ativos, cycle, config_diff, delta_chaos
 from atlas_backend.api.websocket.stream import manager
-from atlas_backend.core.event_bus import event_dispatcher
+from atlas_backend.core.event_bus import event_dispatcher, set_main_loop
 from atlas_backend.core.runtime_mode import get_mode
 
 # ── Variáveis globais ─────────────────────────────────────────────
@@ -23,6 +23,7 @@ _started_at = datetime.utcnow()
 # ── lifespan ──────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    set_main_loop(asyncio.get_running_loop())
     asyncio.create_task(event_dispatcher())
     yield
 

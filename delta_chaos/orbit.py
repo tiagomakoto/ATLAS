@@ -683,7 +683,7 @@ class ORBIT:
             "ciclo_id":   str(ciclo_id),
             "ativo":      ativo,
             "data_ref":   str(df_at.index[-1].date()),
-            "regime_estrategia": regime,
+            "regime": regime,
             "ir":         round(float(ir),        4),
             "ir_treino":  round(float(ir_treino),  4),
             "sizing":     sizing,

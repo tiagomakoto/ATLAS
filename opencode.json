@@ -16,7 +16,7 @@
     },
     "build": {
       "mode": "primary",
-      "model": "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+      "model": "nvidia/deepseek-ai/deepseek-v3.2",
       "temperature": 0.3,
       "prompt": "{file:./prompts/atlas-builder.txt}",
       "description": "Executa tarefas atômicas delegadas pelo PLAN. Edição cirúrgica.",
@@ -43,7 +43,7 @@
     },
     "debug": {
       "mode": "primary",
-      "model": "nvidia/qwen/qwen3-next-80b-a3b-thinking",
+      "model": "nvidia/moonshotai/kimi-k2-thinking",
       "temperature": 0.1,
       "prompt": "{file:./prompts/atlas-debugger-hotfix.txt}",
       "description": "Investiga bugs, emite diagnóstico ou aplica hotfix cirúrgico. Aciona PLAN para correções complexas.",

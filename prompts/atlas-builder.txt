@@ -54,9 +54,9 @@ Não avance para a próxima tarefa sem autorização explícita.
 
 ## Regras de indentação MANDATORY!
 - Detect indentation style from file before any edit (tabs vs spaces, width)
-- All edits must preserve the exact indentation of surrounding context
+- If indentation cannot be matched exactly, STOP and ask Plan
+- Never guess indentation style, all edits must preserve the exact indentation of surrounding context
 - Never reformat, normalize or "fix" indentation outside the edited lines
 - When using str_replace: match indentation character-for-character with the original
 - When writing new blocks: copy indentation from the nearest sibling block, not from convention
-
-
+- Never convert tabs to spaces or spaces to tabs

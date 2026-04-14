@@ -7,6 +7,14 @@ import os
 
 event_queue: Queue = Queue()
 
+# Referência ao loop principal do uvicorn — setada no lifespan
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Chamado no lifespan do FastAPI para guardar o loop principal."""
+    global _main_loop
+    _main_loop = loop
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TIPOS DE EVENTOS DO DELTA CHAOS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,12 +101,18 @@ async def publish_event(event: dict):
     await event_queue.put(event)
 
 def emit_event(event: dict):
-    """Compatível com contexto síncrono e assíncrono."""
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(publish_event(event))
-    except RuntimeError:
-        asyncio.run(publish_event(event))
+    """Thread-safe: usa call_soon_threadsafe no loop principal do uvicorn."""
+    if _main_loop is not None and _main_loop.is_running():
+        _main_loop.call_soon_threadsafe(
+            _main_loop.create_task, publish_event(event)
+        )
+    else:
+        # Fallback: loop ainda não inicializado (startup)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(publish_event(event))
+        except RuntimeError:
+            pass  # descarta silenciosamente — não cria loop isolado
 
 async def health_monitor():
     """
