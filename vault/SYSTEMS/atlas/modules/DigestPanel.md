@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-012
-version: 1.0
+version: 1.0.1
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,5 +30,6 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-14: código modificado — DigestPanel.jsx
   - 2026-04-12 — módulo criado automaticamente a partir de atlas_ui/src/components/DigestPanel.jsx
   - <edge cases ou riscos>

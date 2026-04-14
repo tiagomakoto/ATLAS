@@ -154,7 +154,7 @@ async def _stream_subprocess(
         # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
-        env["PYTHONUNBUFFERED"] = "1"  # garante flush imediato de cada print
+        env["PYTHONUNBUFFERED"] = "1" # garante flush imediato de cada print
 
         # Gerar run_id único e passar para subprocesso
         run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -164,7 +164,7 @@ async def _stream_subprocess(
         # Iniciar watcher de eventos em thread separada
         stop_event = threading.Event()
         seen_events = set()
-        last_pos_ref = [0]  # lista para mutabilidade dentro do closure
+        last_pos_ref = [0] # lista para mutabilidade dentro do closure
 
         def _watch_events_inner(event_log_path, action_payload, stop_event):
             while not stop_event.is_set():
@@ -196,7 +196,7 @@ async def _stream_subprocess(
                                     emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
                 except Exception:
                     pass
-                time.sleep(0.5)
+                time.sleep(0.2)
 
         watch_thread = threading.Thread(
             target=_watch_events_inner,
@@ -204,6 +204,63 @@ async def _stream_subprocess(
             daemon=True
         )
         watch_thread.start()
+
+        # ── Polling SQLite para progresso do TUNE ──────────────────────
+        # Ativo apenas quando modulo=="TUNE". Le tune_{TICKER}.db em modo
+        # read-only a cada 200ms e emite dc_tune_progress via WebSocket.
+        # O subprocess nao sabe desta thread — separacao limpa.
+        sqlite_stop = threading.Event()
+        if modulo == "TUNE":
+            ticker_payload = action_payload.get("ticker", "")
+            db_path = TMP_DIR / f"tune_{ticker_payload}.db"
+
+            def _poll_sqlite(db_path, stop_event, action_payload):
+                import sqlite3
+                last_count = -1
+                TOTAL = 200
+                while not stop_event.is_set():
+                    try:
+                        if db_path.exists():
+                            conn = sqlite3.connect(
+                                f"file:{db_path}?mode=ro", uri=True,
+                                timeout=1
+                            )
+                            try:
+                                cur = conn.cursor()
+                                cur.execute(
+                                    "SELECT COUNT(*) FROM trial "
+                                    "WHERE state = 'COMPLETE'"
+                                )
+                                count = cur.fetchone()[0]
+                                cur.execute(
+                                    "SELECT MAX(value) FROM trial "
+                                    "WHERE state = 'COMPLETE'"
+                                )
+                                best = cur.fetchone()[0] or 0.0
+                            finally:
+                                conn.close()
+
+                            if count != last_count:
+                                last_count = count
+                                emit_dc_event(
+                                    "dc_tune_progress", "TUNE", "running",
+                                    trial=count,
+                                    total=TOTAL,
+                                    ir=round(float(best), 4),
+                                    **action_payload
+                                )
+                    except Exception:
+                        pass
+                    time.sleep(0.2)
+
+            sqlite_thread = threading.Thread(
+                target=_poll_sqlite,
+                args=(db_path, sqlite_stop, action_payload),
+                daemon=True
+            )
+            sqlite_thread.start()
+        else:
+            sqlite_thread = None
 
         proc = subprocess.Popen(
             [sys.executable, "-u"] + args,
@@ -216,25 +273,28 @@ async def _stream_subprocess(
             env=env
         )
 
-        for line in proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            full_output.append(line)
+    for raw_line in proc.stdout:
+        line = raw_line.strip()
+        if not line:
+            continue
+        full_output.append(line)
 
-            lvl = "info"
-            if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
-                lvl = "error"
-            elif line.startswith("⚠") or line.startswith("~"):
-                lvl = "warning"
+        lvl = "info"
+        if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
+            lvl = "error"
+        elif line.startswith("⚠") or line.startswith("~"):
+            lvl = "warning"
 
-            main_loop.call_soon_threadsafe(emit_log, line, lvl)
+        main_loop.call_soon_threadsafe(emit_log, line, lvl)
 
         proc.wait()
 
-        # Parar watcher e fazer flush final antes de encerrar
+        # Parar watcher e sqlite poller antes de encerrar
         stop_event.set()
+        sqlite_stop.set()
         watch_thread.join(timeout=2)
+        if sqlite_thread:
+            sqlite_thread.join(timeout=2)
         _flush_events(event_log_path, action_payload, last_pos_ref[0], seen_events)
 
         # Cleanup do arquivo de eventos (exceto se DEBUG)
@@ -259,10 +319,10 @@ async def _stream_subprocess(
 
         status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
 
-        # ── Emitir evento de conclusão do módulo principal ──
-        if modulo:
-            dc_status = "ok" if status == "OK" else "error"
-            emit_dc_event("dc_module_complete", modulo, dc_status, **action_payload)
+        # ── dc_module_complete NÃO é emitido aqui ──
+        # _watch_events_inner e _flush_events já emitem dc_module_complete
+        # ao ler o JSONL produzido pelo edge.py.
+        # Emitir aqui causaria dupla emissão — bug removido.
 
         if tem_erro and returncode == 0:
             emit_log("[DAILY] ⚠ Processo completou mas com warnings", level="warning")
@@ -370,7 +430,7 @@ def _atualizar_ativo_store(ticker: str) -> None:
         from atlas_backend.core.delta_chaos_reader import get_ativo
         dados_atualizados = get_ativo(ticker)
         emit_dc_event("daily_ativo_updated", "DAILY", "ok",
-        ticker=ticker, dados=dados_atualizados)
+                      ticker=ticker, dados=dados_atualizados)
         emit_log(f"[DAILY] {ticker}: ativo atualizado no store", level="debug")
     except Exception as e:
         emit_log(f"[DAILY] {ticker}: erro ao reler arquivo JSON — {e}", level="warning")
@@ -476,15 +536,15 @@ async def dc_daily(tickers: list) -> dict:
         emit_log(f"[DAILY] Processando {ticker}...", level="info")
         ticker_digest = {"ticker": ticker, "xlsx": None, "bloco_mensal": None}
 
-        # ═══ NOVO: Verificar se ativo tem historico_config (onboarding feito) ═══
+        # ═══ NOVO: Verificar se ativo tem historico_config (calibração feita) ═══
         from atlas_backend.core.delta_chaos_reader import get_ativo
         dados = get_ativo(ticker)
         gate_ok = dados.get("historico_config", False) # ← BOOLEANO: true se tem registros
         if not gate_ok:
-            emit_log(f"[DAILY] {ticker}: onboarding incompleto — aguardando GATE", level="warning")
+            emit_log(f"[DAILY] {ticker}: calibração incompleta — aguardando GATE", level="warning")
             # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══
             emit_dc_event("dc_module_complete", "GATE", "error",
-            ticker=ticker, descricao="onboarding incompleto — aguardando GATE")
+                          ticker=ticker, descricao="calibração incompleta — aguardando GATE")
             # ═══ NOVO: Adicionar à lista de eventos críticos para fallback na API ═══
             _eventos_criticos.append({
                 "type": "dc_module_complete",
@@ -492,17 +552,17 @@ async def dc_daily(tickers: list) -> dict:
                     "modulo": "GATE",
                     "status": "error",
                     "ticker": ticker,
-                    "descricao": "onboarding incompleto — aguardando GATE"
+                    "descricao": "calibração incompleta — aguardando GATE"
                 }
             })
             # ═══ FIM NOVO ═══
             # ═══ Item 4: Adicionar gate_eod no digest para ativos bloqueados ═══
-            ticker_digest["gate_eod"] = "BLOQUEADO — onboarding não realizado"
-            ticker_digest["motivo"] = "onboarding incompleto — aguardando GATE"
+            ticker_digest["gate_eod"] = "BLOQUEADO — calibração não realizada"
+            ticker_digest["motivo"] = "calibração incompleta — aguardando GATE"
             digest[ticker] = ticker_digest
             _atualizar_ativo_store(ticker)
             emit_dc_event("daily_ativo_complete", "DAILY", "ok",
-            ticker=ticker, digest=ticker_digest)
+                          ticker=ticker, digest=ticker_digest)
             continue
         # ═══ FIM NOVO ═══
 
@@ -573,22 +633,22 @@ async def dc_daily(tickers: list) -> dict:
             if "BLOQUEADO" in gate_output:
                 ticker_digest["gate_eod"] = "BLOQUEADO"
                 emit_dc_event("dc_module_complete", "GATE", "error",
-                ticker=ticker, descricao="GATE EOD = BLOQUEADO")
+                              ticker=ticker, descricao="GATE EOD = BLOQUEADO")
                 emit_log(f"[DAILY] {ticker}: BLOQUEADO — aguardando atualização de ciclo", level="info")
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
                 emit_dc_event("dc_module_complete", "GATE", "ok",
-                ticker=ticker, descricao="GATE EOD = OPERAR")
+                              ticker=ticker, descricao="GATE EOD = OPERAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
             elif "MONITORAR" in gate_output:
                 ticker_digest["gate_eod"] = "MONITORAR"
                 emit_dc_event("dc_module_complete", "GATE", "ok",
-                ticker=ticker, descricao="GATE EOD = MONITORAR")
+                              ticker=ticker, descricao="GATE EOD = MONITORAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
             else:
                 ticker_digest["gate_eod"] = gate_output.strip()
                 emit_dc_event("dc_module_complete", "GATE", "error",
-                ticker=ticker, descricao=f"GATE EOD = {gate_output.strip()}")
+                              ticker=ticker, descricao=f"GATE EOD = {gate_output.strip()}")
         except Exception as e:
             ticker_digest["gate_eod"] = f"erro: {str(e)}"
             emit_log(f"[DAILY] {ticker}: gate_eod erro — {e}", level="error")
@@ -603,15 +663,15 @@ async def dc_daily(tickers: list) -> dict:
             try:
                 await dc_reflect_daily(ticker, xlsx_path)
                 emit_dc_event("dc_module_complete", "XLSX", "ok",
-                ticker=ticker, descricao="XLSX EOD encontrado")
+                              ticker=ticker, descricao="XLSX EOD encontrado")
             except Exception as e:
                 emit_log(f"[DAILY] {ticker}: reflect_daily erro — {e}", level="error")
                 emit_dc_event("dc_module_complete", "XLSX", "erro",
-                ticker=ticker, descricao=f"reflect_daily erro: {e}")
+                              ticker=ticker, descricao=f"reflect_daily erro: {e}")
         else:
             emit_log(f"[DAILY] {ticker}: xlsx não encontrado", level="warning")
             emit_dc_event("dc_module_complete", "XLSX", "erro",
-            ticker=ticker, descricao="XLSX EOD não encontrado")
+                          ticker=ticker, descricao="XLSX EOD não encontrado")
 
         # Preencher campo xlsx no digest
         ticker_digest["xlsx"] = "ok" if xlsx_path else "não encontrado"
@@ -632,31 +692,31 @@ async def dc_daily(tickers: list) -> dict:
                         "pnl": resultado.get("pnl", 0)
                     }
                     emit_dc_event("dc_module_complete", "TP_STOP", "erro",
-                    ticker=ticker, descricao=f"TP/STOP atingido: {resultado.get('motivo', '')}")
+                                  ticker=ticker, descricao=f"TP/STOP atingido: {resultado.get('motivo', '')}")
                     emit_log(f"[DAILY] {ticker}: {resultado['motivo']}", level="info")
                     digest[ticker] = ticker_digest
                     _atualizar_ativo_store(ticker)
                     emit_dc_event("daily_ativo_complete", "DAILY", "ok",
-                    ticker=ticker, digest=ticker_digest)
+                                  ticker=ticker, digest=ticker_digest)
                     continue
                 else:
                     ticker_digest["posicao"]["pnl"] = resultado.get("pnl", 0)
                     ticker_digest["posicao"]["tp_stop_status"] = "ok"
                     ticker_digest["posicao"]["xlsx_lido"] = True
                     emit_dc_event("dc_module_complete", "TP_STOP", "ok",
-                    ticker=ticker, descricao="Posição OK - mantendo")
+                                  ticker=ticker, descricao="Posição OK - mantendo")
             else:
                 ticker_digest["posicao"]["tp_stop_status"] = "sem_xlsx"
                 ticker_digest["posicao"]["xlsx_lido"] = False
                 emit_dc_event("dc_module_complete", "TP_STOP", "erro",
-                ticker=ticker, descricao="XLSX não disponível - não foi possível verificar TP/STOP")
+                              ticker=ticker, descricao="XLSX não disponível - não foi possível verificar TP/STOP")
                 emit_log(f"[DAILY] {ticker}: posição aberta mas XLSX não disponível para verificação", level="warning")
                 emit_log(f"[DAILY] {ticker}: posição aberta — mantendo", level="info")
-            digest[ticker] = ticker_digest
-            _atualizar_ativo_store(ticker)
-            emit_dc_event("daily_ativo_complete", "DAILY", "ok",
-            ticker=ticker, digest=ticker_digest)
-            continue
+                digest[ticker] = ticker_digest
+                _atualizar_ativo_store(ticker)
+                emit_dc_event("daily_ativo_complete", "DAILY", "ok",
+                              ticker=ticker, digest=ticker_digest)
+                continue
 
         ticker_digest["posicao"] = {"aberta": False, "acao": "sem_posicao"}
 
@@ -669,7 +729,7 @@ async def dc_daily(tickers: list) -> dict:
         digest[ticker] = ticker_digest
         _atualizar_ativo_store(ticker)
         emit_dc_event("daily_ativo_complete", "DAILY", "ok",
-        ticker=ticker, digest=ticker_digest)
+                      ticker=ticker, digest=ticker_digest)
 
     emit_log(f"[DAILY] ✅ Ciclo de manutenção concluído — {len(tickers)} ativos processados", level="info")
 
@@ -712,13 +772,19 @@ async def dc_orbit_backtest(ticker: str, anos: Optional[list] = None) -> dict:
 
 async def dc_tune(ticker: str) -> dict:
     script = _get_dc_script()
-    return await _stream_subprocess(
+    result = await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "tune", "--ticker", ticker],
         cwd=script.parent,
         action_name="dc_tune",
         action_payload={"ticker": ticker},
-        modulo="TUNE"  # emite dc_module_start/complete para o drawer
+        modulo="TUNE" # emite dc_module_start para o drawer
     )
+    
+    # Emitir dc_module_complete explicitamente (TUNE não escreve no JSONL)
+    status = "ok" if result.get("status") == "OK" else "error"
+    emit_dc_event("dc_module_complete", "TUNE", status, ticker=ticker)
+    
+    return result
 
 async def dc_gate_backtest(ticker: str) -> dict:
     """Executa GATE via backtest completo (8 etapas) para atualização mensal."""
@@ -748,7 +814,7 @@ async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
     script = _get_dc_script()
     return await _stream_subprocess(
         args=["-m", "delta_chaos.edge", "--modo", "reflect_daily",
-        "--ticker", ticker, "--xlsx_path", xlsx_path],
+              "--ticker", ticker, "--xlsx_path", xlsx_path],
         cwd=script.parent,
         action_name="dc_reflect_daily",
         action_payload={"ticker": ticker, "xlsx_path": xlsx_path}
@@ -778,34 +844,34 @@ async def dc_reflect_cycle(ticker: str) -> dict:
     )
 
 
-async def dc_onboarding_iniciar(ticker: str) -> dict:
+async def dc_calibracao_iniciar(ticker: str) -> dict:
     """
-    Inicia onboarding completo de novo ativo.
+    Inicia calibração completa de novo ativo.
     Sequência: backtest_dados → tune → backtest_gate
-    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess EM BACKGROUND
+    Cria/atualiza campo calibracao no master JSON, dispara step 1 via subprocess EM BACKGROUND
     """
     # Validação básica do ticker
     import re
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise ValueError(f"Ticker inválido: {ticker}")
-    
-    # 1. Criar/Atualizar campo onboarding no master JSON
+
+    # 1. Criar/Atualizar campo calibracao no master JSON
     from atlas_backend.core.delta_chaos_reader import get_ativo, update_ativo
     from atlas_backend.core.paths import get_paths
     from pathlib import Path
     import json
     from datetime import datetime
-    
+
     # Verificar se ativo existe, criar se necessário
     paths = get_paths()
     config_path = Path(paths["config_dir"]) / f"{ticker}.json"
-    
+
     if not config_path.exists():
         # Criar ativo com estrutura básica
         dados = {
             "ticker": ticker,
             "status": "MONITORAR",
-            "onboarding": {
+            "calibracao": {
                 "step_atual": 1,
                 "steps": {
                     "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
@@ -818,193 +884,250 @@ async def dc_onboarding_iniciar(ticker: str) -> dict:
             "historico_config": [],
             "atualizado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
-        
+
         # Criar arquivo
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(dados, f, indent=2, ensure_ascii=False)
     else:
         # Carregar dados atuais
         dados = get_ativo(ticker)
-        
-        # Inicializar onboarding com estrutura padrão
-        onboarding = {
-            "step_atual": 1,
-            "steps": {
-                "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
-                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
-                "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
-            },
-            "ultimo_evento_em": None
-        }
-        
-        # Atualizar no master JSON usando versão simplificada
-        def _update_ativo_simples(ticker: str, updates: dict):
-            """Versão simplificada de update_ativo para onboarding."""
-            from atlas_backend.core.paths import get_paths
-            import json
-            import os
-            from datetime import datetime
-            
-            paths = get_paths()
-            config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
-            
-            if not os.path.exists(config_path):
-                raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                current = json.load(f)
-            
-            current.update(updates)
-            current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Criar arquivo temporário
-            tmp_path = config_path + ".tmp"
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(current, f, indent=2, ensure_ascii=False)
-            
-            # Substituir arquivo original
-            os.replace(tmp_path, config_path)
-        
-        _update_ativo_simples(ticker, {"onboarding": onboarding})
-    
-    # 2. Disparar step 1 EM BACKGROUND (não bloquear resposta HTTP)
-    import asyncio
-    asyncio.create_task(_executar_onboarding_step1(ticker))
-    
-    # 3. Retornar IMEDIATAMENTE para frontend abrir drawer
-    return {"status": "started", "step": 1}
 
-async def _executar_onboarding_step1(ticker: str):
-    """Executa step 1 do onboarding em background."""
-    from atlas_backend.core.delta_chaos_reader import get_ativo
-    from datetime import datetime
-    import json
-    import os
-    
+    # Inicializar calibracao com estrutura padrão
+    calibracao = {
+        "step_atual": 1,
+        "steps": {
+            "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+            "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+            "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+        },
+        "ultimo_evento_em": None
+    }
+
+    # Atualizar no master JSON usando versão simplificada
     def _update_ativo_simples(ticker: str, updates: dict):
-        """Versão simplificada de update_ativo para onboarding."""
+        """Versão simplificada de update_ativo para calibracao."""
         from atlas_backend.core.paths import get_paths
+        import json
+        import os
+        from datetime import datetime
+
         paths = get_paths()
         config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
-        
+
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
-        
+
         with open(config_path, 'r', encoding='utf-8') as f:
             current = json.load(f)
-        
+
         current.update(updates)
         current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         # Criar arquivo temporário
         tmp_path = config_path + ".tmp"
         with open(tmp_path, 'w', encoding='utf-8') as f:
             json.dump(current, f, indent=2, ensure_ascii=False)
-        
+
         # Substituir arquivo original
         os.replace(tmp_path, config_path)
-    
+
+    _update_ativo_simples(ticker, {"calibracao": calibracao})
+
+    # 2. Disparar step 1 EM BACKGROUND (não bloquear resposta HTTP)
+    import asyncio
+    asyncio.create_task(_executar_calibracao_step1(ticker))
+
+    # 3. Retornar IMEDIATAMENTE para frontend abrir drawer
+    return {"status": "started", "step": 1}
+
+async def _executar_calibracao_step1(ticker: str):
+    """Executa step 1 da calibração em background."""
+    from atlas_backend.core.delta_chaos_reader import get_ativo
+    from datetime import datetime
+    import json
+    import os
+
+    def _update_ativo_simples(ticker: str, updates: dict):
+        """Versão simplificada de update_ativo para calibracao."""
+        from atlas_backend.core.paths import get_paths
+        paths = get_paths()
+        config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
+
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            current = json.load(f)
+
+        current.update(updates)
+        current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Criar arquivo temporário
+        tmp_path = config_path + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+
+        # Substituir arquivo original
+        os.replace(tmp_path, config_path)
+
     try:
         # 1. Atualizar status para "running"
         dados = get_ativo(ticker)
-        dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "running"
-        dados["onboarding"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
-        dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
-        _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
-        
+        dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "running"
+        dados["calibracao"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
+        dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+        _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
         # 2. Executar backtest
         from atlas_backend.core.dc_runner import dc_orbit_backtest
         result = await dc_orbit_backtest(ticker)
-        
+
         # 3. Atualizar status para "done" ou "error"
         dados = get_ativo(ticker)
         if result.get("status") == "OK":
-            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "done"
+            dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "done"
         else:
-            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "error"
-            dados["onboarding"]["steps"]["1_backtest_dados"]["erro"] = result.get("output", "Erro desconhecido")
-        
-        dados["onboarding"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
-        dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
-        _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
-        
-    except Exception as e:
-        # Marcar como erro em caso de exceção
-        try:
+            dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "error"
+            dados["calibracao"]["steps"]["1_backtest_dados"]["erro"] = result.get("output", "Erro desconhecido")
+
+        dados["calibracao"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
+        dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+        _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
+        # 4. Se step 1 concluído com sucesso, iniciar step 2 automaticamente
+        if result.get("status") == "OK":
+            # Atualizar step_atual para 2
+            dados["calibracao"]["step_atual"] = 2
+            dados["calibracao"]["steps"]["2_tune"]["status"] = "running"
+            dados["calibracao"]["steps"]["2_tune"]["iniciado_em"] = datetime.now().isoformat()
+            dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+            _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
+            # Executar step 2 (TUNE)
+            from atlas_backend.core.dc_runner import dc_tune
+            result_tune = await dc_tune(ticker)
+
+            # Atualizar status do step 2
             dados = get_ativo(ticker)
-            dados["onboarding"]["steps"]["1_backtest_dados"]["status"] = "error"
-            dados["onboarding"]["steps"]["1_backtest_dados"]["erro"] = str(e)
-            dados["onboarding"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
-            _update_ativo_simples(ticker, {"onboarding": dados["onboarding"]})
-        except:
-            pass  # Se falhar, pelo menos tentamos
+            if result_tune.get("status") == "OK":
+                dados["calibracao"]["steps"]["2_tune"]["status"] = "done"
+            else:
+                dados["calibracao"]["steps"]["2_tune"]["status"] = "error"
+                dados["calibracao"]["steps"]["2_tune"]["erro"] = result_tune.get("output", "Erro desconhecido")
+
+            dados["calibracao"]["steps"]["2_tune"]["concluido_em"] = datetime.now().isoformat()
+            dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+            _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
+            # 5. Se step 2 concluído com sucesso, iniciar step 3 automaticamente
+            if result_tune.get("status") == "OK":
+                # Atualizar step_atual para 3
+                dados["calibracao"]["step_atual"] = 3
+                dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "running"
+                dados["calibracao"]["steps"]["3_backtest_gate"]["iniciado_em"] = datetime.now().isoformat()
+                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
+                # Executar step 3 (GATE)
+                from atlas_backend.core.dc_runner import dc_gate_backtest
+                result_gate = await dc_gate_backtest(ticker)
+
+                # Atualizar status do step 3
+                dados = get_ativo(ticker)
+                if result_gate.get("status") == "OK":
+                    dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "done"
+                else:
+                    dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "error"
+                    dados["calibracao"]["steps"]["3_backtest_gate"]["erro"] = result_gate.get("output", "Erro desconhecido")
+
+                dados["calibracao"]["steps"]["3_backtest_gate"]["concluido_em"] = datetime.now().isoformat()
+                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+
+except Exception as e:
+    # Marcar como erro em caso de exceção
+    try:
+        dados = get_ativo(ticker)
+        step_atual = dados.get("calibracao", {}).get("step_atual", 1)
+        modulo = "ORBIT" if step_atual == 1 else "TUNE" if step_atual == 2 else "GATE"
+        emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
+        
+        # Atualizar status do step atual
+        step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+        dados["calibracao"]["steps"][step_key]["status"] = "error"
+        dados["calibracao"]["steps"][step_key]["erro"] = str(e)
+        dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
+        
+        _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+    except:
+        pass # Se falhar, pelo menos tentamos
 
 
-async def dc_onboarding_retomar(ticker: str) -> dict:
+async def dc_calibracao_retomar(ticker: str) -> dict:
     """
-    Retoma onboarding do step atual (usado quando status == "paused")
+    Retoma calibração do step atual (usado quando status == "paused")
     Para step 2: Optuna continua do SQLite existente
     """
     # Validação básica do ticker
     import re
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise ValueError(f"Ticker inválido: {ticker}")
-    
+
     from atlas_backend.core.delta_chaos_reader import get_ativo
-    
+
     # Carregar estado atual
     dados = get_ativo(ticker)
-    onboarding = dados.get("onboarding", {})
-    step_atual = onboarding.get("step_atual", 1)
-    
+    calibracao = dados.get("calibracao", {})
+    step_atual = calibracao.get("step_atual", 1)
+
     # Verificar se está pausado
     step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
-    if onboarding.get("steps", {}).get(step_key, {}).get("status") != "paused":
+    if calibracao.get("steps", {}).get(step_key, {}).get("status") != "paused":
         raise HTTPException(status_code=400, detail=f"Step {step_atual} não está pausado")
-    
+
     # Retomar conforme step
     if step_atual == 1:
         # Retomar backtest_dados
         from atlas_backend.core.dc_runner import dc_orbit_backtest
         result = await dc_orbit_backtest(ticker)
-        
+
         # Atualizar estado
-        dados["onboarding"]["steps"][step_key]["status"] = "running"
-        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
-        
+        dados["calibracao"]["steps"][step_key]["status"] = "running"
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+
     elif step_atual == 2:
         # Retomar tune
         from atlas_backend.core.dc_runner import dc_tune
         result = await dc_tune(ticker)
-        
+
         # Atualizar estado
-        dados["onboarding"]["steps"][step_key]["status"] = "running"
-        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
-        
+        dados["calibracao"]["steps"][step_key]["status"] = "running"
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+
     elif step_atual == 3:
         # Retomar backtest_gate
         from atlas_backend.core.dc_runner import dc_gate_backtest
         result = await dc_gate_backtest(ticker)
-        
+
         # Atualizar estado
-        dados["onboarding"]["steps"][step_key]["status"] = "running"
-        dados["onboarding"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
-        
+        dados["calibracao"]["steps"][step_key]["status"] = "running"
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+
     # Atualizar ultimo_evento_em
-    dados["onboarding"]["ultimo_evento_em"] = datetime.now().isoformat()
-    
+    dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+
     # Atualizar no arquivo com escrita atômica
     path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
     path_tmp = path_ativo.with_suffix(".tmp")
-    
+
     with open(path_tmp, "w", encoding="utf-8") as f:
         json.dump(dados, f, indent=2, ensure_ascii=False)
     os.replace(path_tmp, path_ativo)
-    
+
     return {"status": "resumed", "step": step_atual}
 
 
-async def dc_onboarding_progresso_tune(ticker: str) -> dict:
+async def dc_calibracao_progresso_tune(ticker: str) -> dict:
     """
     Lê tune_{TICKER}.db via conexão read-only
     Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
@@ -1014,30 +1137,30 @@ async def dc_onboarding_progresso_tune(ticker: str) -> dict:
     import re
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise ValueError(f"Ticker inválido: {ticker}")
-    
+
     from pathlib import Path
     import sqlite3
-    
+
     # Caminho do SQLite
     tmp_dir = Path(__file__).resolve().parent.parent.parent / "tmp"
     db_path = tmp_dir / f"tune_{ticker}.db"
-    
+
     if not db_path.exists():
         return {"trials_completos": 0, "trials_total": 200, "best_ir": 0.0}
-    
+
     # Conexão read-only
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         cursor = conn.cursor()
-        
+
         # Contar trials completos
         cursor.execute("SELECT COUNT(*) FROM trial WHERE state = 'COMPLETE'")
         trials_completos = cursor.fetchone()[0]
-        
+
         # Pegar melhor IR
         cursor.execute("SELECT MAX(value) FROM trial WHERE state = 'COMPLETE'")
         best_ir = cursor.fetchone()[0] or 0.0
-        
+
         return {
             "trials_completos": trials_completos,
             "trials_total": 200,

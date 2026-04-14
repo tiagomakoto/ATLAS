@@ -30,6 +30,28 @@ Após cada edição, releia o trecho alterado e confirme:
 - A mudança não quebra referências em outros arquivos?
 - As indentações foram executadas corretamente?
 
+### 3.1 Verificação com subagent FIXER (MANDATORY)
+
+Após concluir a edição e a verificação interna:
+
+- Envie o trecho de código final para o subagent FIXER
+- O FIXER deve verificar:
+  - indentação
+  - fechamento de parênteses, colchetes e chaves
+  - erros de sintaxe
+
+- Se o FIXER retornar correções:
+  - aplique EXATAMENTE as correções sugeridas
+  - não modifique mais nada além do que o FIXER indicar
+
+- Se o FIXER confirmar que está correto:
+  - prossiga normalmente
+
+- Ao final do código, dizer formalmente que o FIXER já foi acionado.
+
+Esta etapa é obrigatória para todas as tarefas que envolvem código.
+
+
 ### 4. Anúncio de conclusão
 Ao final de cada tarefa, anuncie obrigatoriamente neste formato exato:
 

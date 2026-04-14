@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
 
-# Testes para o sistema de onboarding
+# Testes para o sistema de calibração
 
 def test_emit_event_chamado_por_trial():
     """
@@ -21,9 +21,9 @@ def test_emit_event_chamado_por_trial():
     # Verifica se o emit_event foi adicionado no _early_stop_cb
     assert "emit_event(\"TUNE\", \"trial\"" in content, "emit_event não foi adicionado no _early_stop_cb"
 
-def test_onboarding_estado_inicial():
+def test_calibracao_estado_inicial():
     """
-    Verifica se a estrutura padrão do campo onboarding é criada corretamente
+    Verifica se a estrutura padrão do campo calibracao é criada corretamente
     """
     # Criar um arquivo JSON temporário para simular um ativo
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -35,13 +35,13 @@ def test_onboarding_estado_inicial():
         with open(temp_path, "r", encoding="utf-8") as f:
             dados = json.load(f)
         
-        # Verificar que o campo onboarding foi adicionado com a estrutura padrão
-        assert "onboarding" in dados, "Campo onboarding não encontrado no JSON"
+        # Verificar que o campo calibracao foi adicionado com a estrutura padrão
+        assert "calibracao" in dados, "Campo calibracao não encontrado no JSON"
         
-        onboarding = dados["onboarding"]
-        assert onboarding["step_atual"] == 1, "step_atual deve ser 1"
+        calibracao = dados["calibracao"]
+        assert calibracao["step_atual"] == 1, "step_atual deve ser 1"
         
-        steps = onboarding["steps"]
+        steps = calibracao["steps"]
         assert "1_backtest_dados" in steps, "Step 1 não encontrado"
         assert "2_tune" in steps, "Step 2 não encontrado"
         assert "3_backtest_gate" in steps, "Step 3 não encontrado"
@@ -56,7 +56,7 @@ def test_onboarding_estado_inicial():
         assert steps["2_tune"]["trials_total"] == 200, "trials_total deve ser 200"
         
         # Verificar ultimo_evento_em
-        assert onboarding["ultimo_evento_em"] is None, "ultimo_evento_em deve ser None"
+        assert calibracao["ultimo_evento_em"] is None, "ultimo_evento_em deve ser None"
         
     finally:
         os.unlink(temp_path)
@@ -74,7 +74,7 @@ def test_watchdog_promove_paused():
         
         json.dump({
             "ticker": "TESTE",
-            "onboarding": {
+            "calibracao": {
                 "step_atual": 2,
                 "steps": {
                     "1_backtest_dados": {"status": "done", "iniciado_em": None, "concluido_em": None, "erro": None},
@@ -86,21 +86,17 @@ def test_watchdog_promove_paused():
         }, f)
     
     try:
-        # Simular a leitura do ativo (como faria o endpoint /onboarding/{ticker})
+        # Simular a leitura do ativo (como faria o endpoint /calibracao/{ticker})
         with open(temp_path, "r", encoding="utf-8") as f:
             dados = json.load(f)
         
         # Simular a reconciliação watchdog (como faria o endpoint)
-        onboarding = dados["onboarding"]
+        calibracao = dados["calibracao"]
         
         # Verificar que o status foi atualizado para paused
-        assert onboarding["steps"]["2_tune"]["status"] == "paused", "Step 2 deve ser promovido para paused"
-        
-        # Verificar que ultimo_evento_em foi atualizado
-        assert onboarding["ultimo_evento_em"] is not None, "ultimo_evento_em deve ser atualizado"
-        
-        # Verificar que o novo ultimo_evento_em é recente
-        new_time = datetime.fromisoformat(onboarding["ultimo_evento_em"])
+assert calibracao["steps"]["2_tune"]["status"] == "paused", "Step 2 deve ser promovido para paused"
+        assert calibracao["ultimo_evento_em"] is not None, "ultimo_evento_em deve ser atualizado"
+        new_time = datetime.fromisoformat(calibracao["ultimo_evento_em"])
         assert (datetime.now() - new_time).total_seconds() < 10, "ultimo_evento_em deve ser atualizado para o momento atual"
         
     finally:
@@ -143,7 +139,7 @@ def test_retomada_continua_do_sqlite():
         conn.commit()
         conn.close()
         
-        # Simular a chamada de dc_onboarding_progresso_tune
+        # Simular a chamada de dc_calibracao_progresso_tune
         # Verificar que o número de trials completos é 5
         conn = sqlite3.connect(f"file:{temp_db_path}?mode=ro", uri=True)
         cursor = conn.cursor()

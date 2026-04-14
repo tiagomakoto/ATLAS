@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import TuneApprovalCard from "./GestaoView/TuneApprovalCard";
-import OnboardingDrawer from "./GestaoView/OnboardingDrawer";
+import CalibracaoDrawer from "./GestaoView/CalibracaoDrawer";
 
 const API_BASE = "http://localhost:8000";
 
@@ -10,7 +10,7 @@ export default function GestaoView() {
   const [ativos, setAtivos] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [novoAtivo, setNovoAtivo] = useState("");
-  const [onboardingMsg, setOnboardingMsg] = useState("");
+  const [calibracaoMsg, setCalibracaoMsg] = useState("");
   const [drawerOnboarding, setDrawerOnboarding] = useState(null);
 
   useEffect(() => {
@@ -37,15 +37,15 @@ export default function GestaoView() {
     
     // 2. Chamar endpoint (não bloquear UI)
     setCarregando(true);
-    setOnboardingMsg("");
+    setCalibracaoMsg("");
     try {
-      const res = await fetch(`${API_BASE}/delta-chaos/onboarding/iniciar`, {
+      const res = await fetch(`${API_BASE}/delta-chaos/calibracao/iniciar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ticker: ticker,
           confirm: true,
-          description: `Onboarding ${ticker}`
+          description: `Calibração ${ticker}`
         })
       });
       
@@ -53,10 +53,10 @@ export default function GestaoView() {
         // Se erro HTTP, fechar drawer e mostrar mensagem
         setDrawerOnboarding(null);
         const data = await res.json();
-        setOnboardingMsg(`✗ ${data.detail || "Erro desconhecido"}`);
+        setCalibracaoMsg(`✗ ${data.detail || "Erro desconhecido"}`);
       } else {
         // Sucesso - manter drawer aberto
-        setOnboardingMsg(`✓ ${ticker} — onboarding iniciado`);
+        setCalibracaoMsg(`✓ ${ticker} — calibração iniciada`);
         setTimeout(() => {
           setNovoAtivo("");
           fetchAtivos();
@@ -65,7 +65,7 @@ export default function GestaoView() {
     } catch (e) {
       // Se erro de rede, fechar drawer
       setDrawerOnboarding(null);
-      setOnboardingMsg(`✗ Erro: ${e.message}`);
+      setCalibracaoMsg(`✗ Erro: ${e.message}`);
     } finally {
       setCarregando(false);
     }
@@ -221,7 +221,7 @@ export default function GestaoView() {
 
       {/* Onboarding */}
       <div style={{ marginBottom: 16, padding: 12, background: "rgba(59,130,246,0.08)", borderRadius: 2 }}>
-        <span style={{...labelStyle, marginBottom: 4}}>Onboarding de novo ativo</span>
+        <span style={{...labelStyle, marginBottom: 4}}>Calibração de novo ativo</span>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input
             value={novoAtivo}
@@ -255,14 +255,14 @@ export default function GestaoView() {
             {carregando ? "..." : "Iniciar"}
           </button>
         </div>
-        {onboardingMsg && (
+        {calibracaoMsg && (
           <div style={{
             fontFamily: "monospace", fontSize: 10,
-            color: onboardingMsg.startsWith("✓")
+            color: calibracaoMsg.startsWith("✓")
               ? "var(--atlas-green)"
               : "var(--atlas-red)"
           }}>
-            {onboardingMsg}
+            {calibracaoMsg}
           </div>
         )}
       </div>
@@ -376,13 +376,13 @@ export default function GestaoView() {
       </div>
     )}
 
-    {/* Drawer de Onboarding */}
-    {drawerOnboarding && (
-      <OnboardingDrawer 
-        ticker={drawerOnboarding} 
-        onClose={() => setDrawerOnboarding(null)} 
-      />
-    )}
+{/* Drawer de Calibração */}
+        {drawerOnboarding && (
+          <CalibracaoDrawer
+            ticker={drawerOnboarding}
+            onClose={() => setDrawerOnboarding(null)}
+          />
+        )}
 
     </div>
   );

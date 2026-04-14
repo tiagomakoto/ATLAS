@@ -167,8 +167,8 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         # ✅ CAMPOS OBRIGATÓRIOS PARA MANUTENÇÃO:
         "take_profit": raw_data.get("take_profit"),
         "stop_loss": raw_data.get("stop_loss"),
-        # ✅ NOVO: campo onboarding com estrutura padrão
-        "onboarding": raw_data.get("onboarding", {
+        # ✅ NOVO: campo calibracao com estrutura padrão
+        "calibracao": raw_data.get("calibracao", {
             "step_atual": 1,
             "steps": {
                 "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},

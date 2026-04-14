@@ -1,6 +1,0 @@
-{"modulo": "TAPE", "status": "start", "timestamp": "2026-04-08T16:24:28.639859", "run_id": "dc_20260408_162427"}
-{"modulo": "TAPE", "status": "done", "timestamp": "2026-04-08T16:24:28.724096", "run_id": "dc_20260408_162427", "registros": 6527}
-{"modulo": "ORBIT", "status": "start", "timestamp": "2026-04-08T16:24:28.724769", "run_id": "dc_20260408_162427"}
-{"modulo": "ORBIT", "status": "done", "timestamp": "2026-04-08T16:24:50.427347", "run_id": "dc_20260408_162427"}
-{"modulo": "REFLECT", "status": "start", "timestamp": "2026-04-08T16:24:50.427803", "run_id": "dc_20260408_162427"}
-{"modulo": "REFLECT", "status": "done", "timestamp": "2026-04-08T16:24:50.510650", "run_id": "dc_20260408_162427"}

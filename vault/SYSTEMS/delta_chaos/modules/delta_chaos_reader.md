@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-009
-version: 1.0.1
+version: 1.0.2
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,6 +30,7 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-14: código modificado — delta_chaos_reader.py
   - 2026-04-13: código modificado — delta_chaos_reader.py
   - 2026-04-12 — módulo criado automaticamente a partir de atlas_backend/core/delta_chaos_reader.py
   - <edge cases ou riscos>

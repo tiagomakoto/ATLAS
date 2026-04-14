@@ -184,8 +184,18 @@ def executar_tune(ticker: str) -> dict:
 
     # C2 — pré-computa df_dia por data fora de _simular()
     # Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
-    df_dias = {str(data)[:10]: df_tape_c[df_tape_c["data"] == data].copy()
-               for data in datas}
+    # Loop com progresso a cada 500 datas para feedback visual
+    emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
+    df_dias = {}
+    for i, data in enumerate(datas):
+        df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
+        if (i + 1) % 100 == 0 or (i + 1) == len(datas):
+            emit_log(
+                f"TUNE [{TICKER}] indexando dias: {i+1:,}/{len(datas):,} "
+                f"({(i+1)/len(datas)*100:.0f}%)",
+                level="info"
+            )
+    emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
 
     # C1 — constantes do BOOK extraídas uma vez fora de _simular()
     # Evita carregar_config() dentro do loop de 200 trials × N_pregões
@@ -425,12 +435,15 @@ def executar_tune(ticker: str) -> dict:
         # Reporta métricas como user_attrs para relatório final
         for k, v in res.items():
             trial.set_user_attr(k, v)
-        # Print por trial — visível no terminal durante warmup e TPE
+        # Print para terminal (stdout capturado pelo dc_runner)
         n = trial.number + 1
         fase = "warmup" if n <= OPTUNA_STARTUP else "TPE"
-        print(f"  trial {n:>3}/{OPTUNA_N_TRIALS} [{fase}] "
-              f"tp={tp:.2f} stop={stop:.2f} janela={janela_anos}a "
-              f"ir={res['ir_valido']:+.3f}")
+        emit_log(
+            f"TUNE [{TICKER}] trial {n:>3}/{OPTUNA_N_TRIALS} [{fase}] "
+            f"tp={tp:.2f} stop={stop:.2f} janela={janela_anos}a "
+            f"ir={res['ir_valido']:+.3f}",
+            level="info"
+        )
         return res["ir_valido"]
 
     # ── Executa estudo Optuna ─────────────────────────────────────────
@@ -438,10 +451,15 @@ def executar_tune(ticker: str) -> dict:
         n_startup_trials=OPTUNA_STARTUP,
         seed=OPTUNA_SEED
     )
+    # Apaga estudo anterior — cada TUNE é calibração nova, não retomada
+    if _study_db.exists():
+        _study_db.unlink()
+        emit_log(f"TUNE [{TICKER}] estudo anterior removido — iniciando do zero", level="info")
+
     study = optuna.create_study(
         storage=f"sqlite:///{_study_db}",
         study_name=TICKER,
-        load_if_exists=True,
+        load_if_exists=False,
         direction="maximize",
         sampler=sampler,
     )
@@ -455,6 +473,7 @@ def executar_tune(ticker: str) -> dict:
         # Evita early stop prematuro antes do surrogate model estar ativo
         if trial.number < OPTUNA_STARTUP:
             return
+        # emit_log de progresso só no TPE — warmup já emite via objective()
         if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
             _melhor_valor[0] = study.best_value
             _sem_melhoria[0] = 0

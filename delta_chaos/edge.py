@@ -14,8 +14,8 @@ from datetime import datetime
 # ---------------------------------------------------------------------
 # Status válidos: SEM_EDGE | OPERAR | MONITORAR | SUSPENSO | BLOQUEADO
 #
-#   BLOQUEADO  — Ativo sem onboarding. Nunca executou ORBIT+TUNE+GATE.
-#                É necessário rodar o onboarding completo para ativar.
+#   BLOQUEADO  — Ativo sem calibração. Nunca executou ORBIT+TUNE+GATE.
+#                É necessário rodar a calibração completa para ativar.
 #
 #   SEM_EDGE   — Backtest com dados suficientes mas sem IR capturável
 #                em nenhum regime. Sem estratégia viável.
@@ -45,9 +45,9 @@ from datetime import datetime
 # =====================================================================
 
 #
-# --modo orbit_backtest    onboarding step 1: COTAHIST + ORBIT + popula historico[]
-# --modo tune             onboarding step 2 + atualização mensal step 3 (se elegível)
-# --modo backtest_gate    onboarding step 3 + atualização mensal step 2: GATE completo
+# --modo orbit_backtest    calibração step 1: COTAHIST + ORBIT + popula historico[]
+# --modo tune             calibração step 2 + atualização mensal step 3 (se elegível)
+# --modo backtest_gate    calibração step 3 + atualização mensal step 2: GATE completo
 # --modo orbit_update       atualização mensal: OHLCV cache + ORBIT + reflect_cycle
 # --modo eod              diário: paper/live
 

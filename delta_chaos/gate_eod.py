@@ -201,7 +201,7 @@ def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
     if not reflect_cycle_history:
         bloqueios.append(
             "REFLECT sem histórico de ciclos — "
-            "onboarding incompleto ou dados corrompidos")
+            "calibração incompleta ou dados corrompidos")
     elif reflect_state in REFLECT_BLOCK_STATES:
         bloqueios.append(
             f"REFLECT state={reflect_state} "

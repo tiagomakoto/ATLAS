@@ -30,7 +30,7 @@ class TickerPayload(BaseModel):
     description: str = ""
     anos: Optional[List[int]] = None
 
-class OnboardingPayload(BaseModel):
+class CalibracaoPayload(BaseModel):
     ticker: str
     confirm: bool = False
     description: str = ""
@@ -204,10 +204,10 @@ async def gate(payload: TickerPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/onboarding")
-async def onboarding(payload: OnboardingPayload):
+@router.post("/calibracao")
+async def calibracao(payload: CalibracaoPayload):
     """
-    Inicia onboarding completo de novo ativo.
+    Inicia calibração completa de novo ativo.
     Sequência: TAPE → ORBIT → TUNE → GATE
     Cada etapa roda em sequência via dc_runner.
     """
@@ -224,7 +224,7 @@ async def onboarding(payload: OnboardingPayload):
         from atlas_backend.core.terminal_stream import emit_log
         from atlas_backend.core.dc_runner import dc_orbit_backtest, dc_tune, dc_gate_backtest
 
-        emit_log(f"[ONBOARDING] Iniciando {ticker}", level="info")
+        emit_log(f"[CALIBRAÇÃO] Iniciando {ticker}", level="info")
 
         # Ano dinâmico para ORBIT
         ano_atual = datetime.now().year
@@ -233,7 +233,7 @@ async def onboarding(payload: OnboardingPayload):
         await dc_tune(ticker=ticker)
         await dc_gate_backtest(ticker=ticker)
 
-        emit_log(f"[ONBOARDING] {ticker} concluído", level="info")
+        emit_log(f"[CALIBRAÇÃO] {ticker} concluído", level="info")
         return {"status": "OK", "ticker": ticker}
 
     except FileNotFoundError as e:
@@ -362,12 +362,12 @@ async def tune_aplicar(payload: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/onboarding/iniciar")
-async def onboarding_iniciar(payload: OnboardingPayload):
+@router.post("/calibracao/iniciar")
+async def calibracao_iniciar(payload: CalibracaoPayload):
     """
-    Inicia onboarding completo de novo ativo.
+    Inicia calibração completa de novo ativo.
     Sequência: backtest_dados → tune → backtest_gate
-    Cria/atualiza campo onboarding no master JSON, dispara step 1 via subprocess
+    Cria/atualiza campo calibracao no master JSON, dispara step 1 via subprocess
     """
     _validar_confirm(payload.confirm, payload.description)
     ticker = payload.ticker.strip().upper()
@@ -379,8 +379,8 @@ async def onboarding_iniciar(payload: OnboardingPayload):
         )
     
     try:
-        from atlas_backend.core.dc_runner import dc_onboarding_iniciar
-        result = await dc_onboarding_iniciar(ticker)
+        from atlas_backend.core.dc_runner import dc_calibracao_iniciar
+        result = await dc_calibracao_iniciar(ticker)
         return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -388,12 +388,12 @@ async def onboarding_iniciar(payload: OnboardingPayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/onboarding/{ticker}")
-async def onboarding_status(ticker: str):
+@router.get("/calibracao/{ticker}")
+async def calibracao_status(ticker: str):
     """
-    Retorna estado atual do onboarding do ativo
+    Retorna estado atual da calibração do ativo
     Inclui reconciliação watchdog: se running + ultimo_evento_em > 10min → paused
-    Retorna: campo onboarding completo do master JSON
+    Retorna: campo calibracao completo do master JSON
     """
     _validar_ticker(ticker)
     
@@ -402,19 +402,19 @@ async def onboarding_status(ticker: str):
         from datetime import datetime, timedelta
         
         dados = get_ativo(ticker)
-        onboarding = dados.get("onboarding", {})
+        calibracao = dados.get("calibracao", {})
         
         # Reconciliação watchdog: se running e ultimo_evento_em > 10min → paused
-        if onboarding.get("step_atual") and onboarding.get("steps"):
-            for step_key, step_info in onboarding["steps"].items():
+        if calibracao.get("step_atual") and calibracao.get("steps"):
+            for step_key, step_info in calibracao["steps"].items():
                 if step_info.get("status") == "running":
-                    ultimo_evento = onboarding.get("ultimo_evento_em")
+                    ultimo_evento = calibracao.get("ultimo_evento_em")
                     if ultimo_evento:
                         ultimo_dt = datetime.fromisoformat(ultimo_evento)
                         if datetime.now() - ultimo_dt > timedelta(minutes=10):
                             # Atualizar para paused
                             step_info["status"] = "paused"
-                            onboarding["ultimo_evento_em"] = datetime.now().isoformat()
+                            calibracao["ultimo_evento_em"] = datetime.now().isoformat()
                             
                             # Atualizar no arquivo com escrita atômica
                             path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
@@ -425,27 +425,27 @@ async def onboarding_status(ticker: str):
                             os.replace(path_tmp, path_ativo)
                             
                             # Atualizar dados locais
-                            dados["onboarding"] = onboarding
+                            dados["calibracao"] = calibracao
         
-        return onboarding
+        return calibracao
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/onboarding/{ticker}/retomar")
-async def onboarding_retomar(ticker: str):
+@router.post("/calibracao/{ticker}/retomar")
+async def calibracao_retomar(ticker: str):
     """
-    Retoma onboarding do step atual (usado quando status == "paused")
+    Retoma calibração do step atual (usado quando status == "paused")
     Para step 2: Optuna continua do SQLite existente
     Retorna: { "status": "resumed", "step": N }
     """
     _validar_ticker(ticker)
     
     try:
-        from atlas_backend.core.dc_runner import dc_onboarding_retomar
-        result = await dc_onboarding_retomar(ticker)
+        from atlas_backend.core.dc_runner import dc_calibracao_retomar
+        result = await dc_calibracao_retomar(ticker)
         return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -453,8 +453,8 @@ async def onboarding_retomar(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/onboarding/{ticker}/progresso-tune")
-async def onboarding_progresso_tune(ticker: str):
+@router.get("/calibracao/{ticker}/progresso-tune")
+async def calibracao_progresso_tune(ticker: str):
     """
     Lê tune_{TICKER}.db via conexão read-only
     Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
@@ -463,8 +463,8 @@ async def onboarding_progresso_tune(ticker: str):
     _validar_ticker(ticker)
     
     try:
-        from atlas_backend.core.dc_runner import dc_onboarding_progresso_tune
-        result = await dc_onboarding_progresso_tune(ticker)
+        from atlas_backend.core.dc_runner import dc_calibracao_progresso_tune
+        result = await dc_calibracao_progresso_tune(ticker)
         return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))

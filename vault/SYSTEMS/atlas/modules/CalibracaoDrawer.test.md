@@ -1,11 +1,11 @@
 ---
-uid: mod-delta-010
-version: 1.0.2
+uid: mod-atlas-023
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_backend/api/routes/delta_chaos.py
+file: atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.test.jsx
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,7 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-14: código modificado — delta_chaos.py
-  - 2026-04-13: código modificado — delta_chaos.py
-  - 2026-04-13 — módulo criado automaticamente a partir de atlas_backend/api/routes/delta_chaos.py
+  - 2026-04-14 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.test.jsx
   - <edge cases ou riscos>

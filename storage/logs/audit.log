@@ -176,3 +176,27 @@
 {"timestamp": "2026-04-14T01:13:18.458922", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "returncode": 3221225786, "linhas": 131}}
 {"timestamp": "2026-04-14T01:13:18.914784", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "returncode": 3221225786, "linhas": 0}}
 {"timestamp": "2026-04-14T01:13:18.962803", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "returncode": 3221225786, "linhas": 30}}
+{"timestamp": "2026-04-14T11:16:56.947023", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T12:24:09.480083", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T16:13:58.451048", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T18:12:15.661256", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T18:22:41.870993", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T18:23:58.091187", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T18:44:36.010663", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T18:45:02.081687", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:10:45.606076", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T19:21:40.483289", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:23:56.072884", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:27:45.220110", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:35:51.614558", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:40:05.758136", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T19:42:05.180883", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T19:53:07.392788", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 398}}
+{"timestamp": "2026-04-14T19:53:09.748125", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 0}}
+{"timestamp": "2026-04-14T20:13:27.030140", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T20:28:06.646646", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 108}}
+{"timestamp": "2026-04-14T20:40:26.168994", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 447}}
+{"timestamp": "2026-04-14T20:40:28.797544", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 0}}
+{"timestamp": "2026-04-14T22:00:33.840085", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-14T22:14:59.597125", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 447}}
+{"timestamp": "2026-04-14T22:15:03.050911", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "error": "UnboundLocalError(\"cannot access local variable 'line' where it is not associated with a value\")"}}

@@ -50,6 +50,8 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B50_drawer_onboarding_estado_persistido\|B50]] | Drawer onboarding — estado persistido no master JSON + watchdog | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B51_nav_relatorio_tune_exportavel\|B51]] | Nav "Relatório" na aba Ativo — relatório de TUNE exportável em .md | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B52_tp_stop_ativos_table\|B52]] | TP/STOP visível na AtivosTable (Visão Geral) | implementação PLAN | 2026-04-13 |
+| [[BOARD/tensoes_abertas/B53_onboarding_drawer_ux_melhorias\|B53]] | OnboardingDrawer — melhorias de UX/UI (6 itens) | implementação PLAN | 2026-04-14 |
+| [[BOARD/tensoes_abertas/B54_dc_runner_edge_import_direto\|B54]] | dc_runner — eliminar subprocess, importar edge.py como módulo direto | CEO entrega spec ao PLAN | 2026-04-14 |
 
 ---
 
@@ -62,6 +64,8 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-12_tune_v2_escopo\|2026-04-12]] | TUNE v2.0 — escopo e gestão aba | board |
 | [[BOARD/atas/2026-04-13_atlas_onboarding_drawer_relatorio_tune\|2026-04-13]] | ATLAS — drawer onboarding + relatório TUNE | board |
 | [[BOARD/atas/2026-04-13_regime_padronizacao\|2026-04-13]] | regime_estrategia → regime — padronização e migração | off-ata |
+| [[BOARD/atas/2026-04-14_atlas_websocket_onboarding_ux\|2026-04-14]] | ATLAS — WebSocket pipeline + OnboardingDrawer UX | board |
+| [[BOARD/atas/2026-04-14_dc_runner_edge_fusao\|2026-04-14]] | dc_runner — eliminação de subprocess, import direto de edge.py | board |
 
 ---
 

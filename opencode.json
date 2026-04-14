@@ -5,6 +5,8 @@
       "mode": "primary",
       "model": "nvidia/z-ai/glm5",
       "temperature": 0.1,
+      "top_p": 0.1,
+      "max_tokens": 16384,
       "prompt": "{file:./prompts/atlas_plannerv2.txt}",
       "description": "Analisa specs e decompõe em tarefas atômicas para o BUILD. Não escreve código.",
       "maxSteps": 20,
@@ -16,8 +18,9 @@
     },
     "build": {
       "mode": "primary",
-      "model": "nvidia/deepseek-ai/deepseek-v3.2",
-      "temperature": 0.3,
+      "model": "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+      "temperature": 0.2,
+      "top_p": 0.1,
       "prompt": "{file:./prompts/atlas-builder.txt}",
       "description": "Executa tarefas atômicas delegadas pelo PLAN. Edição cirúrgica.",
       "maxSteps": 50,
@@ -25,7 +28,16 @@
         "edit": "allow",
         "bash": "ask",
         "write": "allow"
-      }
+      },
+      "subagents": [
+        {
+          "name": "fixer",
+          "model": "nvidia/stepfun-ai/step-3.5-flash",
+          "temperature": 0.1,
+          "prompt": "{file:./prompts/atlas_fixer.txt}",
+          "description": "Valida integridade estrutural, sintaxe e fechamento de blocos pós-build."
+        }
+      ]
     },
     "commit": {
       "mode": "primary",
@@ -48,12 +60,13 @@
       "prompt": "{file:./prompts/atlas-debugger-hotfix.txt}",
       "description": "Investiga bugs, emite diagnóstico ou aplica hotfix cirúrgico. Aciona PLAN para correções complexas.",
       "maxSteps": 30,
+      "include_thinking": false,
       "permission": {
         "edit": "deny",
         "bash": "ask",
         "write": "deny",
         "read": "allow",
-        "search": "allow",
+        "search": "allow"
       }
     }
   }

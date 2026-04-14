@@ -126,7 +126,7 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
               }}>
                 {ticker}
               </span>
-              {ev.gate_eod === "BLOQUEADO — onboarding não realizado" && (
+              {ev.gate_eod === "BLOQUEADO — calibração não realizada" && (
                 <span style={{ color: "var(--atlas-red)", fontSize: 9, alignSelf: "center" }}>
                   ✗ BLOQUEADO
                 </span>
