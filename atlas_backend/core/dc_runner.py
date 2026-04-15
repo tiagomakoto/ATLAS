@@ -104,12 +104,24 @@ async def _stream_subprocess(
                                 continue
                             seen_events.add(ev_key)
 
-                            if ev_status == "start":
-                                emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                            elif ev_status == "done":
-                                emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                            elif ev_status == "error":
-                                emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                if ev_status == "start":
+                    emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                elif ev_status == "done":
+                    emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                elif ev_status == "error":
+                    emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                # TUNE_TRIAL events: IPC for Optuna trial progress
+                if ev_modulo == "TUNE_TRIAL" and ev_status == "progress":
+                    emit_dc_event("dc_tune_progress", "TUNE", "running",
+                        trial=event.get("trial", 0),
+                        total=event.get("total", 0),
+                        fase=event.get("fase", ""),
+                        tp=event.get("tp", 0),
+                        stop=event.get("stop", 0),
+                        janela_anos=event.get("janela_anos", 0),
+                        ir=event.get("ir", 0),
+                        best_ir=event.get("best_ir", 0),
+                        **action_payload)
             except Exception:
                 pass
             time.sleep(0.5)
@@ -136,22 +148,35 @@ async def _stream_subprocess(
                     if ev_key in seen_events:
                         continue
                     seen_events.add(ev_key)
-            # TUNE_INDEX events: IPC for indexation progress
-            if ev_modulo == "TUNE_INDEX":
-                if ev_status == "start":
-                    emit_dc_event("dc_tune_index_start", "TUNE", "running",
-                        total=event.get("total", 0), **action_payload)
-                elif ev_status == "progress":
-                    emit_dc_event("dc_tune_index_progress", "TUNE", "running",
-                        current=event.get("current", 0), total=event.get("total", 0), **action_payload)
-                elif ev_status == "done":
-                    emit_dc_event("dc_tune_index_complete", "TUNE", "ok", **action_payload)
-            elif ev_status == "start":
-                emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-            elif ev_status == "done":
-                emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-            elif ev_status == "error":
-                emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                    # TUNE_INDEX events: IPC for indexation progress
+                    if ev_modulo == "TUNE_INDEX":
+                        if ev_status == "start":
+                            emit_dc_event("dc_tune_index_start", "TUNE", "running",
+                                total=event.get("total", 0), **action_payload)
+                        elif ev_status == "progress":
+                            emit_dc_event("dc_tune_index_progress", "TUNE", "running",
+                                current=event.get("current", 0), total=event.get("total", 0), **action_payload)
+                        elif ev_status == "done":
+                            emit_dc_event("dc_tune_index_complete", "TUNE", "ok", **action_payload)
+                    # TUNE_TRIAL events: IPC for Optuna trial progress
+                    elif ev_modulo == "TUNE_TRIAL":
+                        if ev_status == "progress":
+                            emit_dc_event("dc_tune_progress", "TUNE", "running",
+                                trial=event.get("trial", 0),
+                                total=event.get("total", 0),
+                                fase=event.get("fase", ""),
+                                tp=event.get("tp", 0),
+                                stop=event.get("stop", 0),
+                                janela_anos=event.get("janela_anos", 0),
+                                ir=event.get("ir", 0),
+                                best_ir=event.get("best_ir", 0),
+                                **action_payload)
+                    elif ev_status == "start":
+                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                    elif ev_status == "done":
+                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                    elif ev_status == "error":
+                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
         except Exception:
             pass
 
@@ -205,6 +230,18 @@ async def _stream_subprocess(
                                         emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
                                     elif ev_status == "error":
                                         emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+                                    # TUNE_TRIAL events: IPC for Optuna trial progress
+                                    elif ev_modulo == "TUNE_TRIAL" and ev_status == "progress":
+                                        emit_dc_event("dc_tune_progress", "TUNE", "running",
+                                            trial=event.get("trial", 0),
+                                            total=event.get("total", 0),
+                                            fase=event.get("fase", ""),
+                                            tp=event.get("tp", 0),
+                                            stop=event.get("stop", 0),
+                                            janela_anos=event.get("janela_anos", 0),
+                                            ir=event.get("ir", 0),
+                                            best_ir=event.get("best_ir", 0),
+                                            **action_payload)
                     except Exception:
                         pass
                     time.sleep(0.2)

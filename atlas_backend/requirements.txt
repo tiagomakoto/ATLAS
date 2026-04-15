@@ -19,6 +19,7 @@ openpyxl>=3.1.0
  
 # ── Delta Chaos — utilitários ─────────────────────────────────────
 tqdm>=4.66.0
+optuna>=4.0.0
  
 # ── Delta Chaos — dependências implícitas ─────────────────────────
 # (instaladas como dependências de yfinance/pandas mas listadas

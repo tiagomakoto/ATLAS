@@ -190,23 +190,18 @@ def executar_tune(ticker: str) -> dict:
     tape_lookup = df_ops_idx.groupby(
         ["data_str", "ticker"])[["fechamento", "minimo", "maximo"]].first()
 
-# C2 — pré-computa df_dia por data fora de _simular()
-# Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
-# Loop com progresso a cada 500 datas para feedback visual
-emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
-emit_event("TUNE_INDEX", "start", ticker=TICKER, total=len(datas))
-df_dias = {}
-for i, data in enumerate(datas):
-    df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
-    if (i + 1) % 100 == 0 or (i + 1) == len(datas):
-        emit_log(
-            f"TUNE [{TICKER}] indexando dias: {i+1:,}/{len(datas):,} "
-            f"({(i+1)/len(datas)*100:.0f}%)",
-            level="info"
-        )
-        emit_event("TUNE_INDEX", "progress", ticker=TICKER, current=i+1, total=len(datas))
-emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
-emit_event("TUNE_INDEX", "done", ticker=TICKER)
+    # C2 — pré-computa df_dia por data fora de _simular()
+    # Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
+    # Loop com progresso a cada 500 datas para feedback visual
+    emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
+    emit_event("TUNE_INDEX", "start", ticker=TICKER, total=len(datas))
+    df_dias = {}
+    for i, data in enumerate(datas):
+        df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
+        if (i + 1) % 100 == 0 or (i + 1) == len(datas):
+            emit_event("TUNE_INDEX", "progress", ticker=TICKER, current=i+1, total=len(datas))
+        emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
+        emit_event("TUNE_INDEX", "done", ticker=TICKER)
 
     # C1 — constantes do BOOK extraídas uma vez fora de _simular()
     # Evita carregar_config() dentro do loop de 200 trials × N_pregões
@@ -446,7 +441,7 @@ emit_event("TUNE_INDEX", "done", ticker=TICKER)
         # Reporta métricas como user_attrs para relatório final
         for k, v in res.items():
             trial.set_user_attr(k, v)
-        # Print para terminal (stdout capturado pelo dc_runner)
+    # Print para terminal (stdout capturado pelo dc_runner)
         n = trial.number + 1
         fase = "warmup" if n <= OPTUNA_STARTUP else "TPE"
         emit_log(
@@ -454,6 +449,19 @@ emit_event("TUNE_INDEX", "done", ticker=TICKER)
             f"tp={tp:.2f} stop={stop:.2f} janela={janela_anos}a "
             f"ir={res['ir_valido']:+.3f}",
             level="info"
+        )
+        # IPC: emite evento estruturado para o frontend via WebSocket
+        emit_event(
+            "TUNE_TRIAL", "progress",
+            ticker=TICKER,
+            trial=n,
+            total=OPTUNA_N_TRIALS,
+            fase=fase,
+            tp=tp,
+            stop=stop,
+            janela_anos=janela_anos,
+            ir=res["ir_valido"],
+            best_ir=study.best_value if study.trials else -999.0
         )
         return res["ir_valido"]
 
