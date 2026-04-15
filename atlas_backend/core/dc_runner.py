@@ -345,8 +345,9 @@ async def _stream_subprocess(
                 payload=action_payload,
                 response={"status": "ERRO", "error": repr(e)}
             )
-            raise
+        raise
 
+    return await asyncio.to_thread(_sync_runner)
 
 def _validar_caminho(caminho: str) -> None:
     paths = get_paths()
