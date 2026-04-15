@@ -211,16 +211,46 @@ if (evento.type === "dc_module_complete") {
     }
 }
 
-    if (evento.type === "dc_tune_progress") {
-      const d = evento.data;
-      console.log("[CALIBRACAO] dc_tune_progress:", d); // Debug para verificar se eventos estão chegando
-      if (d?.trial !== undefined) setTrialAtual(d.trial);
-      if (d?.total !== undefined) setTrialTotal(d.total);
-      if (d?.ir !== undefined) setBestIr(d.ir);
-      setUltimoEventoEm(Date.now());
-    }
+if (evento.type === "dc_tune_progress") {
+    const d = evento.data;
+    console.log("[CALIBRACAO] dc_tune_progress:", d); // Debug para verificar se eventos estão chegando
+    if (d?.trial !== undefined) setTrialAtual(d.trial);
+    if (d?.total !== undefined) setTrialTotal(d.total);
+    if (d?.ir !== undefined) setBestIr(d.ir);
+    setUltimoEventoEm(Date.now());
+  }
 
-    // Novo: Tratar logs de progresso da indexação de dias
+  // IPC: eventos de indexação via JSONL
+  if (evento.type === "dc_tune_index_start") {
+    const d = evento.data;
+    console.log("[CALIBRACAO] dc_tune_index_start:", d);
+    setIndexProgress({ current: 0, total: d?.total || 0 });
+    setShowIndexProgress(true);
+    setIndexComplete(false);
+    setFaseCalibracao("indexacao");
+    setUltimoEventoEm(Date.now());
+  }
+
+  if (evento.type === "dc_tune_index_progress") {
+    const d = evento.data;
+    console.log("[CALIBRACAO] dc_tune_index_progress:", d);
+    setIndexProgress({ current: d?.current || 0, total: d?.total || 0 });
+    setShowIndexProgress(true);
+    setIndexComplete(false);
+    setFaseCalibracao("indexacao");
+    setUltimoEventoEm(Date.now());
+  }
+
+  if (evento.type === "dc_tune_index_complete") {
+    const d = evento.data;
+    console.log("[CALIBRACAO] dc_tune_index_complete:", d);
+    setIndexComplete(true);
+    setShowIndexProgress(false);
+    setFaseCalibracao("otimizacao");
+    setUltimoEventoEm(Date.now());
+  }
+
+  // Legado: Tratar logs de progresso da indexação de dias (DEPRECADO - usar IPC acima)
     if (evento.type === "terminal_log") {
       const message = evento.data?.message;
       if (!message) return;
@@ -829,8 +859,8 @@ if (match) {
                     </div>
                   )}
 
-                  {/* Barra de progresso dos trials */}
-                  {(!showIndexProgress || indexComplete) && (
+{/* Barra de progresso dos trials */}
+{steps["2_tune"].status === "running" && (
                     <div style={{
                       marginBottom: 12,
                       padding: "8px 12px",

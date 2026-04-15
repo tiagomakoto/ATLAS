@@ -32,6 +32,14 @@ def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}", flush=True)
 def emit_error(e): print(f"[ERROR] {e}", flush=True)
 _atlas_disponivel = False
 
+# ── IPC via JSONL (eventos estruturados) ──────────────────────────────
+# Importa emit_event de edge.py para escrever no arquivo JSONL
+# que o dc_runner consome e emite via WebSocket
+try:
+    from delta_chaos.edge import emit_event
+except ImportError:
+    def emit_event(modulo, status, **kwargs): pass
+
 
 def executar_tune(ticker: str) -> dict:
     """
@@ -182,20 +190,23 @@ def executar_tune(ticker: str) -> dict:
     tape_lookup = df_ops_idx.groupby(
         ["data_str", "ticker"])[["fechamento", "minimo", "maximo"]].first()
 
-    # C2 — pré-computa df_dia por data fora de _simular()
-    # Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
-    # Loop com progresso a cada 500 datas para feedback visual
-    emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
-    df_dias = {}
-    for i, data in enumerate(datas):
-        df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
-        if (i + 1) % 100 == 0 or (i + 1) == len(datas):
-            emit_log(
-                f"TUNE [{TICKER}] indexando dias: {i+1:,}/{len(datas):,} "
-                f"({(i+1)/len(datas)*100:.0f}%)",
-                level="info"
-            )
-    emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
+# C2 — pré-computa df_dia por data fora de _simular()
+# Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
+# Loop com progresso a cada 500 datas para feedback visual
+emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
+emit_event("TUNE_INDEX", "start", ticker=TICKER, total=len(datas))
+df_dias = {}
+for i, data in enumerate(datas):
+    df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
+    if (i + 1) % 100 == 0 or (i + 1) == len(datas):
+        emit_log(
+            f"TUNE [{TICKER}] indexando dias: {i+1:,}/{len(datas):,} "
+            f"({(i+1)/len(datas)*100:.0f}%)",
+            level="info"
+        )
+        emit_event("TUNE_INDEX", "progress", ticker=TICKER, current=i+1, total=len(datas))
+emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
+emit_event("TUNE_INDEX", "done", ticker=TICKER)
 
     # C1 — constantes do BOOK extraídas uma vez fora de _simular()
     # Evita carregar_config() dentro do loop de 200 trials × N_pregões

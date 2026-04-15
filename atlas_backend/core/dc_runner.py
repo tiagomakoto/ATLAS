@@ -133,15 +133,25 @@ async def _stream_subprocess(
                     ev_status = event.get("status")
                     ev_ts = event.get("timestamp", "")
                     ev_key = (ev_modulo, ev_status, ev_ts)
-                    if ev_key in seen_events:
-                        continue
-                    seen_events.add(ev_key)
-                    if ev_status == "start":
-                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                    elif ev_status == "done":
-                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                    elif ev_status == "error":
-                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
+            if ev_key in seen_events:
+                continue
+                seen_events.add(ev_key)
+            # TUNE_INDEX events: IPC for indexation progress
+            if ev_modulo == "TUNE_INDEX":
+                if ev_status == "start":
+                    emit_dc_event("dc_tune_index_start", "TUNE", "running",
+                        total=event.get("total", 0), **action_payload)
+                elif ev_status == "progress":
+                    emit_dc_event("dc_tune_index_progress", "TUNE", "running",
+                        current=event.get("current", 0), total=event.get("total", 0), **action_payload)
+                elif ev_status == "done":
+                    emit_dc_event("dc_tune_index_complete", "TUNE", "ok", **action_payload)
+            elif ev_status == "start":
+                emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+            elif ev_status == "done":
+                emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+            elif ev_status == "error":
+                emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
         except Exception:
             pass
 
