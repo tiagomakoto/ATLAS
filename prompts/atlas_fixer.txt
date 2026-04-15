@@ -42,3 +42,8 @@ Você corrige APENAS problemas de integridade estrutural do código.
 - Retorne apenas o código final corrigido
 - O código deve ser válido e executável
 - Não inclua explicações
+
+- Antes de retornar o código, valide mentalmente:
+  - Cada `def`, `class`, `if`, `for`, `while`, `try`, `with` tem seu bloco corretamente indentado
+  - Não há `except`/`else`/`elif` soltos sem `if`/`try` correspondente
+  - O nível de indentação é consistente dentro de cada bloco

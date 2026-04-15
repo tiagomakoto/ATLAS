@@ -751,60 +751,78 @@ if __name__ == "__main__":
         # Fluxo: instancia EDGE completo (apaga books), roda TAPE + ORBIT
         # ──────────────────────────────────────────────────────────────
         elif args.modo in ("orbit_backtest", "backtest_dados"):
-            # Mantém comportamento atual do orbit (instancia EDGE completo, apaga books)
-            anos = (list(map(int, args.anos.split(",")))
-                    if args.anos
-                    else list(range(2002, datetime.now().year + 1)))
-            edge = EDGE(
-                capital=carregar_config().get("backtest", {}).get("capital", 10000.0),
-                modo="backtest",
-                universo=[args.ticker]
-            )
-            # TAPE
-            emit_event("TAPE", "start")
-            df_tape = tape_historico_carregar(
-                ativos=[args.ticker], anos=anos, forcar=False)
-            if df_tape.empty:
-                print("  ✗ TAPE vazio. Abortando.")
-                emit_event("TAPE", "error", erro="TAPE vazio")
-                sys.exit(1)
-            # Carregar séries externas (dentro do fluxo TAPE)
-            externas = tape_externas_carregar([args.ticker], anos)
-            print(f"  ✓ TAPE: {len(df_tape)} registros")
-            emit_event("TAPE", "done", registros=len(df_tape))
-            # ORBIT
-            emit_event("ORBIT", "start")
-            cfg_ativo = tape_ativo_carregar(args.ticker)
-            orbit = ORBIT(universo={args.ticker: cfg_ativo})
-            df_regimes_result = orbit.orbit_rodar(df_tape, anos, modo="mensal", externas_dict=externas)
-            if df_regimes_result is None or df_regimes_result.empty:
-                print("  ✗ ORBIT vazio. Abortando.")
-                emit_event("ORBIT", "error", erro="ORBIT vazio")
-                sys.exit(1)
-            print(f"  \u2713 ORBIT: regimes calculados")
-            emit_event("ORBIT", "done")
-
-            # REFLECT: calcular para todos os ciclos do historico
-            print(f"\n  [3/3] REFLECT")
-            emit_event("REFLECT", "start")
             try:
-                cfg_atual = tape_ativo_carregar(args.ticker)
-                historico_ciclos = list(dict.fromkeys(
-                    c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
-                ))
-                reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
-                ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
-                print(f"  Calculando REFLECT para {len(ciclos_sem_reflect)} ciclos...")
-                for ciclo_id in ciclos_sem_reflect:
-                    try:
-                        reflect_cycle_calcular(args.ticker, ciclo_id)
-                    except Exception as e_ciclo:
-                        print(f"  ~ REFLECT {ciclo_id} ignorado: {e_ciclo}")
-                print(f"  \u2713 REFLECT: {len(ciclos_sem_reflect)} ciclo(s) calculado(s)")
-                emit_event("REFLECT", "done")
+                # Mantém comportamento atual do orbit (instancia EDGE completo, apaga books)
+                anos = (list(map(int, args.anos.split(",")))
+                        if args.anos
+                        else list(range(2002, datetime.now().year + 1)))
+                config = carregar_config() or {}
+                capital = config.get("backtest", {}).get("capital", 10000.0)
+                edge = EDGE(
+                    capital=capital,
+                    modo="backtest",
+                    universo=[args.ticker]
+                )
+                # TAPE
+                emit_event("TAPE", "start")
+                df_tape = tape_historico_carregar(
+                    ativos=[args.ticker], anos=anos, forcar=False)
+                if df_tape.empty:
+                    print("  ✗ TAPE vazio. Abortando.")
+                    emit_event("TAPE", "error", erro="TAPE vazio")
+                    sys.exit(1)
+                # Carregar séries externas (dentro do fluxo TAPE)
+                externas = tape_externas_carregar([args.ticker], anos)
+                print(f"  ✓ TAPE: {len(df_tape)} registros")
+                emit_event("TAPE", "done", registros=len(df_tape))
+                
+                
+                # ORBIT
+                emit_event("ORBIT", "start")
+                cfg_ativo = tape_ativo_carregar(args.ticker)
+
+                # TAREFA 3: verificação defensiva contra cfg_ativo None
+                if cfg_ativo is None:
+                    print(f"ERRO: Configuração ausente para {args.ticker}")
+                    emit_event("ORBIT", "error", erro="cfg_ativo é None")
+                    sys.exit(1)
+
+                orbit = ORBIT(universo={args.ticker: cfg_ativo})
+                df_regimes_result = orbit.orbit_rodar(df_tape, anos, modo="mensal", externas_dict=externas)
+                if df_regimes_result is None or df_regimes_result.empty:
+                    print("  ✗ ORBIT vazio. Abortando.")
+                    emit_event("ORBIT", "error", erro="ORBIT vazio")
+                    sys.exit(1)
+                print(f"  ✓ ORBIT: regimes calculados")
+                emit_event("ORBIT", "done")
+
+                # REFLECT: calcular para todos os ciclos do historico
+                print(f"\n  [3/3] REFLECT")
+                emit_event("REFLECT", "start")
+                try:
+                    cfg_atual = tape_ativo_carregar(args.ticker)
+                    historico_ciclos = list(dict.fromkeys(
+                        c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
+                    ))
+                    reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
+                    ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
+                    print(f"  Calculando REFLECT para {len(ciclos_sem_reflect)} ciclos...")
+                    for ciclo_id in ciclos_sem_reflect:
+                        try:
+                            reflect_cycle_calcular(args.ticker, ciclo_id)
+                        except Exception as e_ciclo:
+                            print(f"  ~ REFLECT {ciclo_id} ignorado: {e_ciclo}")
+                    print(f"  ✓ REFLECT: {len(ciclos_sem_reflect)} ciclo(s) calculado(s)")
+                    emit_event("REFLECT", "done")
+                except Exception as e:
+                    print(f"  ✗ REFLECT erro: {e}")
+                    emit_event("REFLECT", "error", erro=str(e))
             except Exception as e:
-                print(f"  \u2717 REFLECT erro: {e}")
-                emit_event("REFLECT", "error", erro=str(e))
+                print(f"  ✗ backtest_dados erro: {e}")
+                import traceback
+                traceback.print_exc()
+                emit_event("ORBIT", "error", erro=str(e))
+                sys.exit(1)
 
         # ──────────────────────────────────────────────────────────────
         # Modo: orbit_update

@@ -94,7 +94,7 @@ def test_watchdog_promove_paused():
         calibracao = dados["calibracao"]
         
         # Verificar que o status foi atualizado para paused
-assert calibracao["steps"]["2_tune"]["status"] == "paused", "Step 2 deve ser promovido para paused"
+        assert calibracao["steps"]["2_tune"]["status"] == "paused", "Step 2 deve ser promovido para paused"
         assert calibracao["ultimo_evento_em"] is not None, "ultimo_evento_em deve ser atualizado"
         new_time = datetime.fromisoformat(calibracao["ultimo_evento_em"])
         assert (datetime.now() - new_time).total_seconds() < 10, "ultimo_evento_em deve ser atualizado para o momento atual"
@@ -146,10 +146,55 @@ def test_retomada_continua_do_sqlite():
         
         cursor.execute("SELECT COUNT(*) FROM trial WHERE state = 'COMPLETE'")
         trials_completos = cursor.fetchone()[0]
-        
+
         assert trials_completos == 5, "Deve haver 5 trials completos no SQLite"
-        
+
         conn.close()
-        
+
     finally:
         os.unlink(temp_db_path)
+
+def test_tape_ativo_carregar_nao_retorna_none():
+    """
+    TAREFA 5: Verifica que tape_ativo_carregar nunca retorna None.
+    Mesmo quando o arquivo JSON não existe, deve retornar default_config.
+    """
+    import sys
+    from pathlib import Path
+
+    # Adiciona o diretório delta_chaos ao path
+    delta_chaos_path = Path(__file__).parent.parent
+    sys.path.insert(0, str(delta_chaos_path.parent))
+
+    # Teste com ticker que não existe - deve retornar default_config, não None
+    ticker_teste = "TESTE_ATIVO_INEXISTENTE_12345"
+
+    # Mock do caminho de ATIVOS_DIR para usar diretório temporário
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Simula o comportamento de tape_ativo_carregar
+        from delta_chaos import tape
+
+        # Salva o ATIVOS_DIR original
+        originais_dir = tape.ATIVOS_DIR
+
+        # Substitui temporariamente
+        tape.ATIVOS_DIR = tmpdir
+
+        try:
+            # Chama tape_ativo_carregar com ticker inexistente
+            resultado = tape.tape_ativo_carregar(ticker_teste)
+
+            # Verifica que não retorna None
+            assert resultado is not None, "tape_ativo_carregar não deve retornar None"
+
+            # Verifica que tem os campos obrigatórios
+            assert "ativo" in resultado, "Resultado deve ter campo 'ativo'"
+            assert "prior" in resultado, "Resultado deve ter campo 'prior'"
+            assert "historico" in resultado, "Resultado deve ter campo 'historico'"
+
+            print(f" ✓ tape_ativo_carregar retorna default_config para ativo inexistente")
+
+        finally:
+            # Restaura o diretório original
+            tape.ATIVOS_DIR = originais_dir

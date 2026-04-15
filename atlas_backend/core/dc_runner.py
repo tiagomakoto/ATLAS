@@ -148,211 +148,204 @@ async def _stream_subprocess(
     def _sync_runner():
         import subprocess
 
-        env = os.environ.copy()
-        # Garante que o python vai enxergar a raiz do ATLAS como import root pra rodar o module 'delta_chaos'
-        env["PYTHONPATH"] = str(cwd.parent)
-        # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
-        env["PYTHONIOENCODING"] = "utf-8"
-        env["PYTHONUTF8"] = "1"
-        env["PYTHONUNBUFFERED"] = "1" # garante flush imediato de cada print
+        try:
+            env = os.environ.copy()
+            # Garante que o python vai enxergar a raiz do ATLAS como import root pra rodar o module 'delta_chaos'
+            env["PYTHONPATH"] = str(cwd.parent)
+            # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONUTF8"] = "1"
+            env["PYTHONUNBUFFERED"] = "1"  # garante flush imediato de cada print
 
-        # Gerar run_id único e passar para subprocesso
-        run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        event_log_path = TMP_DIR / f"events_{run_id}.jsonl"
-        env["ATLAS_RUN_ID"] = run_id
+            # Gerar run_id único e passar para subprocesso
+            run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            event_log_path = TMP_DIR / f"events_{run_id}.jsonl"
+            env["ATLAS_RUN_ID"] = run_id
 
-        # Iniciar watcher de eventos em thread separada
-        stop_event = threading.Event()
-        seen_events = set()
-        last_pos_ref = [0] # lista para mutabilidade dentro do closure
+            # Iniciar watcher de eventos em thread separada
+            stop_event = threading.Event()
+            seen_events = set()
+            last_pos_ref = [0]  # lista para mutabilidade dentro do closure
 
-        def _watch_events_inner(event_log_path, action_payload, stop_event):
-            while not stop_event.is_set():
-                try:
-                    if event_log_path.exists():
-                        with open(event_log_path, "r", encoding="utf-8") as f:
-                            f.seek(last_pos_ref[0])
-                            while True:
-                                line = f.readline()
-                                if not line:
-                                    break
-                                last_pos_ref[0] = f.tell()
-                                line = line.strip()
-                                if not line:
-                                    continue
-                                event = json.loads(line)
-                                ev_modulo = event.get("modulo")
-                                ev_status = event.get("status")
-                                ev_ts = event.get("timestamp", "")
-                                ev_key = (ev_modulo, ev_status, ev_ts)
-                                if ev_key in seen_events:
-                                    continue
-                                seen_events.add(ev_key)
-                                if ev_status == "start":
-                                    emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                                elif ev_status == "done":
-                                    emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                                elif ev_status == "error":
-                                    emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
-                except Exception:
-                    pass
-                time.sleep(0.2)
-
-        watch_thread = threading.Thread(
-            target=_watch_events_inner,
-            args=(event_log_path, action_payload, stop_event),
-            daemon=True
-        )
-        watch_thread.start()
-
-        # ── Polling SQLite para progresso do TUNE ──────────────────────
-        # Ativo apenas quando modulo=="TUNE". Le tune_{TICKER}.db em modo
-        # read-only a cada 200ms e emite dc_tune_progress via WebSocket.
-        # O subprocess nao sabe desta thread — separacao limpa.
-        sqlite_stop = threading.Event()
-        if modulo == "TUNE":
-            ticker_payload = action_payload.get("ticker", "")
-            db_path = TMP_DIR / f"tune_{ticker_payload}.db"
-
-            def _poll_sqlite(db_path, stop_event, action_payload):
-                import sqlite3
-                last_count = -1
-                TOTAL = 200
+            def _watch_events_inner(event_log_path, action_payload, stop_event):
                 while not stop_event.is_set():
                     try:
-                        if db_path.exists():
-                            conn = sqlite3.connect(
-                                f"file:{db_path}?mode=ro", uri=True,
-                                timeout=1
-                            )
-                            try:
-                                cur = conn.cursor()
-                                cur.execute(
-                                    "SELECT COUNT(*) FROM trial "
-                                    "WHERE state = 'COMPLETE'"
-                                )
-                                count = cur.fetchone()[0]
-                                cur.execute(
-                                    "SELECT MAX(value) FROM trial "
-                                    "WHERE state = 'COMPLETE'"
-                                )
-                                best = cur.fetchone()[0] or 0.0
-                            finally:
-                                conn.close()
-
-                            if count != last_count:
-                                last_count = count
-                                emit_dc_event(
-                                    "dc_tune_progress", "TUNE", "running",
-                                    trial=count,
-                                    total=TOTAL,
-                                    ir=round(float(best), 4),
-                                    **action_payload
-                                )
+                        if event_log_path.exists():
+                            with open(event_log_path, "r", encoding="utf-8") as f:
+                                f.seek(last_pos_ref[0])
+                                while True:
+                                    line = f.readline()
+                                    if not line:
+                                        break
+                                    last_pos_ref[0] = f.tell()
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    event = json.loads(line)
+                                    ev_modulo = event.get("modulo")
+                                    ev_status = event.get("status")
+                                    ev_ts = event.get("timestamp", "")
+                                    ev_key = (ev_modulo, ev_status, ev_ts)
+                                    if ev_key in seen_events:
+                                        continue
+                                    seen_events.add(ev_key)
+                                    if ev_status == "start":
+                                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
+                                    elif ev_status == "done":
+                                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
+                                    elif ev_status == "error":
+                                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
                     except Exception:
                         pass
                     time.sleep(0.2)
 
-            sqlite_thread = threading.Thread(
-                target=_poll_sqlite,
-                args=(db_path, sqlite_stop, action_payload),
+            watch_thread = threading.Thread(
+                target=_watch_events_inner,
+                args=(event_log_path, action_payload, stop_event),
                 daemon=True
             )
-            sqlite_thread.start()
-        else:
-            sqlite_thread = None
+            watch_thread.start()
 
-        proc = subprocess.Popen(
-            [sys.executable, "-u"] + args,
-            cwd=str(cwd.parent),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env=env
-        )
+            # ── Polling SQLite para progresso do TUNE ──────────────────────
+            # Ativo apenas quando modulo=="TUNE". Le tune_{TICKER}.db em modo
+            # read-only a cada 200ms e emite dc_tune_progress via WebSocket.
+            # O subprocess nao sabe desta thread — separacao limpa.
+            sqlite_stop = threading.Event()
+            if modulo == "TUNE":
+                ticker_payload = action_payload.get("ticker", "")
+                db_path = TMP_DIR / f"tune_{ticker_payload}.db"
 
-    for raw_line in proc.stdout:
-        line = raw_line.strip()
-        if not line:
-            continue
-        full_output.append(line)
+                def _poll_sqlite(db_path, stop_event, action_payload):
+                    import sqlite3
+                    last_count = -1
+                    TOTAL = 200
+                    while not stop_event.is_set():
+                        try:
+                            if db_path.exists():
+                                conn = sqlite3.connect(
+                                    f"file:{db_path}?mode=ro", uri=True,
+                                    timeout=1
+                                )
+                                try:
+                                    cur = conn.cursor()
+                                    cur.execute(
+                                        "SELECT COUNT(*) FROM trial "
+                                        "WHERE state = 'COMPLETE'"
+                                    )
+                                    count = cur.fetchone()[0]
+                                    cur.execute(
+                                        "SELECT MAX(value) FROM trial "
+                                        "WHERE state = 'COMPLETE'"
+                                    )
+                                    best = cur.fetchone()[0] or 0.0
+                                finally:
+                                    conn.close()
 
-        lvl = "info"
-        if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
-            lvl = "error"
-        elif line.startswith("⚠") or line.startswith("~"):
-            lvl = "warning"
+                                if count != last_count:
+                                    last_count = count
+                                    emit_dc_event(
+                                        "dc_tune_progress", "TUNE", "running",
+                                        trial=count,
+                                        total=TOTAL,
+                                        ir=round(float(best), 4),
+                                        **action_payload
+                                    )
+                        except Exception:
+                            pass
+                        time.sleep(0.2)
 
-        main_loop.call_soon_threadsafe(emit_log, line, lvl)
+                sqlite_thread = threading.Thread(
+                    target=_poll_sqlite,
+                    args=(db_path, sqlite_stop, action_payload),
+                    daemon=True
+                )
+                sqlite_thread.start()
+            else:
+                sqlite_thread = None
 
-        proc.wait()
+            proc = subprocess.Popen(
+                [sys.executable, "-u"] + args,
+                cwd=str(cwd.parent),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env
+            )
 
-        # Parar watcher e sqlite poller antes de encerrar
-        stop_event.set()
-        sqlite_stop.set()
-        watch_thread.join(timeout=2)
-        if sqlite_thread:
-            sqlite_thread.join(timeout=2)
-        _flush_events(event_log_path, action_payload, last_pos_ref[0], seen_events)
+            for raw_line in proc.stdout:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                full_output.append(line)
 
-        # Cleanup do arquivo de eventos (exceto se DEBUG)
-        if not DEBUG_TICKER and event_log_path.exists():
-            try:
-                event_log_path.unlink()
-            except Exception:
-                pass
+                lvl = "info"
+                if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
+                    lvl = "error"
+                elif line.startswith("⚠") or line.startswith("~"):
+                    lvl = "warning"
 
-        return proc.returncode
+                main_loop.call_soon_threadsafe(emit_log, line, lvl)
 
-    try:
-        returncode = await asyncio.wait_for(asyncio.to_thread(_sync_runner), timeout=1800)
+            proc.wait()
 
-        output_str = "\n".join(full_output)
+            # Parar watcher e sqlite poller antes de encerrar
+            stop_event.set()
+            sqlite_stop.set()
+            watch_thread.join(timeout=2)
+            if sqlite_thread:
+                sqlite_thread.join(timeout=2)
+            _flush_events(event_log_path, action_payload, last_pos_ref[0], seen_events)
 
-        # Verificar se há erros no output
-        tem_erro = any(
-            line.startswith("ERRO") or "Error" in line or "Traceback" in line
-            for line in full_output
-        )
+            # Cleanup do arquivo de eventos (exceto se DEBUG)
+            if not DEBUG_TICKER and event_log_path.exists():
+                try:
+                    event_log_path.unlink()
+                except Exception:
+                    pass
 
-        status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
+            returncode = proc.returncode
 
-        # ── dc_module_complete NÃO é emitido aqui ──
-        # _watch_events_inner e _flush_events já emitem dc_module_complete
-        # ao ler o JSONL produzido pelo edge.py.
-        # Emitir aqui causaria dupla emissão — bug removido.
+            output_str = "\n".join(full_output)
 
-        if tem_erro and returncode == 0:
-            emit_log("[DAILY] ⚠ Processo completou mas com warnings", level="warning")
+            # Verificar se há erros no output
+            tem_erro = any(
+                line.startswith("ERRO") or "Error" in line or "Traceback" in line
+                for line in full_output
+            )
 
-        log_action(
-            action=action_name,
-            payload=action_payload,
-            response={
+            status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
+
+            if tem_erro and returncode == 0:
+                emit_log("[DAILY] ⚠ Processo completou mas com warnings", level="warning")
+
+            log_action(
+                action=action_name,
+                payload=action_payload,
+                response={
+                    "status": status,
+                    "returncode": returncode,
+                    "linhas": len(full_output)
+                }
+            )
+
+            return {
                 "status": status,
                 "returncode": returncode,
-                "linhas": len(full_output)
+                "output": output_str
             }
-        )
 
-        return {
-            "status": status,
-            "returncode": returncode,
-            "output": output_str
-        }
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        emit_error(repr(e))
-        log_action(
-            action=action_name,
-            payload=action_payload,
-            response={"status": "ERRO", "error": repr(e)}
-        )
-        raise
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            emit_error(repr(e))
+            log_action(
+                action=action_name,
+                payload=action_payload,
+                response={"status": "ERRO", "error": repr(e)}
+            )
+            raise
 
 
 def _validar_caminho(caminho: str) -> None:
@@ -947,31 +940,31 @@ async def _executar_calibracao_step1(ticker: str):
     import json
     import os
 
-    def _update_ativo_simples(ticker: str, updates: dict):
-        """Versão simplificada de update_ativo para calibracao."""
-        from atlas_backend.core.paths import get_paths
-        paths = get_paths()
-        config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
-
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            current = json.load(f)
-
-        current.update(updates)
-        current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Criar arquivo temporário
-        tmp_path = config_path + ".tmp"
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            json.dump(current, f, indent=2, ensure_ascii=False)
-
-        # Substituir arquivo original
-        os.replace(tmp_path, config_path)
-
     try:
-        # 1. Atualizar status para "running"
+        def _update_ativo_simples(ticker: str, updates: dict):
+            """Versão simplificada de update_ativo para calibracao."""
+            from atlas_backend.core.paths import get_paths
+            paths = get_paths()
+            config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
+
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"Ativo '{ticker}' não encontrado")
+
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current = json.load(f)
+
+            current.update(updates)
+            current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Criar arquivo temporário
+            tmp_path = config_path + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(current, f, indent=2, ensure_ascii=False)
+
+            # Substituir arquivo original
+            os.replace(tmp_path, config_path)
+
+        # 1. Atualizar status para \"running\"
         dados = get_ativo(ticker)
         dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "running"
         dados["calibracao"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
@@ -980,9 +973,14 @@ async def _executar_calibracao_step1(ticker: str):
 
         # 2. Executar backtest
         from atlas_backend.core.dc_runner import dc_orbit_backtest
-        result = await dc_orbit_backtest(ticker)
+        result_tune = {"status": "ERRO", "returncode": 1, "output": "Step 1 não concluído"}  # default
+        result_gate = {"status": "ERRO", "returncode": 1, "output": "Step 2 não concluído"}  # default
+        try:
+            result = await dc_orbit_backtest(ticker)
+        except Exception as e:
+            result = {"status": "ERRO", "returncode": 1, "output": str(e)}
 
-        # 3. Atualizar status para "done" ou "error"
+        # 3. Atualizar status para \"done\" ou \"error\"
         dados = get_ativo(ticker)
         if result.get("status") == "OK":
             dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "done"
@@ -994,30 +992,34 @@ async def _executar_calibracao_step1(ticker: str):
         dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
         _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
-        # 4. Se step 1 concluído com sucesso, iniciar step 2 automaticamente
-        if result.get("status") == "OK":
-            # Atualizar step_atual para 2
-            dados["calibracao"]["step_atual"] = 2
-            dados["calibracao"]["steps"]["2_tune"]["status"] = "running"
-            dados["calibracao"]["steps"]["2_tune"]["iniciado_em"] = datetime.now().isoformat()
-            dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
-            _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+        try:
+            # 4. Se step 1 concluído com sucesso, iniciar step 2 automaticamente
+            if result.get("status") == "OK":
+                # Atualizar step_atual para 2
+                dados["calibracao"]["step_atual"] = 2
+                dados["calibracao"]["steps"]["2_tune"]["status"] = "running"
+                dados["calibracao"]["steps"]["2_tune"]["iniciado_em"] = datetime.now().isoformat()
+                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
-            # Executar step 2 (TUNE)
-            from atlas_backend.core.dc_runner import dc_tune
-            result_tune = await dc_tune(ticker)
+                # Executar step 2 (TUNE)
+                from atlas_backend.core.dc_runner import dc_tune
+                try:
+                    result_tune = await dc_tune(ticker)
+                except Exception as e:
+                    result_tune = {"status": "ERRO", "returncode": 1, "output": str(e)}
 
-            # Atualizar status do step 2
-            dados = get_ativo(ticker)
-            if result_tune.get("status") == "OK":
-                dados["calibracao"]["steps"]["2_tune"]["status"] = "done"
-            else:
-                dados["calibracao"]["steps"]["2_tune"]["status"] = "error"
-                dados["calibracao"]["steps"]["2_tune"]["erro"] = result_tune.get("output", "Erro desconhecido")
+                # Atualizar status do step 2
+                dados = get_ativo(ticker)
+                if result_tune.get("status") == "OK":
+                    dados["calibracao"]["steps"]["2_tune"]["status"] = "done"
+                else:
+                    dados["calibracao"]["steps"]["2_tune"]["status"] = "error"
+                    dados["calibracao"]["steps"]["2_tune"]["erro"] = result_tune.get("output", "Erro desconhecido")
 
-            dados["calibracao"]["steps"]["2_tune"]["concluido_em"] = datetime.now().isoformat()
-            dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
-            _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+                dados["calibracao"]["steps"]["2_tune"]["concluido_em"] = datetime.now().isoformat()
+                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
             # 5. Se step 2 concluído com sucesso, iniciar step 3 automaticamente
             if result_tune.get("status") == "OK":
@@ -1030,7 +1032,10 @@ async def _executar_calibracao_step1(ticker: str):
 
                 # Executar step 3 (GATE)
                 from atlas_backend.core.dc_runner import dc_gate_backtest
-                result_gate = await dc_gate_backtest(ticker)
+                try:
+                    result_gate = await dc_gate_backtest(ticker)
+                except Exception as e:
+                    result_gate = {"status": "ERRO", "returncode": 1, "output": str(e)}
 
                 # Atualizar status do step 3
                 dados = get_ativo(ticker)
@@ -1044,23 +1049,41 @@ async def _executar_calibracao_step1(ticker: str):
                 dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
-except Exception as e:
-    # Marcar como erro em caso de exceção
-    try:
-        dados = get_ativo(ticker)
-        step_atual = dados.get("calibracao", {}).get("step_atual", 1)
-        modulo = "ORBIT" if step_atual == 1 else "TUNE" if step_atual == 2 else "GATE"
-        emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
-        
-        # Atualizar status do step atual
-        step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
-        dados["calibracao"]["steps"][step_key]["status"] = "error"
-        dados["calibracao"]["steps"][step_key]["erro"] = str(e)
-        dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
-        
-        _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
-    except:
-        pass # Se falhar, pelo menos tentamos
+        except Exception as e:
+            # Marcar como erro em caso de exceção
+            try:
+                dados = get_ativo(ticker)
+                step_atual = dados.get("calibracao", {}).get("step_atual", 1)
+                modulo = "ORBIT" if step_atual == 1 else "TUNE" if step_atual == 2 else "GATE"
+                emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
+                
+                # Atualizar status do step atual
+                step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+                dados["calibracao"]["steps"][step_key]["status"] = "error"
+                dados["calibracao"]["steps"][step_key]["erro"] = str(e)
+                dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
+
+                _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+            except:
+                pass  # Se falhar, pelo menos tentamos
+
+    except Exception as e:
+        # Marcar como erro em caso de exceção
+        try:
+            dados = get_ativo(ticker)
+            step_atual = dados.get("calibracao", {}).get("step_atual", 1)
+            modulo = "ORBIT" if step_atual == 1 else "TUNE" if step_atual == 2 else "GATE"
+            emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
+
+            # Atualizar status do step atual
+            step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+            dados["calibracao"]["steps"][step_key]["status"] = "error"
+            dados["calibracao"]["steps"][step_key]["erro"] = str(e)
+            dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
+
+            _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+        except:
+            pass  # Se falhar, pelo menos tentamos
 
 
 async def dc_calibracao_retomar(ticker: str) -> dict:

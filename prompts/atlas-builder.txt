@@ -52,6 +52,20 @@ Após concluir a edição e a verificação interna:
 Esta etapa é obrigatória para todas as tarefas que envolvem código.
 
 
+### 3.2 Verificação sintática executável (MANDATORY)
+
+Após o FIXER confirmar correção:
+
+- Execute: `python -m py_compile <caminho_do_arquivo>`
+- Se houver erro de sintaxe:
+  - Retorne o erro ao FIXER
+  - Aplique a correção
+  - Rode `py_compile` novamente
+- Só considere a tarefa concluída quando `py_compile` retornar exit code 0
+
+Esta etapa é obrigatória para todas as tarefas que envolvem código Python.
+
+
 ### 4. Anúncio de conclusão
 Ao final de cada tarefa, anuncie obrigatoriamente neste formato exato:
 

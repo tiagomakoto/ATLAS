@@ -80,7 +80,45 @@ git -C C:\Users\tiago\OneDrive\Documentos\ATLAS commit -m "<mensagem composta no
 git -C C:\Users\tiago\OneDrive\Documentos\ATLAS push
 ```
 
-### 6. Anunciar conclusão
+### 6. Persistir pendências semânticas no vault
+
+Se houver arquivos nas categorias B ou C do Passo 2, **grave** o registro no arquivo acumulador:
+
+```
+vault/SYSTEM/scm_pendencias.md
+```
+
+Se o arquivo não existir, crie-o com este cabeçalho:
+
+```markdown
+# SCM — Pendências Semânticas Acumuladas
+
+Arquivo acumulador. Cada entrada corresponde a um commit com pendências semânticas não resolvidas.
+O Gemini varre este arquivo em sessões periódicas e preenche os `.md` pendentes.
+Após resolução, o CEO apaga a entrada correspondente.
+```
+
+Cada entrada deve ser **appendada** ao final do arquivo, no formato:
+
+```markdown
+---
+## <hash 7 chars> — <data YYYY-MM-DD HH:MM>
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/<sistema>/modules/<arquivo>.md
+  arquivo de código: <caminho do .py ou .jsx>
+  campos pendentes: function, role, intent, constraints
+
+### Módulos existentes com campos pendentes (Categoria C)
+- SYSTEMS/<sistema>/modules/<arquivo>.md
+  campos pendentes: <lista de campos>
+
+status: pendente
+```
+
+Se não houver pendências, **não escreva nada** no arquivo acumulador.
+
+### 7. Anunciar conclusão
 
 Formato obrigatório:
 
@@ -91,7 +129,7 @@ Formato obrigatório:
 - Vault SCM: <N criados> criados | <N atualizados> atualizados
 ```
 
-Se houver arquivos nas categorias B ou C do Passo 2, adicione obrigatoriamente o bloco abaixo após o anúncio:
+Se houver arquivos nas categorias B ou C do Passo 2, adicione obrigatoriamente o bloco abaixo após o anúncio (o registro já foi gravado no vault no Passo 6):
 
 ```
 📋 PENDÊNCIAS SEMÂNTICAS — requerem preenchimento pelo Gemini
@@ -105,9 +143,8 @@ Arquivos com campos pendentes em módulos existentes:
   - SYSTEMS/<sistema>/modules/<arquivo>.md
     campos pendentes: <lista>
 
-Próximo passo: entregar este log ao Gemini com o código dos arquivos acima
-para preenchimento semântico. Usar o prompt em:
-vault/scripts/update_scm.py (referência de formato de módulo)
+Próximo passo: convocar o Gemini em sessão dedicada. As pendências acumuladas estão em:
+vault/SYSTEM/scm_pendencias.md
 ```
 
 Se não houver pendências semânticas:

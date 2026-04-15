@@ -1,6 +1,6 @@
 # SCM — Modus Operandi do Vault Semântico
 
-**Última atualização:** 2026-04-12  
+**Última atualização:** 2026-04-14  
 **Escopo:** Delta Chaos · ATLAS · Advantage  
 **Leitura estimada:** 5 minutos
 
@@ -155,7 +155,20 @@ Se não houver pendências:
 
 ### Fase 3 — Preenchimento semântico (Gemini)
 
-Acionado pelo CEO quando o COMMIT emite o bloco `📋 PENDÊNCIAS SEMÂNTICAS`. O CEO entrega ao Gemini o log + o código-fonte dos arquivos pendentes usando o **Prompt padrão** na seção abaixo. O Gemini devolve os `.md` completos. O CEO cola no vault.
+O COMMIT persiste automaticamente todas as pendências B e C em `vault/SYSTEM/scm_pendencias.md` (arquivo acumulador). O CEO não precisa agir a cada commit.
+
+Quando o CEO decide rodar o Gemini (sessão periódica, não por commit):
+
+```
+CEO abre vault/SYSTEM/scm_pendencias.md
+  → verifica as entradas com status: pendente
+  → convoca o Gemini com o Prompt padrão abaixo
+  → Gemini lê o acumulador via Antigravity
+  → Gemini lê o código dos arquivos pendentes via Antigravity
+  → Gemini devolve os .md preenchidos
+  → CEO cola os .md no vault
+  → CEO apaga as entradas resolvidas do acumulador
+```
 
 ---
 
@@ -271,9 +284,9 @@ notes:
 
 ## Prompt padrão para convocação do Gemini
 
-Usar este prompt quando o COMMIT emitir o bloco `📋 PENDÊNCIAS SEMÂNTICAS`, ou quando houver mudanças estruturais acumuladas em módulos existentes que justifiquem atualização semântica.
+Usar em sessões periódicas — não necessariamente a cada commit. O Gemini lê tudo via Antigravity; o CEO não cola código manualmente.
 
-Copiar o bloco abaixo integralmente, substituindo as duas seções marcadas com `[COLE AQUI]`.
+Copiar o bloco abaixo integralmente e entregar ao Gemini sem modificações.
 
 ---
 
@@ -284,17 +297,39 @@ Copiar o bloco abaixo integralmente, substituindo as duas seções marcadas com 
 
 Delta Chaos é um sistema quantitativo de trading de opções no mercado brasileiro (B3).
 O vault é uma base de conhecimento em Markdown onde cada módulo do sistema é descrito
-em linguagem semântica para leitura por LLMs. Você vai preencher arquivos .md de módulos
-que estão com campos em [BOARD_REVIEW_REQUIRED] ou com semântica desatualizada após
-mudanças estruturais de código.
+em linguagem semântica para leitura por LLMs.
 
-## Formato obrigatório de cada arquivo
+Você tem acesso direto ao repositório via Antigravity. Não precisa receber código colado.
+
+## Passo 1 — Ler o acumulador de pendências
+
+Abra o arquivo:
+  vault/SYSTEM/scm_pendencias.md
+
+Identifique todas as entradas com `status: pendente`.
+Cada entrada lista os arquivos .md do vault que precisam de preenchimento semântico
+e o caminho do arquivo de código correspondente.
+
+Se o arquivo não existir ou não houver entradas com `status: pendente`, informe o CEO
+e encerre — não há trabalho a fazer.
+
+## Passo 2 — Para cada pendência, ler o código e preencher o .md
+
+Para cada entrada pendente:
+
+1. Leia o arquivo de código indicado na entrada (campo `arquivo de código`)
+2. Leia o arquivo .md atual do vault (campo com o caminho SYSTEMS/...)
+3. Preencha os campos marcados como [BOARD_REVIEW_REQUIRED] extraindo do código
+4. Preserve todos os campos já preenchidos — não reescreva o que está correto
+5. Grave o .md atualizado no vault
+
+## Formato obrigatório de cada arquivo .md
 
 Todo .md de módulo segue este schema YAML frontmatter:
 
 ---
-uid: <preservar o existente>
-version: <preservar — incrementar patch se for atualização de módulo existente>
+uid: <preservar o existente — nunca alterar>
+version: <incrementar patch: ex 1.2.3 → 1.2.4>
 status: validated
 owner: Chan
 
@@ -331,35 +366,207 @@ notes:
 
 1. Leia o código antes de preencher qualquer campo. Não infira — extraia.
 2. Se o código não deixar claro, marque: [REVISAR — comportamento não determinístico]
-3. Preserve UIDs existentes. Não altere módulos que não estão na lista de pendências.
+3. Preserve UIDs existentes. Nunca altere módulos fora da lista de pendências.
 4. constraints devem ser literais: se o código diz timeout=1800, escreva timeout=1800.
 5. depends_on: apenas módulos que o código importa diretamente — não inferir.
 6. Formato WikiLink obrigatório em depends_on e used_by: [[SYSTEMS/<sistema>/modules/<MODULO>]]
 7. status deve ser validated após preenchimento completo.
 8. notes: preservar todas as entradas existentes. Adicionar apenas edge cases novos.
-9. Não produza explicações entre arquivos — apenas os arquivos, separados por ---
-   com o caminho canônico no topo de cada bloco.
 
-## Arquivos pendentes
+## Passo 3 — Atualizar o acumulador
 
-[COLE AQUI O BLOCO 📋 PENDÊNCIAS SEMÂNTICAS EMITIDO PELO COMMIT]
+Após preencher e gravar cada .md, atualize a entrada correspondente em
+`vault/SYSTEM/scm_pendencias.md`:
 
-## Código dos arquivos pendentes
+  status: pendente  →  status: resolvido — <data YYYY-MM-DD>
 
-[COLE AQUI O CÓDIGO-FONTE COMPLETO DE CADA ARQUIVO LISTADO ACIMA]
+Não apague as entradas — o CEO faz a limpeza manual.
 
-## Output esperado
+## Passo 4 — Relatório final
 
-Um bloco Markdown completo por arquivo, na ordem dos arquivos pendentes.
-Cada bloco encabeçado pelo caminho canônico no vault:
+Ao concluir todas as pendências, emita:
 
-// SYSTEMS/<sistema>/modules/<arquivo>.md
-<conteúdo completo do arquivo .md>
+```
+✅ Preenchimento semântico concluído
+- Módulos preenchidos: <N>
+- Módulos ignorados (sem pendência): <N>
+- Entradas do acumulador marcadas como resolvidas: <N>
+
+Pendências restantes: <N> — <lista de arquivos que não foi possível resolver com justificativa>
+```
+```
 
 ---
 
-// SYSTEMS/<sistema>/modules/<próximo arquivo>.md
-<conteúdo completo>
+## Prompt de varredura completa (Gemini)
+
+Usar quando a semântica do vault precisar ser reconciliada com o estado real do código — independente do acumulador. Cobre todo o COVERAGE_MAP, detecta `.md` órfãos e atualiza diretórios.
+
+Entregar ao Gemini sem modificações.
+
+---
+
+```
+# Tarefa — Varredura completa: código vs vault semântico
+
+## Contexto
+
+Delta Chaos é um sistema quantitativo de trading de opções no mercado brasileiro (B3).
+O vault é uma base de conhecimento em Markdown onde cada módulo do sistema é descrito
+em linguagem semântica para leitura por LLMs.
+
+Você tem acesso direto ao repositório via Antigravity. Não precisa receber código colado.
+Esta é uma varredura completa — não dirigida pelo acumulador de pendências.
+
+## Passo 1 — Mapear o estado atual do vault
+
+Leia a estrutura de diretórios do vault:
+  vault/SYSTEMS/delta_chaos/modules/
+  vault/SYSTEMS/atlas/modules/
+  vault/SYSTEMS/advantage/modules/
+
+Para cada .md encontrado, registre internamente:
+  - caminho do .md
+  - uid
+  - version
+  - status (draft | validated)
+  - file (arquivo de código coberto)
+  - se há campos [BOARD_REVIEW_REQUIRED] remanescentes
+
+## Passo 2 — Mapear o estado atual do código
+
+Percorra os diretórios de código de cada sistema, aplicando as mesmas regras de
+exclusão do should_ignore():
+
+  Ignorar: .json .md .xlsx .parquet .db .css .html .log
+           /tests/ /test/ /__pycache__/ /node_modules/
+           test_*.py · conftest.py · pytest.ini · __init__ · SPEC_* · README
+
+Delta Chaos — ler:
+  delta_chaos/*.py
+
+ATLAS Backend — ler:
+  atlas_backend/core/*.py
+  atlas_backend/api/routes/*.py
+  atlas_backend/api/websocket/*.py
+  atlas_backend/main.py
+
+ATLAS Frontend — ler:
+  atlas_ui/src/App.jsx
+  atlas_ui/src/hooks/
+  atlas_ui/src/store/
+  atlas_ui/src/components/
+  atlas_ui/src/layouts/
+
+Advantage — ler:
+  advantage/src/data_layer/db/
+  advantage/src/data_layer/collectors/
+  advantage/src/data_layer/scheduler.py
+  advantage/src/data_layer/utils.py
+
+Para cada arquivo de código encontrado, determine o módulo conceitual que o cobre
+aplicando o COVERAGE_MAP abaixo. Se o arquivo não bater com nenhuma entrada do
+COVERAGE_MAP, use o stem do nome para localizar o .md correspondente.
+
+### COVERAGE_MAP
+
+Delta Chaos:
+  delta_chaos/tape.py           → TAPE.md
+  delta_chaos/orbit.py          → ORBIT.md
+  delta_chaos/fire.py           → FIRE.md
+  delta_chaos/book.py           → BOOK.md
+  delta_chaos/edge.py           → EDGE.md
+  delta_chaos/gate.py           → GATE.md
+  delta_chaos/tune.py           → TUNE.md
+  delta_chaos/reflect.py        → REFLECT.md
+
+ATLAS Backend:
+  atlas_backend/core/dc_runner*         → ATLAS_DC_RUNNER.md
+  atlas_backend/core/delta_chaos_reader → delta_chaos_reader.md
+  atlas_backend/core/event_bus*         → EVENT_BUS.md
+  atlas_backend/core/config*            → CONFIG_MANAGER.md
+  atlas_backend/api/routes/             → API_ROUTES.md
+  atlas_backend/api/websocket/          → WEBSOCKET.md
+
+Advantage:
+  advantage/src/data_layer/db/          → DATA_LAYER.md
+  advantage/src/data_layer/collectors/  → COLLECTORS.md
+  advantage/src/data_layer/scheduler*   → SCHEDULER.md
+  advantage/src/data_layer/utils*       → COLLECTORS.md
+
+## Passo 3 — Classificar cada módulo do vault
+
+Para cada .md no vault, classifique em uma das quatro categorias:
+
+**A — Sincronizado**: semântica completa, código não mudou estruturalmente.
+  → Nenhuma ação.
+
+**B — Desatualizado**: o código evoluiu (novas funções públicas, novo contrato de
+  entrada/saída, novos constraints) mas o .md não acompanhou.
+  → Atualizar campos afetados. Incrementar version patch.
+
+**C — Draft pendente**: .md com campos [BOARD_REVIEW_REQUIRED] remanescentes.
+  → Preencher campos pendentes extraindo do código.
+
+**D — Órfão**: .md no vault sem arquivo de código correspondente (arquivo foi
+  deletado, renomeado ou movido).
+  → NÃO deletar automaticamente. Registrar no relatório para decisão do CEO.
+
+Se existirem arquivos de código sem nenhum .md correspondente no vault:
+  → Criar .md novo seguindo o template. Classificar como Categoria C (draft).
+
+## Passo 4 — Executar as atualizações
+
+Para cada módulo nas categorias B e C:
+
+1. Leia o código atualizado
+2. Compare com o .md existente campo a campo
+3. Atualize apenas os campos que divergem ou estão pendentes
+4. Preserve UIDs, notes existentes e campos corretos
+5. Incremente version patch
+6. Grave o .md no vault
+
+Para cada módulo novo (sem .md):
+1. Crie o .md seguindo o template em vault/TEMPLATES/module_template.md
+2. Preencha todos os campos que o código permitir extrair
+3. Marque [BOARD_REVIEW_REQUIRED] apenas onde o código não for conclusivo
+4. Use UID sequencial: mod-delta-NNN | mod-atlas-NNN | mod-advantage-NNN
+5. Grave o .md no vault
+
+Regras universais de preenchimento:
+- Leia o código antes de preencher qualquer campo. Não infira — extraia.
+- Se o código não deixar claro, marque: [REVISAR — comportamento não determinístico]
+- constraints devem ser literais: se o código diz timeout=1800, escreva timeout=1800.
+- depends_on: apenas módulos que o código importa diretamente — não inferir.
+- Formato WikiLink obrigatório: [[SYSTEMS/<sistema>/modules/<MODULO>]]
+- status: validated após preenchimento completo | draft se campos pendentes restarem.
+- notes: preservar todas as entradas existentes. Adicionar apenas edge cases novos.
+- UIDs existentes nunca são alterados.
+
+## Passo 5 — Atualizar vault/VERSIONS/version_history.md
+
+Adicione uma entrada datada:
+  vX.Y — Varredura completa YYYY-MM-DD: <N> módulos atualizados, <N> criados, <N> órfãos detectados.
+
+## Passo 6 — Relatório final
+
+Ao concluir, emita o relatório completo:
+
+```
+✅ Varredura completa concluída — <data>
+
+Módulos sincronizados (A): <N> — nenhuma ação
+Módulos atualizados   (B): <N> — <lista com o campo principal alterado em cada um>
+Drafts preenchidos    (C): <N> — <lista>
+Módulos novos criados    : <N> — <lista com caminho do .md criado>
+
+Órfãos detectados (D): <N>
+  - <caminho do .md> — arquivo de código esperado: <caminho> — STATUS: não encontrado
+  Aguardando decisão do CEO: deletar | remap | manter como referência histórica
+
+Campos não resolvidos: <N>
+  - <módulo>: <campo> — [REVISAR — <motivo>]
+```
 ```
 
 ---
@@ -373,3 +580,6 @@ Cada bloco encabeçado pelo caminho canônico no vault:
 | 2026-04-12 | `needs_board_review()` corrigido: regex multiline detecta `[BOARD_REVIEW_REQUIRED]` em bloco YAML (linha seguinte ao campo), com early-exit se marcador ausente |
 | 2026-04-12 | Prompt do COMMIT atualizado: Passo 1 cobre três estados git (HEAD / cached / untracked) com instrução explícita de concatenar e deduplicar; Passo 6 emite log estruturado de pendências semânticas com caminho do `.py` original |
 | 2026-04-12 | 8 arquivos de teste criados erroneamente no vault Advantage deletados manualmente pelo CEO |
+| 2026-04-14 | COMMIT atualizado: Passo 6 persiste pendências B/C em `vault/SYSTEM/scm_pendencias.md` (acumulador) antes do anúncio; Passo 7 referencia o acumulador no lugar de instruções de colagem manual |
+| 2026-04-14 | Prompt do Gemini reescrito: Gemini lê acumulador e código via Antigravity — CEO não cola conteúdo; Gemini marca entradas como `resolvido` após gravar; limpeza final é responsabilidade do CEO |
+| 2026-04-14 | Prompt de varredura completa adicionado: 6 passos — mapear vault, mapear código, classificar (A/B/C/D), executar atualizações, atualizar version_history, emitir relatório; órfãos detectados mas nunca deletados automaticamente |

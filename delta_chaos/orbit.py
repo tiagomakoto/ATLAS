@@ -498,8 +498,13 @@ class ORBIT:
             for ativo in ohlcv_ativos:
                 cfg = cfgs_ativos[ativo]
 
+                # TAREFA 1: verificação defensiva contra cfg None
+                if cfg is None:
+                    emit_error(f"Configuração ausente para {ativo} — pulando")
+                    continue
+
                 df_ohlcv = ohlcv_ativos[ativo]
-                df_ate   = df_ohlcv[
+                df_ate = df_ohlcv[
                     df_ohlcv.index.date <= data_ref
                 ].copy()
 
@@ -522,7 +527,7 @@ class ORBIT:
                         emit_error(f"Falha ao salvar {ativo} {ciclo_id}: {e}")
 
         if not rows:
-            print("  ✗ ORBIT sem resultados")
+            print(" ✗ ORBIT sem resultados")
             return pd.DataFrame()
 
         df_regimes = pd.DataFrame(rows)

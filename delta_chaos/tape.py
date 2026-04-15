@@ -370,14 +370,15 @@ def tape_ativo_carregar(ticker: str) -> dict:
                 print(f"  ⚠ S2: backup falhou: {e2}")
             print(f"  ⚠ S2: recriando {ticker}.json — "
                   f"erro: {e}")
-            # Recria com defaults completos
-            tape_ativo_salvar(ticker, default_config)
-            return default_config
+# Recria com defaults completos
+        tape_ativo_salvar(ticker, default_config)
+        return default_config
+    else:
+        # Arquivo não existe — cria com defaults completos
+        tape_ativo_salvar(ticker, default_config)
+        print(f" + Master JSON {ticker} criado com defaults")
+        return default_config
 
-    # Arquivo não existe — cria com defaults completos
-    tape_ativo_salvar(ticker, default_config)
-    print(f"  + Master JSON {ticker} criado com defaults")
-    return default_config
 
 def tape_ativo_inicializar(ticker: str) -> dict:
     """

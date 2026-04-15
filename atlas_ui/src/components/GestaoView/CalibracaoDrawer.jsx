@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import useWebSocket from "../../hooks/useWebSocket";
 
+const API_BASE = "http://localhost:8000";
+
 export default function CalibracaoDrawer({ ticker, onClose }) {
   const [calibracao, setCalibracao] = useState(null);
   const [watchdogAlert, setWatchdogAlert] = useState(null);
@@ -34,7 +36,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   useEffect(() => {
     const fetchOnboarding = async () => {
       try {
-        const res = await fetch(`/delta-chaos/calibracao/${ticker}`);
+        const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`);
         if (res.ok) {
           const data = await res.json();
           setCalibracao(data);
@@ -420,7 +422,7 @@ if (evento.type === "dc_module_complete") {
 
   const handleRetomar = async () => {
     try {
-      const res = await fetch(`/delta-chaos/calibracao/${ticker}/retomar`, {
+      const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}/retomar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -469,7 +471,7 @@ if (evento.type === "dc_module_complete") {
     });
 
     try {
-      const res = await fetch("/delta-chaos/calibracao/iniciar", {
+      const res = await fetch(`${API_BASE}/delta-chaos/calibracao/iniciar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker, confirm: true, description: "Iniciar calibração" })
@@ -544,7 +546,7 @@ if (evento.type === "dc_module_complete") {
   // TAREFA 5: Implementar botões de conclusão
   const handleConfirmarOperar = async () => {
     try {
-      const res = await fetch("http://localhost:8000/ativos/" + ticker + "/status", {
+      const res = await fetch(`${API_BASE}/ativos/${ticker}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "OPERAR" })
