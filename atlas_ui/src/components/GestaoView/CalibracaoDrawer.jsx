@@ -868,7 +868,7 @@ if (match) {
                         <div style={{
                           height: "100%",
                           background: "var(--atlas-blue)",
-                          width: `${trialAtual / trialTotal * 100}%`
+                          width: `${trialTotal > 0 ? (trialAtual / trialTotal * 100) : 0}%`
                         }} />
                       </div>
                     </div>
