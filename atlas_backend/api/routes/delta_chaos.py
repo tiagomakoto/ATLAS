@@ -447,6 +447,8 @@ async def calibracao_retomar(ticker: str):
         from atlas_backend.core.dc_runner import dc_calibracao_retomar
         result = await dc_calibracao_retomar(ticker)
         return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

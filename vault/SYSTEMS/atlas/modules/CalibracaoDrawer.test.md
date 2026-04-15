@@ -1,34 +1,22 @@
 ---
 uid: mod-atlas-023
-version: 1.0
+version: 1.0.1
 status: draft
-owner: Chan | Lilian | Board
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: ÓRFÃO — arquivo de teste. Regras de varredura excluem arquivos de teste (__tests__/, test_*.py). Manter ou deletar a critério do CEO.
 file: atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.test.jsx
-role: [BOARD_REVIEW_REQUIRED]
+role: Arquivo de teste — excluído do escopo da varredura SCM.
 
 input:
-  - <name>: <type + meaning>
-
 output:
-  - <name>: <type + meaning>
-
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
-
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
-
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
-
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
-
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
-
+intent:
+  - ÓRFÃO detectado na varredura 2026-04-14. Módulo cobre arquivo de teste — fora do escopo SCM.
+constraints:
 notes:
-  - 2026-04-14 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.test.jsx
-  - <edge cases ou riscos>
+  - 2026-04-14: detectado como ÓRFÃO na varredura completa — arquivo de teste
+  - Aguardando decisão do CEO: deletar | manter como referência
+---

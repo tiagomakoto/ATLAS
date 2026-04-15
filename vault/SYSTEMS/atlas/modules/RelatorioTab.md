@@ -1,34 +1,35 @@
 ---
 uid: mod-atlas-020
-version: 1.0
-status: draft
-owner: Chan | Lilian | Board
+version: 1.0.1
+status: validated
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: Tab de relatórios TUNE no frontend. Lista relatórios do index.json, exibe detalhes expandidos com parâmetros sugeridos vs atuais, e permite aplicar parâmetros aprovados pelo CEO via POST /delta-chaos/tune/aplicar.
 file: atlas_ui/src/components/RelatorioTab.jsx
-role: [BOARD_REVIEW_REQUIRED]
+role: Interface de relatórios — visualização e ação sobre relatórios de TUNE e ONBOARDING.
 
 input:
-  - <name>: <type + meaning>
+  - Dados via fetch GET /delta-chaos/relatorios
+  - Interações do CEO: expandir, aplicar, rejeitar
 
 output:
-  - <name>: <type + meaning>
+  - DOM: lista expandível de relatórios com botões de ação
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/API_ROUTES]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/UI_CORE]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - Prover interface para que o CEO avalie e aplique ou rejeite parâmetros sugeridos pelo TUNE.
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
+  - Aplicação dispara POST com confirm=true e description obrigatória
+  - Relatórios aplicados ficam marcados como "aplicado" no index.json
 
 notes:
   - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/RelatorioTab.jsx
-  - <edge cases ou riscos>
+---

@@ -1,11 +1,11 @@
 ---
 uid: mod-delta-006
-version: 1.0.2
+version: 1.0.3
 status: validated
 owner: Chan
 
 function: Protocolo de qualificacao de ativo em 8 gates sequenciais antes de declarar status OPERAR. Inclui backtest interno, validacao de TP/STOP, regime, REFLECT e liquidez. Tambem opera em modo EOD leve (gate_eod) para verificacao diaria.
-file: delta_chaos/gate.py
+file: delta_chaos/gate.py, delta_chaos/gate_eod.py
 role: Porteiro — nenhum ativo opera sem aprovacao do GATE. Decisao de presente, nao calibracao historica.
 
 input:

@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-003
-version: 1.0
+version: 1.0.1
 status: validated
 owner: Chan
 
@@ -13,7 +13,7 @@ input:
   - updates: dict — objeto contendo modificações no JSON para salvamento.
 
 output:
-  - dict: JSON completo do ativo em `get_ativo`, enriquecido com `status`, `staleness_days`, e arrays extraídos/sanitizados.
+  - dict: JSON completo do ativo em `get_ativo`, enriquecido com `status`, `staleness_days`, `calibracao` e arrays extraídos/sanitizados.
   - dict: Posicões e PnL retornados por `get_book`.
 
 depends_on:
@@ -32,7 +32,13 @@ constraints:
   - `sanitize_nan` converte `NaN` Python para `None` no output, evitando corrupção ou quebra do parser JSON.
   - `update_ativo` sempre atualiza version (+1) e injeta history (`ticker_history.json`) de forma atômica para cada atualização de config.
   - O Status deriva implicitamente de regressão no `reflect_history[...state]` e `historico_config`, não é um campo persistido no estado bruto.
+  - get_ativo retorna campo `calibracao` com estrutura padrão (step_atual, steps 1-3, ultimo_evento_em) quando ausente no master JSON.
+  - get_ativo retorna `historico_config` como booleano (true se tem registros) — não o array completo.
+  - get_book aceita fonte "backtest" | "paper" | "live" — valida antes de abrir arquivo.
+  - reflect_historico filtrado por ciclos existentes no historico ORBIT — ciclos órfãos descartados.
+  - Quedas consecutivas REFLECT (D ou E) >= 2 resultam em status SUSPENSO.
 
 notes:
   - Se faltar historico, último ciclo setar `lock`, estado será SUSPENSO. Duas quedas no reflector também suspendem a engine para o ativo.
+  - Funções públicas: list_ativos, get_ativo, update_ativo, get_book, sanitize_nan, sanitize_record
 ---

@@ -1,34 +1,35 @@
 ---
 uid: mod-atlas-015
-version: 1.0
-status: draft
-owner: Chan | Lilian | Board
+version: 1.0.1
+status: validated
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: Mapeamento centralizado de cores para regimes ORBIT. Exporta REGIME_COLORS (CSS vars), REGIME_BG_COLORS (rgba) e funções getRegimeColor/getRegimeBgColor com fallback por substring.
 file: atlas_ui/src/store/regimeColors.js
-role: [BOARD_REVIEW_REQUIRED]
+role: Fonte única de verdade para cores de regime — importado por AtivoView, DigestPanel e demais componentes.
 
 input:
-  - <name>: <type + meaning>
+  - regime: str — nome do regime ORBIT (ex: "ALTA", "NEUTRO_BULL")
 
 output:
-  - <name>: <type + meaning>
+  - color: str — variável CSS ou valor rgba correspondente ao regime
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/UI_CORE]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - Eliminar duplicação de lógica de cor por regime em componentes. Fonte única importável.
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
+  - Match exato priorizado sobre fallback por substring
+  - Regimes cobertos: ALTA, BAIXA, NEUTRO_BULL, NEUTRO_BEAR, NEUTRO_LATERAL, NEUTRO_TRANSICAO, NEUTRO_MORTO, RECUPERACAO, PANICO, NEUTRO
+  - Fallback por substring: ALTA/BULL → verde, BAIXA/BEAR → vermelho, PANICO → vermelho, RECUPERACAO → verde, NEUTRO → azul
+  - Retorno padrão: var(--atlas-text-secondary) para regime desconhecido
 
 notes:
-  - 2026-04-12 — módulo criado automaticamente a partir de atlas_ui/src/store/regimeColors.js
-  - <edge cases ou riscos>
+  - Duas variantes: REGIME_COLORS (var CSS para foreground) e REGIME_BG_COLORS (rgba 0.2 para backgrounds)
+---

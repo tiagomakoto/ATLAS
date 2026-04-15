@@ -1,36 +1,37 @@
 ---
 uid: mod-atlas-018
-version: 1.0.2
-status: draft
-owner: Chan | Lilian | Board
+version: 1.0.3
+status: validated
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: Drawer lateral para onboarding de novo ativo. Coleta ticker e configurações iniciais, dispara POST /delta-chaos/calibracao/iniciar e acompanha progresso dos 3 steps (backtest_dados, tune, backtest_gate).
 file: atlas_ui/src/components/GestaoView/OnboardingDrawer.jsx
-role: [BOARD_REVIEW_REQUIRED]
+role: Formulário de onboarding — interface para adicionar novos ativos ao sistema.
 
 input:
-  - <name>: <type + meaning>
+  - Interações do CEO: ticker, parâmetros iniciais
+  - Status de calibração via polling GET /delta-chaos/calibracao/{ticker}
 
 output:
-  - <name>: <type + meaning>
+  - DOM: drawer com formulário, stepper de progresso (3 steps) e log de execução
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/API_ROUTES]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/GestaoView]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - Guiar o CEO pelo fluxo de onboarding com feedback visual em tempo real.
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
+  - 3 steps sequenciais: backtest_dados → tune → backtest_gate
+  - Polling de status a cada intervalo para atualização do stepper
+  - Validação de ticker: regex ^[A-Z0-9]{4,6}$
 
 notes:
   - 2026-04-14: código modificado — OnboardingDrawer.jsx
   - 2026-04-13: código modificado — OnboardingDrawer.jsx
-  - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/OnboardingDrawer.jsx
-  - <edge cases ou riscos>
+---

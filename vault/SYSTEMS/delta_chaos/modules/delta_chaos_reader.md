@@ -1,36 +1,45 @@
 ---
 uid: mod-delta-009
-version: 1.0.2
-status: draft
-owner: Chan | Lilian | Board
+version: 1.0.3
+status: validated
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: Interface de leitura e escrita do master JSON dos ativos produzido pelo Delta Chaos. Sanitiza NaN, calcula status derivado (OPERAR, MONITORAR, SEM_EDGE, SUSPENSO), enriquece com staleness_days e calibracao.
 file: atlas_backend/core/delta_chaos_reader.py
-role: [BOARD_REVIEW_REQUIRED]
+role: Leitor/escritor de estado do ativo — traduz JSON cru para estrutura consumível pelo backend.
 
 input:
-  - <name>: <type + meaning>
+  - ticker: str — identificador do ativo
+  - updates: dict — campos a atualizar (para update_ativo)
+  - fonte: str — "backtest" | "paper" | "live" (para get_book)
 
 output:
-  - <name>: <type + meaning>
+  - dict: JSON enriquecido com status, staleness_days, calibracao, reflect_historico, core, historico
+  - list: lista de tickers encontrados em config_dir (para list_ativos)
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/ATLAS_DC_RUNNER]]
+  - [[SYSTEMS/atlas/modules/API_ROUTES]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - Abstrair acesso ao master JSON do ativo para todo o ecossistema ATLAS.
+  - NOTA: este módulo é coberto semanticamente por [[SYSTEMS/atlas/modules/DATA_READERS]] — mantido separado por granularidade de arquivo.
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
+  - sanitize_nan converte float NaN para None — evita corrupção JSON
+  - get_ativo retorna historico_config como booleano (true se len > 0)
+  - Status derivado: quedas REFLECT >=2 → SUSPENSO | último GATE OPERAR + IR>0 + REFLECT A/B → OPERAR
+  - reflect_historico filtra por ciclos existentes no historico ORBIT — órfãos descartados
+  - get_ativo retorna calibracao com estrutura padrão (3 steps) quando ausente
+  - update_ativo incrementa version, injeta history em ticker_history.json
+  - get_book valida fonte antes de ler — aceita backtest, paper, live
 
 notes:
   - 2026-04-14: código modificado — delta_chaos_reader.py
   - 2026-04-13: código modificado — delta_chaos_reader.py
-  - 2026-04-12 — módulo criado automaticamente a partir de atlas_backend/core/delta_chaos_reader.py
-  - <edge cases ou riscos>
+  - Funções públicas: list_ativos, get_ativo, update_ativo, get_book, sanitize_nan, sanitize_record
+---

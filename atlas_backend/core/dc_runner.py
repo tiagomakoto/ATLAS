@@ -1106,7 +1106,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
     # Verificar se está pausado
     step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
     if calibracao.get("steps", {}).get(step_key, {}).get("status") != "paused":
-        raise HTTPException(status_code=400, detail=f"Step {step_atual} não está pausado")
+        raise ValueError(f"Step {step_atual} não está pausado")
 
     # Retomar conforme step
     if step_atual == 1:

@@ -18,7 +18,7 @@
     },
     "build": {
       "mode": "primary",
-      "model": "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+      "model": "nvidia/minimaxai/minimax-m2.7",
       "temperature": 0.2,
       "top_p": 0.1,
       "prompt": "{file:./prompts/atlas-builder.txt}",

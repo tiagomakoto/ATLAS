@@ -1,37 +1,33 @@
 ---
 uid: mod-atlas-010
-version: 1.0.3
+version: 1.0.4
 status: draft
-owner: Chan | Lilian | Board
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: DUPLICATA — este módulo cobre o mesmo arquivo que [[SYSTEMS/atlas/modules/ATLAS_DC_RUNNER]] (mod-atlas-001). Mantido como referência histórica. Consultar ATLAS_DC_RUNNER.md para documentação atualizada.
 file: atlas_backend/core/dc_runner.py
-role: [BOARD_REVIEW_REQUIRED]
+role: DUPLICATA de ATLAS_DC_RUNNER.md — aguardando decisão do CEO: deletar | remap | manter como referência histórica.
 
 input:
-  - <name>: <type + meaning>
+  - Ver [[SYSTEMS/atlas/modules/ATLAS_DC_RUNNER]]
 
 output:
-  - <name>: <type + meaning>
+  - Ver [[SYSTEMS/atlas/modules/ATLAS_DC_RUNNER]]
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/ATLAS_DC_RUNNER]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - DUPLICATA detectada na varredura 2026-04-14. Módulo criado automaticamente em 2026-04-11 duplicando ATLAS_DC_RUNNER.md (mod-atlas-001).
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
 
 notes:
-  - 2026-04-12: código modificado — dc_runner.py
-  - 2026-04-12: código modificado — dc_runner.py
-  - 2026-04-11: código modificado — dc_runner.py
+  - 2026-04-14: detectado como DUPLICATA de ATLAS_DC_RUNNER.md na varredura completa
   - 2026-04-11 — módulo criado automaticamente a partir de atlas_backend/core/dc_runner.py
-  - <edge cases ou riscos>
+  - Aguardando decisão do CEO: deletar | remap | manter como referência histórica
+---

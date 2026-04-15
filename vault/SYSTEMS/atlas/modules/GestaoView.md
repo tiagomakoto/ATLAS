@@ -1,36 +1,37 @@
 ---
 uid: mod-atlas-017
-version: 1.0.2
-status: draft
-owner: Chan | Lilian | Board
+version: 1.0.3
+status: validated
+owner: Chan
 
-function: [BOARD_REVIEW_REQUIRED]
+function: View de gestão de ativos com abas para onboarding de novos ativos e calibração. Integra OnboardingDrawer e CalibracaoDrawer como sub-componentes modais/drawer.
 file: atlas_ui/src/components/GestaoView.jsx
-role: [BOARD_REVIEW_REQUIRED]
+role: Tela de gestão — administração do ciclo de vida dos ativos (onboarding, calibração, parâmetros).
 
 input:
-  - <name>: <type + meaning>
+  - Interações do CEO (botões de ação, seleção de ativo)
+  - Dados da API via fetch
 
 output:
-  - <name>: <type + meaning>
+  - DOM: view com abas e drawers laterais para gestão
 
 depends_on:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/API_ROUTES]]
+  - [[SYSTEMS/atlas/modules/systemStore]]
 
 depends_on_condition:
-  - <condição>: [[SYSTEMS/<system>/modules/...]]
 
 used_by:
-  - [[SYSTEMS/<system>/modules/...]]
+  - [[SYSTEMS/atlas/modules/UI_CORE]]
 
-intent: [BOARD_REVIEW_REQUIRED]
-  - [BOARD_REVIEW_REQUIRED] ou descrição explícita
+intent:
+  - Centralizar todas as ações de gestão de ativos em uma única tela organizada por abas.
 
-constraints: [BOARD_REVIEW_REQUIRED]
-  - <regras / invariantes / thresholds literais>
+constraints:
+  - Integra CalibracaoDrawer e OnboardingDrawer como sub-componentes
+  - Ações passam por confirmação (confirm=true + description obrigatória)
 
 notes:
   - 2026-04-14: código modificado — GestaoView.jsx
   - 2026-04-14: código modificado — GestaoView.jsx
-  - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView.jsx
-  - <edge cases ou riscos>
+---
