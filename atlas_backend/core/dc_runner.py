@@ -133,9 +133,9 @@ async def _stream_subprocess(
                     ev_status = event.get("status")
                     ev_ts = event.get("timestamp", "")
                     ev_key = (ev_modulo, ev_status, ev_ts)
-            if ev_key in seen_events:
-                continue
-                seen_events.add(ev_key)
+                    if ev_key in seen_events:
+                        continue
+                    seen_events.add(ev_key)
             # TUNE_INDEX events: IPC for indexation progress
             if ev_modulo == "TUNE_INDEX":
                 if ev_status == "start":
