@@ -247,7 +247,7 @@ async def _stream_subprocess(
                                         "dc_tune_progress", "TUNE", "running",
                                         trial=count,
                                         total=TOTAL,
-                                        ir=round(float(best), 4),
+                                        ir=round(float(best), 3),
                                         **action_payload
                                     )
                         except Exception:

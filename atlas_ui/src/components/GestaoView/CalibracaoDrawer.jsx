@@ -25,12 +25,15 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   // Estado para rastrear a fase atual da calibração
   const [faseCalibracao, setFaseCalibracao] = useState("integridade");
 
-  // Estado para rastrear sub-módulos do step 1 (TAPE, ORBIT, REFLECT)
-  const [subModules, setSubModules] = useState({
-    "TAPE": null,
-    "ORBIT": null,
-    "REFLECT": null
-  });
+// Estado para rastrear sub-módulos do step 1 (TAPE, ORBIT, REFLECT)
+const [subModules, setSubModules] = useState({
+  "TAPE": null,
+  "ORBIT": null,
+  "REFLECT": null
+});
+
+// Estado para armazenar valores de parametrização (TP/STOP)
+const [parametros, setParametros] = useState({ take_profit: null, stop_loss: null });
 
   // Carregar estado inicial da calibração
   useEffect(() => {
@@ -102,10 +105,31 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       }
     }, 60000); // Verifica a cada minuto
 
-    return () => clearInterval(interval);
-  }, [ultimoEventoEm, step2IniciadoEm, steps["2_tune"].status, watchdogAlert]);
+return () => clearInterval(interval);
+}, [ultimoEventoEm, step2IniciadoEm, steps["2_tune"].status, watchdogAlert]);
 
-  // Conexão WebSocket para eventos em tempo real
+// Buscar TP/STOP do ativo quando GATE concluído
+useEffect(() => {
+  if (getStepStatus("3_backtest_gate") === "done") {
+    const fetchParametros = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/ativos/${ticker}`);
+        if (res.ok) {
+          const data = await res.json();
+          setParametros({
+            take_profit: data.take_profit,
+            stop_loss: data.stop_loss
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao buscar parâmetros:", error);
+      }
+    };
+    fetchParametros();
+  }
+}, [ticker, steps]);
+
+// Conexão WebSocket para eventos em tempo real
   const wsUrl = `ws://${window.location.hostname}:${window.location.port || '8000'}/ws/events`;
   useWebSocket(wsUrl, (evento) => {
     handleEvento(evento);
@@ -205,23 +229,25 @@ if (evento.type === "dc_module_complete") {
       // Regex ajustado para capturar números com vírgulas (ex: 1,000/6,004)
       const indexRegex = /TUNE \[([A-Z0-9]+)\] indexando dias: ([\d,]+)\/([\d,]+)/;
       const match = message.match(indexRegex);
-      if (match) {
-        // Remover vírgulas antes de converter para int
-        const current = parseInt(match[2].replace(/,/g, ''));
-        const total = parseInt(match[3].replace(/,/g, ''));
-        setIndexProgress({ current, total });
-        setShowIndexProgress(true);
-        setIndexComplete(false);
-        setFaseCalibracao("indexacao");
-        return;
-      }
+if (match) {
+    // Remover vírgulas antes de converter para int
+    const current = parseInt(match[2].replace(/,/g, ''));
+    const total = parseInt(match[3].replace(/,/g, ''));
+    setIndexProgress({ current, total });
+    setShowIndexProgress(true);
+    setIndexComplete(false);
+    setFaseCalibracao("indexacao");
+    setUltimoEventoEm(Date.now());
+    return;
+  }
 
-      // Detectar conclusão da indexação: "pré-cômputo concluído"
-      if (message.includes("pré-cômputo concluído")) {
-        setIndexComplete(true);
-        setFaseCalibracao("otimizacao");
-        return;
-      }
+  // Detectar conclusão da indexação: "pré-cômputo concluído"
+  if (message.includes("pré-cômputo concluído")) {
+    setIndexComplete(true);
+    setFaseCalibracao("otimizacao");
+    setUltimoEventoEm(Date.now());
+    return;
+  }
     }
   };
 
@@ -829,7 +855,7 @@ if (evento.type === "dc_module_complete") {
                           fontSize: 9,
                           color: "var(--atlas-text-secondary)"
                         }}>
-                          IR: {bestIr.toFixed(4) || "0.0000"}
+                          IR: {bestIr.toFixed(3) || "0.000"}
                         </span>
                       </div>
                       <div style={{
@@ -987,12 +1013,24 @@ if (evento.type === "dc_module_complete") {
             color: "var(--atlas-text-secondary)",
             marginTop: 2
           }}>
-            {faseCalibracao === "integridade" && "Integridade de dados"}
-            {faseCalibracao === "indexacao" && "Indexação"}
-            {faseCalibracao === "otimizacao" && "Otimização"}
-          </div>
-        </>
-      )}
+{faseCalibracao === "integridade" && "Integridade de dados"}
+{faseCalibracao === "indexacao" && "Indexação"}
+{faseCalibracao === "otimizacao" && "Otimização"}
+</div>
+
+{/* Valores de parametrização em azul */}
+{parametros.take_profit !== null && parametros.stop_loss !== null && (
+  <div style={{
+    fontFamily: "monospace",
+    fontSize: 9,
+    color: "var(--atlas-blue)",
+    marginTop: 6
+  }}>
+    TP: {parametros.take_profit.toFixed(2)} | STOP: {parametros.stop_loss.toFixed(2)}
+  </div>
+)}
+</>
+)}
 
       {/* Botão de reinício apenas em caso de erro - não mostra "Iniciar" pois já foi iniciado na aba Gestão */}
 
@@ -1060,6 +1098,6 @@ if (evento.type === "dc_module_complete") {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
       }
-    `}</style></>
+    `}}</style></>
   );
 }
