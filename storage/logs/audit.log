@@ -221,3 +221,6 @@
 {"timestamp": "2026-04-15T22:38:15.274030", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 0}}
 {"timestamp": "2026-04-15T23:50:32.177386", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
 {"timestamp": "2026-04-15T23:51:06.131818", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "returncode": 3221225786, "linhas": 823}}
+{"timestamp": "2026-04-16T12:53:44.253996", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "ERRO", "error": "NameError(\"name 'tape_ativo_carregar' is not defined\")"}}
+{"timestamp": "2026-04-16T13:08:13.980802", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-16T13:15:17.541754", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}

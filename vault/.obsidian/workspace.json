@@ -19,8 +19,19 @@
               "icon": "lucide-folder-closed",
               "title": "Explorador de arquivos"
             }
+          },
+          {
+            "id": "7e6da89f5cc241cf",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -178,8 +189,9 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "sidebar",
+  "active": "7e6da89f5cc241cf",
   "lastOpenFiles": [
+    "SYSTEMS/atlas/modules/CalibracaoDrawer.test.md",
     "SYSTEMS/advantage/modules/conftest.md",
     "SYSTEMS/advantage/modules/pytest.md",
     "SYSTEM/llm_usage.md",

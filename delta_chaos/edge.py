@@ -93,6 +93,21 @@ from datetime import datetime, date
 import pandas as pd
 from tqdm.auto import tqdm as _tqdm
 
+from delta_chaos.tape import (
+    tape_ativo_carregar,
+    tape_ativo_salvar,
+    tape_historico_carregar,
+    tape_eod_carregar,
+    tape_ohlcv_carregar,
+    tape_ibov_carregar,
+    tape_externas_carregar,
+    _obter_selic,
+)
+from .orbit import ORBIT
+from .book import BOOK
+from .fire import FIRE
+from .gate_eod import gate_eod_verificar
+
 # ── REFLECT FUNCTIONS (moved from tape.py) ────────────────────────────────────
 
 def reflect_daily_calcular(ativo: str, data: str, df_eod: pd.DataFrame) -> dict:
