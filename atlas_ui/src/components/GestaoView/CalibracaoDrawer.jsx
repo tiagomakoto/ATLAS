@@ -3,6 +3,13 @@ import useWebSocket from "../../hooks/useWebSocket";
 
 const API_BASE = "http://localhost:8000";
 
+const PULSE_ANIMATION = `
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+`;
+
 export default function CalibracaoDrawer({ ticker, onClose }) {
   const [calibracao, setCalibracao] = useState(null);
   const [watchdogAlert, setWatchdogAlert] = useState(null);
@@ -619,7 +626,7 @@ if (match) {
   // if (!calibracao) return null;
 
   return (
-    <><div style={{
+      <><div style={{
       position: "fixed",
       top: 0,
       right: 0,
@@ -1122,12 +1129,9 @@ if (match) {
         >
           Reiniciar Step 3
         </button>
-      )}
-    </div><style>{`
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-    `}}</style></>
+)}
+</div>
+<style>{PULSE_ANIMATION}</style>
+</>
   );
 }

@@ -32,13 +32,9 @@ def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}", flush=True)
 def emit_error(e): print(f"[ERROR] {e}", flush=True)
 _atlas_disponivel = False
 
-# ── IPC via JSONL (eventos estruturados) ──────────────────────────────
-# Importa emit_event de edge.py para escrever no arquivo JSONL
-# que o dc_runner consome e emite via WebSocket
-try:
-    from delta_chaos.edge import emit_event
-except ImportError:
-    def emit_event(modulo, status, **kwargs): pass
+# ── IPC via emit_dc_event (conforme SPEC_integração_backend+delta_chaos.md) ──
+# tune.py roda no mesmo processo via asyncio.to_thread, pode emitir eventos diretamente
+from atlas_backend.core.event_bus import emit_dc_event
 
 
 def executar_tune(ticker: str) -> dict:
@@ -194,34 +190,39 @@ def executar_tune(ticker: str) -> dict:
     # Evita filtrar df_tape_c 200x × N_datas dentro do loop Optuna
     # Loop com progresso a cada 500 datas para feedback visual
     emit_log(f"TUNE [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
-    emit_event("TUNE_INDEX", "start", ticker=TICKER, total=len(datas))
+    emit_dc_event("dc_tune_index_start", "TUNE", "running", ticker=TICKER, total=len(datas))
     df_dias = {}
     for i, data in enumerate(datas):
         df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
         if (i + 1) % 100 == 0 or (i + 1) == len(datas):
-            emit_event("TUNE_INDEX", "progress", ticker=TICKER, current=i+1, total=len(datas))
-        emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
-        emit_event("TUNE_INDEX", "done", ticker=TICKER)
+            emit_log(
+            f"TUNE [{TICKER}] indexando dias: {i+1:,}/{len(datas):,} "
+            f"({(i+1)/len(datas)*100:.0f}%)",
+level="info"
+)
+            emit_dc_event("dc_tune_index_progress", "TUNE", "running", ticker=TICKER, current=i+1, total=len(datas))
+emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
+emit_dc_event("dc_tune_index_complete", "TUNE", "ok", ticker=TICKER)
 
-    # C1 — constantes do BOOK extraídas uma vez fora de _simular()
-    # Evita carregar_config() dentro do loop de 200 trials × N_pregões
-    _cfg_book_tune = carregar_config()["book"]
-    _RT = _cfg_book_tune["risco_trade"]
-    _FM = _cfg_book_tune["fator_margem"]
-    _NM = _cfg_book_tune["n_contratos_minimo"]
+# C1 — constantes do BOOK extraídas uma vez fora de _simular()
+# Evita carregar_config() dentro do loop de 200 trials × N_pregões
+_cfg_book_tune = carregar_config()["book"]
+_RT = _cfg_book_tune["risco_trade"]
+_FM = _cfg_book_tune["fator_margem"]
+_NM = _cfg_book_tune["n_contratos_minimo"]
 
-    def _get_regime(ciclo_id):
-        raw = regime_idx_c.get(ciclo_id, {})
-        return {
-            "regime": raw.get("regime", "DESCONHECIDO"),
-            "ir":     float(raw.get("ir", 0.0)),
-            "sizing": float(raw.get("sizing", 0.0)),
-        }
+def _get_regime(ciclo_id):
+    raw = regime_idx_c.get(ciclo_id, {})
+    return {
+        "regime": raw.get("regime", "DESCONHECIDO"),
+        "ir": float(raw.get("ir", 0.0)),
+        "sizing": float(raw.get("sizing", 0.0)),
+    }
 
-    def _reflect_bloqueado(ciclo_id):
-        """Fase 3: retorna True se ciclo está em Edge C/D/E."""
-        estado = reflect_cycle_hist.get(ciclo_id, {}).get("reflect_state", "B")
-        return estado in REFLECT_ESTADOS_BLOQUEADOS
+def _reflect_bloqueado(ciclo_id):
+    """Fase 3: retorna True se ciclo está em Edge C/D/E."""
+    estado = reflect_cycle_hist.get(ciclo_id, {}).get("reflect_state", "B")
+    return estado in REFLECT_ESTADOS_BLOQUEADOS
 
     _cfg_f      = carregar_config()["fire"]
     DIAS_MIN    = _cfg_f["dias_min"]
@@ -441,7 +442,7 @@ def executar_tune(ticker: str) -> dict:
         # Reporta métricas como user_attrs para relatório final
         for k, v in res.items():
             trial.set_user_attr(k, v)
-    # Print para terminal (stdout capturado pelo dc_runner)
+        # Print para terminal (stdout capturado pelo dc_runner)
         n = trial.number + 1
         fase = "warmup" if n <= OPTUNA_STARTUP else "TPE"
         emit_log(
@@ -449,19 +450,6 @@ def executar_tune(ticker: str) -> dict:
             f"tp={tp:.2f} stop={stop:.2f} janela={janela_anos}a "
             f"ir={res['ir_valido']:+.3f}",
             level="info"
-        )
-        # IPC: emite evento estruturado para o frontend via WebSocket
-        emit_event(
-            "TUNE_TRIAL", "progress",
-            ticker=TICKER,
-            trial=n,
-            total=OPTUNA_N_TRIALS,
-            fase=fase,
-            tp=tp,
-            stop=stop,
-            janela_anos=janela_anos,
-            ir=res["ir_valido"],
-            best_ir=study.best_value if study.trials else -999.0
         )
         return res["ir_valido"]
 
