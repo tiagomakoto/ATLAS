@@ -220,3 +220,4 @@
 {"timestamp": "2026-04-15T22:38:12.307413", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 510}}
 {"timestamp": "2026-04-15T22:38:15.274030", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "OK", "returncode": 0, "linhas": 0}}
 {"timestamp": "2026-04-15T23:50:32.177386", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK", "returncode": 0, "linhas": 107}}
+{"timestamp": "2026-04-15T23:51:06.131818", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "returncode": 3221225786, "linhas": 823}}

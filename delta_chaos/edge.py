@@ -62,54 +62,20 @@ import os
 import json
 from datetime import datetime
 
-# Diretório compartilhado para eventos JSONL
-ATLAS_ROOT = Path(__file__).resolve().parent.parent
-TMP_DIR = ATLAS_ROOT / "tmp"
-TMP_DIR.mkdir(parents=True, exist_ok=True)
+# ── Logging ATLAS ─────────────────────────────────
+from atlas_backend.core.terminal_stream import emit_log, emit_error
+from atlas_backend.core.event_bus import emit_dc_event
 
-# run_id para isolamento entre múltiplos runners
-RUN_ID = os.environ.get("ATLAS_RUN_ID", f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-EVENT_LOG = TMP_DIR / f"events_{RUN_ID}.jsonl"
+def emit_event(modulo, status, ticker=None, **kwargs):
+    if status == "start":
+        emit_dc_event("dc_module_start", modulo, "running", ticker=ticker, **kwargs)
+    elif status == "done":
+        emit_dc_event("dc_module_complete", modulo, "ok", ticker=ticker, **kwargs)
+    elif status == "error":
+        emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, **kwargs)
+    else:
+        emit_dc_event("dc_module_complete", modulo, status, ticker=ticker, **kwargs)
 
-def emit_event(modulo, status, **kwargs):
-    """Escreve evento estruturado em arquivo JSONL para o runner consumir."""
-    event = {
-        "modulo": modulo,
-        "status": status,
-        "timestamp": datetime.now().isoformat(),
-        "run_id": RUN_ID,
-        **kwargs
-    }
-    with open(EVENT_LOG, "a", encoding="utf-8") as f:
-        f.write(json.dumps(event, ensure_ascii=False) + "\n")
-    # Manter print para debug humano
-    print(f"  [EVENT] {modulo}: {status}")
-
-from delta_chaos.tape import (
-    tape_ativo_carregar, tape_ativo_salvar,
-    tape_historico_carregar,
-    tape_eod_carregar, tape_ohlcv_carregar, tape_ibov_carregar, tape_externas_carregar,
-    _obter_selic,
-)
-from .orbit import ORBIT
-from .book import BOOK
-from .fire import FIRE
-from .gate_eod import gate_eod_verificar
-
-# ── Logging ATLAS (graceful fallback) ─────────────────────────────────
-# edge.py roda como subprocess do dc_runner. emit_log deve usar print()
-# com flush=True para que o dc_runner capture stdout linha a linha.
-# Nao importar atlas_backend.terminal_stream aqui: o processo filho
-# nao tem acesso ao event_bus/loop do uvicorn pai.
-def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}", flush=True)
-def emit_error(e): print(f"[ERROR] {e}", flush=True)
-_atlas_disponivel = False
-
-# Eventos estruturados do Delta Chaos (DESATIVADO — quem emite é o dc_runner)
-# try:
-#     from atlas_backend.core.event_bus import emit_dc_event
-# except ImportError:
-#     def emit_dc_event(event_type, modulo, status=None, **kwargs): pass
 
 # ════════════════════════════════════════════════════════════════════
 # DELTA CHAOS — EDGE v1.3
@@ -674,6 +640,165 @@ class EDGE:
         self.book.dashboard()
         return self.book.df()
 
+
+# ──────────────────────────────────────────────────────────────
+# Funções Públicas Síncronas (API do Orquestrador)
+# Requisito SPEC: executam I/O pesado, o caller (dc_runner) deve usar asyncio.to_thread
+# ──────────────────────────────────────────────────────────────
+
+def rodar_backtest_dados(ticker: str, anos: list = None):
+    try:
+        from datetime import datetime
+        import sys
+        
+        anos_list = anos if anos else list(range(2002, datetime.now().year + 1))
+        
+        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
+        
+        config = carregar_config() or {}
+        capital = config.get("backtest", {}).get("capital", 10000.0)
+        edge = EDGE(capital=capital, modo="backtest", universo=[ticker])
+        
+        # TAPE
+        emit_dc_event("dc_module_start", "TAPE", "running", ticker=ticker)
+        df_tape = tape_historico_carregar(ativos=[ticker], anos=anos_list, forcar=False)
+        if df_tape.empty:
+            emit_dc_event("dc_module_complete", "TAPE", "error", ticker=ticker, erro="TAPE vazio")
+            raise Exception("TAPE vazio")
+        externas = tape_externas_carregar([ticker], anos_list)
+        emit_dc_event("dc_module_complete", "TAPE", "ok", ticker=ticker, registros=len(df_tape))
+        
+        # ORBIT
+        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
+        cfg_ativo = tape_ativo_carregar(ticker)
+        if cfg_ativo is None:
+            emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro="cfg_ativo é None")
+            raise Exception(f"Configuração ausente para {ticker}")
+            
+        orbit = ORBIT(universo={ticker: cfg_ativo})
+        df_regimes_result = orbit.orbit_rodar(df_tape, anos_list, modo="mensal", externas_dict=externas)
+        if df_regimes_result is None or df_regimes_result.empty:
+            emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro="ORBIT vazio")
+            raise Exception("ORBIT vazio")
+        emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker=ticker)
+        
+        # REFLECT
+        emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)
+        try:
+            cfg_atual = tape_ativo_carregar(ticker)
+            historico_ciclos = list(dict.fromkeys(
+                c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
+            ))
+            reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
+            ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
+            for ciclo_id in ciclos_sem_reflect:
+                try:
+                    reflect_cycle_calcular(ticker, ciclo_id)
+                except Exception as e_ciclo:
+                    emit_log(f"~ REFLECT {ciclo_id} ignorado: {e_ciclo}", "warning")
+            emit_dc_event("dc_module_complete", "REFLECT", "ok", ticker=ticker)
+        except Exception as e:
+            emit_dc_event("dc_module_complete", "REFLECT", "error", ticker=ticker, erro=str(e))
+            raise e
+            
+        return {"status": "OK"}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro=str(e))
+        import traceback
+        traceback.print_exc()
+        raise e
+
+def rodar_orbit_update(ticker: str, anos: list = None):
+    try:
+        from datetime import datetime
+        import sys
+
+        anos_list = anos if anos else list(range(2002, datetime.now().year + 1))
+        
+        # TAPE
+        emit_dc_event("dc_module_start", "TAPE", "running", ticker=ticker)
+        cfg_ativo = tape_ativo_carregar(ticker)
+        df_ohlcv = tape_ohlcv_carregar(ticker, anos_list)
+        df_ibov = tape_ibov_carregar(anos_list)
+        externas = tape_externas_carregar([ticker], anos_list)
+        if df_ohlcv.empty:
+            emit_dc_event("dc_module_complete", "TAPE", "error", ticker=ticker, erro="OHLCV vazio")
+            raise Exception(f"TAPE: dados OHLCV indisponíveis para {ticker}")
+        emit_dc_event("dc_module_complete", "TAPE", "ok", ticker=ticker, registros=len(df_ohlcv))
+        
+        # ORBIT
+        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
+        orbit = ORBIT(universo={ticker: cfg_ativo})
+        orbit.orbit_rodar(df_ohlcv, anos=anos_list, modo="mensal", externas_dict=externas)
+        emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker=ticker)
+        
+        # REFLECT
+        emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)
+        cfg_atual = tape_ativo_carregar(ticker)
+        historico_ciclos = list(dict.fromkeys(
+            c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
+        ))
+        reflect_existente = set(cfg_atual.get("reflect_cycle_history", {}).keys())
+        ciclos_sem_reflect = [c for c in historico_ciclos if c not in reflect_existente]
+        if not ciclos_sem_reflect:
+            ciclos_sem_reflect = [datetime.now().strftime("%Y-%m")]
+        for ciclo_id in ciclos_sem_reflect:
+            try:
+                reflect_cycle_calcular(ticker, ciclo_id)
+            except Exception as e_ciclo:
+                emit_log(f"~ REFLECT {ciclo_id} ignorado: {e_ciclo}", "warning")
+        emit_dc_event("dc_module_complete", "REFLECT", "ok", ticker=ticker)
+        return {"status": "OK"}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro=str(e))
+        raise e
+
+def rodar_tune(ticker: str):
+    from delta_chaos.tune import executar_tune
+    emit_dc_event("dc_module_start", "TUNE", "running", ticker=ticker)
+    try:
+        executar_tune(ticker)
+        emit_dc_event("dc_module_complete", "TUNE", "ok", ticker=ticker)
+        return {"status": "OK"}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "TUNE", "error", ticker=ticker, erro=str(e))
+        raise e
+
+def rodar_backtest_gate(ticker: str):
+    from delta_chaos.gate import gate_executar
+    emit_dc_event("dc_module_start", "GATE", "running", ticker=ticker)
+    try:
+        resultado = gate_executar(ticker)
+        emit_log(f"[GATE] {ticker}: {resultado}", "info")
+        emit_dc_event("dc_module_complete", "GATE", "ok", ticker=ticker)
+        return {"status": "OK", "output": str(resultado)}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "GATE", "error", ticker=ticker, erro=str(e))
+        raise e
+
+def rodar_reflect_daily(ticker: str, xlsx_path: str):
+    emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)
+    try:
+        tape_eod_carregar(ativo=ticker, filepath=xlsx_path)
+        emit_dc_event("dc_module_complete", "REFLECT", "ok", ticker=ticker)
+        return {"status": "OK"}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "REFLECT", "error", ticker=ticker, erro=str(e))
+        raise e
+
+def rodar_gate_eod(ticker: str):
+    emit_dc_event("dc_module_start", "GATE", "running", ticker=ticker)
+    try:
+        resultado = gate_eod_verificar(ticker, verbose=True)
+        emit_log(f"[GATE_EOD] {ticker}: {resultado}", "info")
+        emit_dc_event("dc_module_complete", "GATE", "ok", ticker=ticker)
+        return {"status": "OK", "output": str(resultado)}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "GATE", "error", ticker=ticker, erro=str(e))
+        raise e
+
+
+# ── Entrypoint CLI — chamado pelo ATLAS via subprocess ───────────
 # ── Entrypoint CLI — chamado pelo ATLAS via subprocess ───────────
 if __name__ == "__main__":
     import argparse
@@ -797,7 +922,7 @@ if __name__ == "__main__":
                 emit_event("ORBIT", "done")
 
                 # REFLECT: calcular para todos os ciclos do historico
-                print(f"\n  [3/3] REFLECT")
+                print("\n  [3/3] REFLECT")
                 emit_event("REFLECT", "start")
                 try:
                     cfg_atual = tape_ativo_carregar(args.ticker)
@@ -838,7 +963,7 @@ if __name__ == "__main__":
                     else list(range(2002, datetime.now().year + 1)))
 
             # ── TAPE: verificar/baixar dados ──
-            print(f"\n  [1/3] TAPE")
+            print("\n  [1/3] TAPE")
             emit_event("TAPE", "start")
             try:
                 cfg_ativo = tape_ativo_carregar(ticker)
@@ -858,7 +983,7 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             # ── ORBIT: calcular regimes ──
-            print(f"\n  [2/3] ORBIT")
+            print("\n  [2/3] ORBIT")
             emit_event("ORBIT", "start")
             try:
                 orbit = ORBIT(universo={ticker: cfg_ativo})
@@ -876,7 +1001,7 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             # ── REFLECT: calcular para todos os ciclos novos ──
-            print(f"\n  [3/3] REFLECT")
+            print("\n  [3/3] REFLECT")
             emit_event("REFLECT", "start")
             try:
                 cfg_atual = tape_ativo_carregar(ticker)

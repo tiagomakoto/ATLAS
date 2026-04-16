@@ -17,6 +17,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import AsyncIterator, Optional
+import delta_chaos.edge as edge
 
 from atlas_backend.core.paths import get_paths
 from atlas_backend.core.terminal_stream import emit_log, emit_error
@@ -28,6 +29,9 @@ _dc_running: bool = False
 
 # ── DEBUG: limitar a um único ativo para testes ──
 DEBUG_TICKER = None # None = roda todos
+
+ATLAS_ROOT = Path(__file__).resolve().parent.parent.parent
+TMP_DIR = ATLAS_ROOT / "tmp"
 
 def _get_dc_script() -> Path:
     paths = get_paths()
@@ -46,355 +50,7 @@ def _get_dc_script() -> Path:
 
     return script
 
-async def _stream_subprocess(
-    args: list[str],
-    cwd: Path,
-    action_name: str,
-    action_payload: dict,
-    modulo: Optional[str] = None
-) -> dict:
-    """
-    Executa subprocesso do Delta Chaos e emite eventos estruturados.
 
-    O dc_runner parseia o stdout para detectar transições de módulo
-    (TAPE → ORBIT → FIRE) e emite eventos a partir do processo uvicorn.
-
-    Args:
-        modulo: Nome do módulo para eventos ("TAPE", "ORBIT", "FIRE", etc.)
-        Se None, não emite eventos (comportamento legacy).
-    """
-
-    full_output = []
-
-    # Diretório compartilhado para eventos JSONL
-    ATLAS_ROOT = Path(__file__).resolve().parent.parent.parent
-    TMP_DIR = ATLAS_ROOT / "tmp"
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Emite dc_module_start imediatamente antes de lancar o subprocess
-    # O _watch_events_inner emite dc_module_complete ao ler o JSONL
-    if modulo:
-        emit_dc_event("dc_module_start", modulo, "running", **action_payload)
-
-    main_loop = asyncio.get_running_loop()
-
-    def _watch_events(event_log_path, action_payload, stop_event):
-        """Lê arquivo JSONL continuamente e emite eventos ATLAS."""
-        last_pos = 0
-        seen_events: set = set()
-        while not stop_event.is_set():
-            try:
-                if event_log_path.exists():
-                    with open(event_log_path, "r", encoding="utf-8") as f:
-                        f.seek(last_pos)
-                        while True:
-                            line = f.readline()
-                            if not line:
-                                break
-                            last_pos = f.tell()
-                            line = line.strip()
-                            if not line:
-                                continue
-                            event = json.loads(line)
-                            ev_modulo = event.get("modulo")
-                            ev_status = event.get("status")
-                            ev_ts = event.get("timestamp", "")
-                            ev_key = (ev_modulo, ev_status, ev_ts)
-                            if ev_key in seen_events:
-                                continue
-                            seen_events.add(ev_key)
-
-                if ev_status == "start":
-                    emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                elif ev_status == "done":
-                    emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                elif ev_status == "error":
-                    emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
-                # TUNE_TRIAL events: IPC for Optuna trial progress
-                if ev_modulo == "TUNE_TRIAL" and ev_status == "progress":
-                    emit_dc_event("dc_tune_progress", "TUNE", "running",
-                        trial=event.get("trial", 0),
-                        total=event.get("total", 0),
-                        fase=event.get("fase", ""),
-                        tp=event.get("tp", 0),
-                        stop=event.get("stop", 0),
-                        janela_anos=event.get("janela_anos", 0),
-                        ir=event.get("ir", 0),
-                        best_ir=event.get("best_ir", 0),
-                        **action_payload)
-            except Exception:
-                pass
-            time.sleep(0.5)
-
-    def _flush_events(event_log_path, action_payload, last_pos, seen_events):
-        """Leitura final do JSONL após processo terminar — garante eventos do tail."""
-        try:
-            if not event_log_path.exists():
-                return
-            with open(event_log_path, "r", encoding="utf-8") as f:
-                f.seek(last_pos)
-                while True:
-                    line = f.readline()
-                    if not line:
-                        break
-                    line = line.strip()
-                    if not line:
-                        continue
-                    event = json.loads(line)
-                    ev_modulo = event.get("modulo")
-                    ev_status = event.get("status")
-                    ev_ts = event.get("timestamp", "")
-                    ev_key = (ev_modulo, ev_status, ev_ts)
-                    if ev_key in seen_events:
-                        continue
-                    seen_events.add(ev_key)
-                    # TUNE_INDEX events: IPC for indexation progress
-                    if ev_modulo == "TUNE_INDEX":
-                        if ev_status == "start":
-                            emit_dc_event("dc_tune_index_start", "TUNE", "running",
-                                total=event.get("total", 0), **action_payload)
-                        elif ev_status == "progress":
-                            emit_dc_event("dc_tune_index_progress", "TUNE", "running",
-                                current=event.get("current", 0), total=event.get("total", 0), **action_payload)
-                        elif ev_status == "done":
-                            emit_dc_event("dc_tune_index_complete", "TUNE", "ok", **action_payload)
-                    # TUNE_TRIAL events: IPC for Optuna trial progress
-                    elif ev_modulo == "TUNE_TRIAL":
-                        if ev_status == "progress":
-                            emit_dc_event("dc_tune_progress", "TUNE", "running",
-                                trial=event.get("trial", 0),
-                                total=event.get("total", 0),
-                                fase=event.get("fase", ""),
-                                tp=event.get("tp", 0),
-                                stop=event.get("stop", 0),
-                                janela_anos=event.get("janela_anos", 0),
-                                ir=event.get("ir", 0),
-                                best_ir=event.get("best_ir", 0),
-                                **action_payload)
-                    elif ev_status == "start":
-                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                    elif ev_status == "done":
-                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                    elif ev_status == "error":
-                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
-        except Exception:
-            pass
-
-    def _sync_runner():
-        import subprocess
-
-        try:
-            env = os.environ.copy()
-            # Garante que o python vai enxergar a raiz do ATLAS como import root pra rodar o module 'delta_chaos'
-            env["PYTHONPATH"] = str(cwd.parent)
-            # Força o Windows a renderizar prints com UTF-8 nativamente para as setas e cores do terminal não crasharem
-            env["PYTHONIOENCODING"] = "utf-8"
-            env["PYTHONUTF8"] = "1"
-            env["PYTHONUNBUFFERED"] = "1"  # garante flush imediato de cada print
-
-            # Gerar run_id único e passar para subprocesso
-            run_id = f"dc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            event_log_path = TMP_DIR / f"events_{run_id}.jsonl"
-            env["ATLAS_RUN_ID"] = run_id
-
-            # Iniciar watcher de eventos em thread separada
-            stop_event = threading.Event()
-            seen_events = set()
-            last_pos_ref = [0]  # lista para mutabilidade dentro do closure
-
-            def _watch_events_inner(event_log_path, action_payload, stop_event):
-                while not stop_event.is_set():
-                    try:
-                        if event_log_path.exists():
-                            with open(event_log_path, "r", encoding="utf-8") as f:
-                                f.seek(last_pos_ref[0])
-                                while True:
-                                    line = f.readline()
-                                    if not line:
-                                        break
-                                    last_pos_ref[0] = f.tell()
-                                    line = line.strip()
-                                    if not line:
-                                        continue
-                                    event = json.loads(line)
-                                    ev_modulo = event.get("modulo")
-                                    ev_status = event.get("status")
-                                    ev_ts = event.get("timestamp", "")
-                                    ev_key = (ev_modulo, ev_status, ev_ts)
-                                    if ev_key in seen_events:
-                                        continue
-                                    seen_events.add(ev_key)
-                                    if ev_status == "start":
-                                        emit_dc_event("dc_module_start", ev_modulo, "running", **action_payload)
-                                    elif ev_status == "done":
-                                        emit_dc_event("dc_module_complete", ev_modulo, "ok", **action_payload)
-                                    elif ev_status == "error":
-                                        emit_dc_event("dc_module_complete", ev_modulo, "error", **action_payload)
-                                    # TUNE_TRIAL events: IPC for Optuna trial progress
-                                    elif ev_modulo == "TUNE_TRIAL" and ev_status == "progress":
-                                        emit_dc_event("dc_tune_progress", "TUNE", "running",
-                                            trial=event.get("trial", 0),
-                                            total=event.get("total", 0),
-                                            fase=event.get("fase", ""),
-                                            tp=event.get("tp", 0),
-                                            stop=event.get("stop", 0),
-                                            janela_anos=event.get("janela_anos", 0),
-                                            ir=event.get("ir", 0),
-                                            best_ir=event.get("best_ir", 0),
-                                            **action_payload)
-                    except Exception:
-                        pass
-                    time.sleep(0.2)
-
-            watch_thread = threading.Thread(
-                target=_watch_events_inner,
-                args=(event_log_path, action_payload, stop_event),
-                daemon=True
-            )
-            watch_thread.start()
-
-            # ── Polling SQLite para progresso do TUNE ──────────────────────
-            # Ativo apenas quando modulo=="TUNE". Le tune_{TICKER}.db em modo
-            # read-only a cada 200ms e emite dc_tune_progress via WebSocket.
-            # O subprocess nao sabe desta thread — separacao limpa.
-            sqlite_stop = threading.Event()
-            if modulo == "TUNE":
-                ticker_payload = action_payload.get("ticker", "")
-                db_path = TMP_DIR / f"tune_{ticker_payload}.db"
-
-                def _poll_sqlite(db_path, stop_event, action_payload):
-                    import sqlite3
-                    last_count = -1
-                    TOTAL = 200
-                    while not stop_event.is_set():
-                        try:
-                            if db_path.exists():
-                                conn = sqlite3.connect(
-                                    f"file:{db_path}?mode=ro", uri=True,
-                                    timeout=1
-                                )
-                                try:
-                                    cur = conn.cursor()
-                                    cur.execute(
-                                        "SELECT COUNT(*) FROM trial "
-                                        "WHERE state = 'COMPLETE'"
-                                    )
-                                    count = cur.fetchone()[0]
-                                    cur.execute(
-                                        "SELECT MAX(value) FROM trial "
-                                        "WHERE state = 'COMPLETE'"
-                                    )
-                                    best = cur.fetchone()[0] or 0.0
-                                finally:
-                                    conn.close()
-
-                                if count != last_count:
-                                    last_count = count
-                                    emit_dc_event(
-                                        "dc_tune_progress", "TUNE", "running",
-                                        trial=count,
-                                        total=TOTAL,
-                                        ir=round(float(best), 3),
-                                        **action_payload
-                                    )
-                        except Exception:
-                            pass
-                        time.sleep(0.2)
-
-                sqlite_thread = threading.Thread(
-                    target=_poll_sqlite,
-                    args=(db_path, sqlite_stop, action_payload),
-                    daemon=True
-                )
-                sqlite_thread.start()
-            else:
-                sqlite_thread = None
-
-            proc = subprocess.Popen(
-                [sys.executable, "-u"] + args,
-                cwd=str(cwd.parent),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                env=env
-            )
-
-            for raw_line in proc.stdout:
-                line = raw_line.strip()
-                if not line:
-                    continue
-                full_output.append(line)
-
-                lvl = "info"
-                if line.startswith("ERRO") or line.startswith("✗") or "Error" in line:
-                    lvl = "error"
-                elif line.startswith("⚠") or line.startswith("~"):
-                    lvl = "warning"
-
-                main_loop.call_soon_threadsafe(emit_log, line, lvl)
-
-            proc.wait()
-
-            # Parar watcher e sqlite poller antes de encerrar
-            stop_event.set()
-            sqlite_stop.set()
-            watch_thread.join(timeout=2)
-            if sqlite_thread:
-                sqlite_thread.join(timeout=2)
-            _flush_events(event_log_path, action_payload, last_pos_ref[0], seen_events)
-
-            # Cleanup do arquivo de eventos (exceto se DEBUG)
-            if not DEBUG_TICKER and event_log_path.exists():
-                try:
-                    event_log_path.unlink()
-                except Exception:
-                    pass
-
-            returncode = proc.returncode
-
-            output_str = "\n".join(full_output)
-
-            # Verificar se há erros no output
-            tem_erro = any(
-                line.startswith("ERRO") or "Error" in line or "Traceback" in line
-                for line in full_output
-            )
-
-            status = "ERRO" if (returncode != 0 or tem_erro) else "OK"
-
-            if tem_erro and returncode == 0:
-                emit_log("[DAILY] ⚠ Processo completou mas com warnings", level="warning")
-
-            log_action(
-                action=action_name,
-                payload=action_payload,
-                response={
-                    "status": status,
-                    "returncode": returncode,
-                    "linhas": len(full_output)
-                }
-            )
-
-            return {
-                "status": status,
-                "returncode": returncode,
-                "output": output_str
-            }
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            emit_error(repr(e))
-            log_action(
-                action=action_name,
-                payload=action_payload,
-                response={"status": "ERRO", "error": repr(e)}
-            )
-        raise
-
-    return await asyncio.to_thread(_sync_runner)
 
 def _validar_caminho(caminho: str) -> None:
     paths = get_paths()
@@ -786,104 +442,161 @@ async def dc_daily(tickers: list) -> dict:
 # Modos atômicos — um subprocess por função
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def dc_eod(xlsx_dir: str) -> dict:
     _validar_caminho(xlsx_dir)
     script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "eod", "--xlsx_dir", xlsx_dir],
-        cwd=script.parent,
-        action_name="dc_eod_executar",
-        action_payload={"xlsx_dir": xlsx_dir},
-        modulo=None # EOD não é um módulo principal do fluxo TAPE→ORBIT→FIRE
+    import subprocess
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-u", "-m", "delta_chaos.edge", "--modo", "eod", "--xlsx_dir", xlsx_dir,
+        cwd=str(script.parent.parent),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT
     )
+    stdout, _ = await proc.communicate()
+    out_str = stdout.decode('utf-8', errors='replace')
+    status = "OK" if proc.returncode == 0 else "ERRO"
+    log_action("dc_eod_executar", {"xlsx_dir": xlsx_dir}, {"status": status, "returncode": proc.returncode})
+    return {"status": status, "output": out_str, "returncode": proc.returncode}
 
 async def dc_orbit_backtest(ticker: str, anos: Optional[list] = None) -> dict:
-    """Onboarding: modo pesado — COTAHIST + ORBIT completo (backtest_dados)."""
-    script = _get_dc_script()
-    args = ["-m", "delta_chaos.edge", "--modo", "backtest_dados", "--ticker", ticker]
-    if anos:
-        args += ["--anos", ",".join(str(a) for a in anos)]
-    return await _stream_subprocess(
-        args=args,
-        cwd=script.parent,
-        action_name="dc_orbit",
-        action_payload={"ticker": ticker, "anos": anos},
-        modulo="ORBIT"
-    )
+    action_payload = {"ticker": ticker, "anos": anos}
+    emit_dc_event("dc_module_start", "ORBIT", "running", **action_payload)
+    try:
+        await asyncio.to_thread(edge.rodar_backtest_dados, ticker, anos)
+        emit_dc_event("dc_module_complete", "ORBIT", "ok", **action_payload)
+        log_action("dc_orbit", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": ""}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "ORBIT", "error", **action_payload)
+        emit_log(f"[ORBIT] {ticker}: erro — {e}", level="error")
+        log_action("dc_orbit", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_tune(ticker: str) -> dict:
-    script = _get_dc_script()
-    result = await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "tune", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_tune",
-        action_payload={"ticker": ticker},
-        modulo="TUNE" # emite dc_module_start para o drawer
+    action_payload = {"ticker": ticker}
+    emit_dc_event("dc_module_start", "TUNE", "running", **action_payload)
+    
+    sqlite_stop = threading.Event()
+    db_path = TMP_DIR / f"tune_{ticker}.db"
+    
+    def _poll_sqlite(db_path, stop_event, action_payload):
+        import sqlite3
+        import time
+        last_count = -1
+        TOTAL = 200
+        while not stop_event.is_set():
+            try:
+                if db_path.exists():
+                    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("SELECT COUNT(*) FROM trial WHERE state = 'COMPLETE'")
+                        count = cur.fetchone()[0]
+                        cur.execute("SELECT MAX(value) FROM trial WHERE state = 'COMPLETE'")
+                        best = cur.fetchone()[0] or 0.0
+                    finally:
+                        conn.close()
+
+                    if count != last_count:
+                        last_count = count
+                        emit_dc_event(
+                            "dc_tune_progress", "TUNE", "running",
+                            trial=count, total=TOTAL, ir=round(float(best), 3), **action_payload
+                        )
+            except Exception:
+                pass
+            time.sleep(0.2)
+            
+    sqlite_thread = threading.Thread(
+        target=_poll_sqlite, args=(db_path, sqlite_stop, action_payload), daemon=True
     )
+    sqlite_thread.start()
     
-    # Emitir dc_module_complete explicitamente (TUNE não escreve no JSONL)
-    status = "ok" if result.get("status") == "OK" else "error"
-    emit_dc_event("dc_module_complete", "TUNE", status, ticker=ticker)
-    
-    return result
+    try:
+        await asyncio.to_thread(edge.rodar_tune, ticker)
+        emit_dc_event("dc_module_complete", "TUNE", "ok", **action_payload)
+        log_action("dc_tune", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": ""}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "TUNE", "error", **action_payload)
+        emit_log(f"[TUNE] {ticker}: erro — {e}", level="error")
+        log_action("dc_tune", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
+    finally:
+        sqlite_stop.set()
+        sqlite_thread.join(timeout=2)
 
 async def dc_gate_backtest(ticker: str) -> dict:
-    """Executa GATE via backtest completo (8 etapas) para atualização mensal."""
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "backtest_gate", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_backtest_gate",
-        action_payload={"ticker": ticker},
-        modulo="GATE"
-    )
+    action_payload = {"ticker": ticker}
+    emit_dc_event("dc_module_start", "GATE", "running", **action_payload)
+    try:
+        res = await asyncio.to_thread(edge.rodar_backtest_gate, ticker)
+        emit_dc_event("dc_module_complete", "GATE", "ok", **action_payload)
+        log_action("dc_backtest_gate", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": res.get("output", "")}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "GATE", "error", **action_payload)
+        emit_log(f"[GATE] {ticker}: erro — {e}", level="error")
+        log_action("dc_backtest_gate", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
-    script = _get_dc_script()
-    args = ["-m", "delta_chaos.edge", "--modo", "orbit_update", "--ticker", ticker]
-    if anos:
-        args += ["--anos", ",".join(str(a) for a in anos)]
-    return await _stream_subprocess(
-        args=args,
-        cwd=script.parent,
-        action_name="dc_orbit_update",
-        action_payload={"ticker": ticker, "anos": anos},
-        modulo="ORBIT"
-    )
+    action_payload = {"ticker": ticker, "anos": anos}
+    emit_dc_event("dc_module_start", "ORBIT", "running", **action_payload)
+    try:
+        await asyncio.to_thread(edge.rodar_orbit_update, ticker, anos)
+        emit_dc_event("dc_module_complete", "ORBIT", "ok", **action_payload)
+        log_action("dc_orbit_update", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": ""}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "ORBIT", "error", **action_payload)
+        emit_log(f"[ORBIT] {ticker}: erro — {e}", level="error")
+        log_action("dc_orbit_update", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "reflect_daily",
-              "--ticker", ticker, "--xlsx_path", xlsx_path],
-        cwd=script.parent,
-        action_name="dc_reflect_daily",
-        action_payload={"ticker": ticker, "xlsx_path": xlsx_path}
-    )
+    action_payload = {"ticker": ticker, "xlsx_path": xlsx_path}
+    emit_dc_event("dc_module_start", "REFLECT", "running", **action_payload)
+    try:
+        await asyncio.to_thread(edge.rodar_reflect_daily, ticker, xlsx_path)
+        emit_dc_event("dc_module_complete", "REFLECT", "ok", **action_payload)
+        log_action("dc_reflect_daily", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": ""}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "REFLECT", "error", **action_payload)
+        emit_log(f"[REFLECT] {ticker}: erro — {e}", level="error")
+        log_action("dc_reflect_daily", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_gate_eod(ticker: str) -> dict:
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "gate_eod", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_gate_eod",
-        action_payload={"ticker": ticker},
-        modulo="GATE"
-    )
+    action_payload = {"ticker": ticker}
+    emit_dc_event("dc_module_start", "GATE", "running", **action_payload)
+    try:
+        res = await asyncio.to_thread(edge.rodar_gate_eod, ticker)
+        emit_dc_event("dc_module_complete", "GATE", "ok", **action_payload)
+        log_action("dc_gate_eod", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": res.get("output", "")}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "GATE", "error", **action_payload)
+        emit_log(f"[GATE] {ticker}: erro — {e}", level="error")
+        log_action("dc_gate_eod", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_reflect_cycle(ticker: str) -> dict:
-    """
-    Executa reflect_cycle_calcular para o ativo.
-    """
-    script = _get_dc_script()
-    return await _stream_subprocess(
-        args=["-m", "delta_chaos.edge", "--modo", "orbit_update", "--ticker", ticker],
-        cwd=script.parent,
-        action_name="dc_reflect_cycle",
-        action_payload={"ticker": ticker},
-        modulo="REFLECT"
-    )
-
+    action_payload = {"ticker": ticker}
+    emit_dc_event("dc_module_start", "REFLECT", "running", **action_payload)
+    try:
+        # Reflect cycle internally handled inside orbit_update
+        await asyncio.to_thread(edge.rodar_orbit_update, ticker)
+        emit_dc_event("dc_module_complete", "REFLECT", "ok", **action_payload)
+        log_action("dc_reflect_cycle", action_payload, {"status": "OK"})
+        return {"status": "OK", "returncode": 0, "output": ""}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "REFLECT", "error", **action_payload)
+        emit_log(f"[REFLECT] {ticker}: erro — {e}", level="error")
+        log_action("dc_reflect_cycle", action_payload, {"status": "ERRO", "error": repr(e)})
+        return {"status": "ERRO", "output": repr(e)}
 
 async def dc_calibracao_iniciar(ticker: str) -> dict:
     """
