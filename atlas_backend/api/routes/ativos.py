@@ -2,7 +2,20 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
 from atlas_backend.core.paths import get_paths
-from atlas_backend.core.delta_chaos_reader import list_ativos, get_ativo, get_book, update_ativo
+from atlas_backend.core.delta_chaos_reader import (
+    list_ativos,
+    get_ativo,
+    get_book,
+    update_ativo,
+    get_gate_resultado,
+    get_fire_diagnostico,
+    get_cotahist_recente_info,
+)
+from atlas_backend.core.calibracao_contract import (
+    normalize_gate_resultado,
+    normalize_fire_diagnostico,
+    normalize_guard_payload,
+)
 from atlas_backend.core.analytics_engine import compute_walk_forward, compute_distribution, compute_acf, compute_tail_metrics
 from atlas_backend.core.schema_validator import ATLASEditableFields
 from atlas_backend.core.cache import analytics_cache
@@ -134,6 +147,45 @@ def obter_ativo(ticker: str):
         if "paths.json" in str(e):
             raise HTTPException(status_code=503, detail="paths.json ausente")
         raise
+
+
+@router.get("/{ticker}/cotahist-recente", response_model=Dict[str, Any])
+def obter_cotahist_recente(ticker: str):
+    try:
+        data = get_cotahist_recente_info(ticker)
+        return normalize_guard_payload(data, ticker)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    except Exception as e:
+        if "paths.json" in str(e):
+            raise HTTPException(status_code=503, detail="paths.json ausente")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ticker}/gate-resultado", response_model=Dict[str, Any])
+def obter_gate_resultado(ticker: str):
+    try:
+        data = get_gate_resultado(ticker)
+        return normalize_gate_resultado(data, ticker)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    except Exception as e:
+        if "paths.json" in str(e):
+            raise HTTPException(status_code=503, detail="paths.json ausente")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ticker}/fire-diagnostico", response_model=Dict[str, Any])
+def obter_fire_diagnostico(ticker: str):
+    try:
+        data = get_fire_diagnostico(ticker)
+        return normalize_fire_diagnostico(data, ticker)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    except Exception as e:
+        if "paths.json" in str(e):
+            raise HTTPException(status_code=503, detail="paths.json ausente")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{ticker}/analytics", response_model=Dict[str, Any])
 async def obter_analytics(ticker: str):

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import useWebSocket from "../../hooks/useWebSocket";
 
 const API_BASE = "http://localhost:8000";
@@ -10,1120 +10,716 @@ const PULSE_ANIMATION = `
 }
 `;
 
+const STEP_KEYS = ["1_backtest_dados", "2_tune", "3_gate_fire"];
+
+const DEFAULT_STEPS = {
+  "1_backtest_dados": { status: "idle", iniciado_em: null, concluido_em: null, skipped: false },
+  "2_tune": { status: "idle", iniciado_em: null, concluido_em: null },
+  "3_gate_fire": { status: "idle", iniciado_em: null, concluido_em: null },
+};
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateTimeBR(value) {
+  if (!value) return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}, ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}:${pad2(dt.getSeconds())}`;
+}
+
+function formatDuration(startISO, endISO) {
+  if (!startISO || !endISO) return "";
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
+  const totalSeconds = Math.max(Math.floor((end - start) / 1000), 0);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  if (totalSeconds < 3600) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}m ${s}s`;
+  }
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function statusColors(status, isNext) {
+  if (status === "running") {
+    return { bg: "rgba(59,130,246,0.15)", border: "var(--atlas-blue)", label: "EXECUTANDO", color: "var(--atlas-blue)" };
+  }
+  if (status === "done") {
+    return { bg: "rgba(34,197,94,0.1)", border: "var(--atlas-green)", label: "CONCLUÍDO", color: "var(--atlas-green)" };
+  }
+  if (status === "error") {
+    return { bg: "rgba(239,68,68,0.1)", border: "var(--atlas-red)", label: "ERRO", color: "var(--atlas-red)" };
+  }
+  if (isNext) {
+    return { bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.3)", label: "PRÓXIMO", color: "var(--atlas-blue)" };
+  }
+  return { bg: "rgba(156,163,175,0.1)", border: "var(--atlas-border)", label: "PENDENTE", color: "var(--atlas-text-secondary)" };
+}
+
+function buildMarkdownReport({ ticker, cycle, gateResult, fireDiag }) {
+  const now = new Date().toISOString().slice(0, 10);
+  const header = `# Relatório de Calibração - ${ticker} - ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
+  const gateTableHeader = "## GATE - Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n";
+  const gateRows = (gateResult?.criterios || [])
+    .map((c) => `| ${c.id} ${c.nome} | ${c.passou ? "✓" : "✗"} | ${c.valor ?? "N/D"} |`)
+    .join("\n");
+  const gateResultText = `\n\n**Resultado:** ${gateResult?.resultado || "BLOQUEADO"}\n`;
+  if (!fireDiag || !fireDiag.regimes || gateResult?.resultado !== "OPERAR") {
+    return `${header}${gateTableHeader}${gateRows}${gateResultText}`;
+  }
+  const fireHeader = "\n---\n\n## FIRE - Diagnóstico histórico por regime\n| Regime | Trades | Acerto | IR | Worst trade |\n|--------|--------|--------|----|-------------|\n";
+  const fireRows = fireDiag.regimes
+    .map((r) => `| ${r.regime} | ${r.trades} | ${r.acerto_pct}% | ${r.ir} | ${r.worst_trade ?? "N/D"} |`)
+    .join("\n");
+  const estrategias = fireDiag.regimes
+    .filter((r) => r.estrategia_dominante)
+    .map((r) => `${r.regime} -> ${r.estrategia_dominante}`)
+    .join("\n");
+  const cobertura = fireDiag.cobertura || {};
+  const stops = fireDiag.stops_por_regime || {};
+  return `${header}${gateTableHeader}${gateRows}${gateResultText}${fireHeader}${fireRows}\n\n**Estratégia dominante por regime:**\n${estrategias || "N/D"}\n\n**Cobertura:** ${cobertura.ciclos_com_operacao ?? 0}/${cobertura.total_ciclos ?? 0} ciclos históricos com operação\n**Distribuição de stops:** ${JSON.stringify(stops)}`;
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function CalibracaoDrawer({ ticker, onClose }) {
-  const [calibracao, setCalibracao] = useState(null);
+  const [steps, setSteps] = useState(DEFAULT_STEPS);
   const [watchdogAlert, setWatchdogAlert] = useState(null);
   const [trialAtual, setTrialAtual] = useState(0);
-  const [trialTotal, setTrialTotal] = useState(0);
+  const [trialTotal, setTrialTotal] = useState(200);
   const [bestIr, setBestIr] = useState(0);
-  const [ultimoEventoEm, setUltimoEventoEm] = useState(0);
-  const [step2IniciadoEm, setStep2IniciadoEm] = useState(0);
-  const [steps, setSteps] = useState({
-    "1_backtest_dados": { status: "idle", iniciado_em: null, concluido_em: null },
-    "2_tune": { status: "idle", iniciado_em: null, concluido_em: null },
-    "3_backtest_gate": { status: "idle", iniciado_em: null, concluido_em: null }
-  });
-
-  // Novos estados para rastrear progresso da indexação de dias
-  const [indexProgress, setIndexProgress] = useState({ current: 0, total: 0 });
-  const [showIndexProgress, setShowIndexProgress] = useState(false);
-  const [indexComplete, setIndexComplete] = useState(false);
-
-  // Estado para rastrear a fase atual da calibração
-  const [faseCalibracao, setFaseCalibracao] = useState("integridade");
-
-// Estado para rastrear sub-módulos do step 1 (TAPE, ORBIT, REFLECT)
-const [subModules, setSubModules] = useState({
-  "TAPE": null,
-  "ORBIT": null,
-  "REFLECT": null
-});
-
-// Estado para armazenar valores de parametrização (TP/STOP)
-const [parametros, setParametros] = useState({ take_profit: null, stop_loss: null });
-
-  // Melhor TP/STOP da otimização em andamento (atualizado a cada trial progress)
   const [bestTp, setBestTp] = useState(null);
   const [bestStop, setBestStop] = useState(null);
+  const [ultimoEventoEm, setUltimoEventoEm] = useState(0);
+  const [step2IniciadoEm, setStep2IniciadoEm] = useState(0);
+  const [indexProgress, setIndexProgress] = useState({ current: 0, total: 0 });
+  const [indexComplete, setIndexComplete] = useState(false);
+  const [gateResult, setGateResult] = useState(null);
+  const [fireDiag, setFireDiag] = useState(null);
+  const [cotahistInfo, setCotahistInfo] = useState(null);
+  const [showStep1Guard, setShowStep1Guard] = useState(false);
 
-  // Carregar estado inicial da calibração
+  const proximoStep = useMemo(() => {
+    let ultimoDone = -1;
+    for (let i = 0; i < STEP_KEYS.length; i += 1) {
+      if (steps[STEP_KEYS[i]]?.status === "done") ultimoDone = i;
+    }
+    for (let i = ultimoDone + 1; i < STEP_KEYS.length; i += 1) {
+      if (steps[STEP_KEYS[i]]?.status === "idle") return STEP_KEYS[i];
+    }
+    return null;
+  }, [steps]);
+
   useEffect(() => {
-    const fetchOnboarding = async () => {
+    let mounted = true;
+    async function loadInitial() {
       try {
-        const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`);
-        if (res.ok) {
-          const data = await res.json();
-          setCalibracao(data);
-          // Inicializar steps com base no estado carregado
-          if (data?.steps) {
-            setSteps({
-              "1_backtest_dados": {
-                status: data.steps["1_backtest_dados"]?.status || "idle",
-                iniciado_em: data.steps["1_backtest_dados"]?.iniciado_em || null,
-                concluido_em: data.steps["1_backtest_dados"]?.concluido_em || null
-              },
-              "2_tune": {
-                status: data.steps["2_tune"]?.status || "idle",
-                iniciado_em: data.steps["2_tune"]?.iniciado_em || null,
-                concluido_em: data.steps["2_tune"]?.concluido_em || null
-              },
-              "3_backtest_gate": {
-                status: data.steps["3_backtest_gate"]?.status || "idle",
-                iniciado_em: data.steps["3_backtest_gate"]?.iniciado_em || null,
-                concluido_em: data.steps["3_backtest_gate"]?.concluido_em || null
-              }
-            });
-          }
-          // Inicializar métricas de TUNE se disponíveis
-          if (data.steps?.["2_tune"]?.trials_completos) {
-            setTrialAtual(data.steps["2_tune"].trials_completos);
-          }
-          if (data.steps?.["2_tune"]?.trials_total) {
-            setTrialTotal(data.steps["2_tune"].trials_total);
-          }
-          if (data.steps?.["2_tune"]?.best_ir) {
-            setBestIr(data.steps["2_tune"].best_ir);
-          }
-          if (data.ultimo_evento_em) {
-            setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
-          }
-          if (data.steps?.["2_tune"]?.iniciado_em) {
-            setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
-          }
+        const [statusRes, cotahistRes] = await Promise.all([
+          fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`),
+          fetch(`${API_BASE}/ativos/${ticker}/cotahist-recente`),
+        ]);
+        if (statusRes.ok) {
+          const data = await statusRes.json();
+          if (!mounted) return;
+          const persistedSteps = data?.steps || {};
+          setSteps({
+            "1_backtest_dados": {
+              ...DEFAULT_STEPS["1_backtest_dados"],
+              ...(persistedSteps["1_backtest_dados"] || {}),
+            },
+            "2_tune": {
+              ...DEFAULT_STEPS["2_tune"],
+              ...(persistedSteps["2_tune"] || {}),
+            },
+            "3_gate_fire": {
+              ...DEFAULT_STEPS["3_gate_fire"],
+              ...(persistedSteps["3_gate_fire"] || persistedSteps["3_backtest_gate"] || {}),
+            },
+          });
+          if (data?.gate_resultado) setGateResult(data.gate_resultado);
+          if (data?.fire_diagnostico) setFireDiag(data.fire_diagnostico);
+          if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
+          if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
+        }
+        if (cotahistRes.ok) {
+          const info = await cotahistRes.json();
+          if (!mounted) return;
+          setCotahistInfo(info);
+          setShowStep1Guard(Boolean(info?.dados_recentes));
         }
       } catch (error) {
         console.error("Erro ao carregar calibração:", error);
       }
-    };
-
-    if (ticker) {
-      fetchOnboarding();
     }
+    loadInitial();
+    return () => {
+      mounted = false;
+    };
   }, [ticker]);
 
-  // Watchdog: alerta se sem sinal por 5 minutos
   useEffect(() => {
-    if (!ultimoEventoEm || !step2IniciadoEm) return;
-
+    if (!ultimoEventoEm || !step2IniciadoEm) return undefined;
     const interval = setInterval(() => {
-      const now = Date.now();
-      const minutesSinceLastEvent = Math.floor((now - ultimoEventoEm) / 60000);
-
-      if (steps["2_tune"].status === "running" && minutesSinceLastEvent >= 5 && !watchdogAlert) {
-        setWatchdogAlert(`⚠ Sem sinal há ${minutesSinceLastEvent}min — processo pode ter sido interrompido`);
-      } else if (steps["2_tune"].status === "running" && minutesSinceLastEvent < 5 && watchdogAlert) {
+      const mins = Math.floor((Date.now() - ultimoEventoEm) / 60000);
+      if (steps["2_tune"]?.status === "running" && mins >= 5) {
+        setWatchdogAlert(`Sem sinal há ${mins}min - processo pode ter sido interrompido`);
+      } else if (steps["2_tune"]?.status === "running" && mins < 5) {
         setWatchdogAlert(null);
       }
-    }, 60000); // Verifica a cada minuto
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [ultimoEventoEm, step2IniciadoEm, steps]);
 
-return () => clearInterval(interval);
-}, [ultimoEventoEm, step2IniciadoEm, steps["2_tune"].status, watchdogAlert]);
-
-// Buscar TP/STOP do ativo quando GATE concluído
-useEffect(() => {
-  if (getStepStatus("3_backtest_gate") === "done") {
-    const fetchParametros = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/ativos/${ticker}`);
-        if (res.ok) {
-          const data = await res.json();
-          setParametros({
-            take_profit: data.take_profit,
-            stop_loss: data.stop_loss
-          });
-        }
-      } catch (error) {
-        console.error("Erro ao buscar parâmetros:", error);
-      }
-    };
-    fetchParametros();
-  }
-}, [ticker, steps]);
-
-// Conexão WebSocket para eventos em tempo real
-  const wsUrl = `ws://${window.location.hostname}:${window.location.port || '8000'}/ws/events`;
-  useWebSocket(wsUrl, (evento) => {
-    handleEvento(evento);
-  });
-
-  const handleEvento = (evento) => {
-    console.log("[CALIBRACAO] Evento recebido:", evento.type, evento.data);
-
-    const stepMap = {
-      "ORBIT": "1_backtest_dados",
-      "TUNE": "2_tune",
-      "GATE": "3_backtest_gate"
-    };
-
-    // Mapear sub-módulos do step 1 (TAPE, ORBIT, REFLECT)
-    const subModuleMap = {
-      "TAPE": "1_backtest_dados",
-      "ORBIT": "1_backtest_dados",
-      "REFLECT": "1_backtest_dados"
-    };
-
-    if (evento.type === "dc_module_start") {
-      const modulo = evento.data?.modulo;
-      const stepKey = stepMap[modulo];
-
-      // Atualizar sub-módulos do step 1
-      if (subModuleMap[modulo] === "1_backtest_dados") {
-        setSubModules(prev => ({ ...prev, [modulo]: "running" }));
-        // Quando qualquer módulo do step 1 inicia, setar fase como integridade
-        setFaseCalibracao("integridade");
-      }
-
-      if (stepKey) {
-        setSteps(prev => ({
-          ...prev,
-          [stepKey]: {
-            ...prev[stepKey],
-            status: "running",
-            iniciado_em: evento.data?.timestamp || new Date().toISOString()
-          }
-        }));
-        if (stepKey === "2_tune") {
-          setStep2IniciadoEm(new Date().getTime());
-          setIndexProgress({ current: 0, total: 0 });
-          setShowIndexProgress(false);
-          setIndexComplete(false);
-          setFaseCalibracao("integridade");
-          setBestTp(null);
-          setBestStop(null);
-        }
-      }
-    }
-
-if (evento.type === "dc_module_complete") {
-    const modulo = evento.data?.modulo;
-    const status = evento.data?.status;
-    const stepKey = stepMap[modulo];
-
-    // Atualizar sub-módulos do step 1
-    if (subModuleMap[modulo] === "1_backtest_dados") {
-        setSubModules(prev => ({ ...prev, [modulo]: status === "ok" ? "ok" : "error" }));
-    }
-
-    if (stepKey) {
-        setSteps(prev => ({
-            ...prev,
-            [stepKey]: {
-                ...prev[stepKey],
-                status: status === "ok" ? "done" : "error",
-                concluido_em: evento.data?.timestamp || new Date().toISOString()
-            }
-        }));
-    }
-    
-    // Mostrar mensagem de erro para TUNE
-    if (modulo === "TUNE" && status === "error") {
-        const erro = evento.data?.erro || "Erro desconhecido";
-        setWatchdogAlert(`✗ TUNE falhou: ${erro}`);
-    }
-}
-
-if (evento.type === "dc_tune_progress") {
-    const d = evento.data;
-    if (d?.trial !== undefined) setTrialAtual(d.trial);
-    if (d?.total !== undefined) setTrialTotal(d.total);
-    if (d?.ir !== undefined) setBestIr(d.ir);
-    if (d?.best_tp != null) setBestTp(d.best_tp);
-    if (d?.best_stop != null) setBestStop(d.best_stop);
-    setUltimoEventoEm(Date.now());
-  }
-
-  // IPC: eventos de indexação via JSONL
-  if (evento.type === "dc_tune_index_start") {
-    const d = evento.data;
-    console.log("[CALIBRACAO] dc_tune_index_start:", d);
-    setIndexProgress({ current: 0, total: d?.total || 0 });
-    setShowIndexProgress(true);
-    setIndexComplete(false);
-    setFaseCalibracao("indexacao");
-    setUltimoEventoEm(Date.now());
-  }
-
-  if (evento.type === "dc_tune_index_progress") {
-    const d = evento.data;
-    console.log("[CALIBRACAO] dc_tune_index_progress:", d);
-    setIndexProgress({ current: d?.current || 0, total: d?.total || 0 });
-    setShowIndexProgress(true);
-    setIndexComplete(false);
-    setFaseCalibracao("indexacao");
-    setUltimoEventoEm(Date.now());
-  }
-
-  if (evento.type === "dc_tune_index_complete") {
-    const d = evento.data;
-    console.log("[CALIBRACAO] dc_tune_index_complete:", d);
-    setIndexComplete(true);
-    setShowIndexProgress(false);
-    setFaseCalibracao("otimizacao");
-    setUltimoEventoEm(Date.now());
-  }
-
-  // Legado: Tratar logs de progresso da indexação de dias (DEPRECADO - usar IPC acima)
-    if (evento.type === "terminal_log") {
-      const message = evento.data?.message;
-      if (!message) return;
-
-      // Detectar progresso de indexação: "TUNE [TICKER] indexando dias: X/Y (Z%)"
-      // Regex ajustado para capturar números com vírgulas (ex: 1,000/6,004)
-      const indexRegex = /TUNE \[([A-Z0-9]+)\] indexando dias: ([\d,]+)\/([\d,]+)/;
-      const match = message.match(indexRegex);
-if (match) {
-    // Remover vírgulas antes de converter para int
-    const current = parseInt(match[2].replace(/,/g, ''));
-    const total = parseInt(match[3].replace(/,/g, ''));
-    setIndexProgress({ current, total });
-    setShowIndexProgress(true);
-    setIndexComplete(false);
-    setFaseCalibracao("indexacao");
-    setUltimoEventoEm(Date.now());
-    return;
-  }
-
-  // Detectar conclusão da indexação: "pré-cômputo concluído"
-  if (message.includes("pré-cômputo concluído")) {
-    setIndexComplete(true);
-    setFaseCalibracao("otimizacao");
-    setUltimoEventoEm(Date.now());
-    return;
-  }
-    }
-  };
-
-  const getStepStatus = (stepKey) => {
-    return steps[stepKey]?.status || "idle";
-  };
-
-  const getStepName = (stepKey) => {
-    const names = {
-      "1_backtest_dados": "Integridade de dados",
-      "2_tune": "Parametrização",
-      "3_backtest_gate": "GATE"
-    };
-    return names[stepKey] || stepKey;
-  };
-
-  const getProximoStep = () => {
-    const stepKeys = ["1_backtest_dados", "2_tune", "3_backtest_gate"];
-    let ultimoDone = -1;
-    for (let i = 0; i < stepKeys.length; i++) {
-      if (getStepStatus(stepKeys[i]) === "done") {
-        ultimoDone = i;
-      }
-    }
-    // O próximo é o primeiro idle após o último done
-    for (let i = ultimoDone + 1; i < stepKeys.length; i++) {
-      if (getStepStatus(stepKeys[i]) === "idle") {
-        return stepKeys[i];
-      }
-    }
-    return null; // Todos done ou running
-  };
-
-  const getStepLabel = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const proximoStep = getProximoStep();
-    if (status === "idle" && stepKey === proximoStep) {
-      return "PRÓXIMO";
-    }
-    const labels = {
-      idle: "PENDENTE",
-      running: "EXECUTANDO",
-      done: "CONCLUÍDO",
-      error: "ERRO",
-      paused: "PAUSADO"
-    };
-    return labels[status] || "PENDENTE";
-  };
-
-  const getStepIcon = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const icons = {
-      idle: "○",
-      running: "⟳",
-      done: "●",
-      error: "✗",
-      paused: "⏸"
-    };
-    return icons[status] || "○";
-  };
-
-  const getStepColor = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const colors = {
-      idle: "var(--atlas-text-secondary)",
-      running: "var(--atlas-blue)",
-      done: "var(--atlas-green)",
-      error: "var(--atlas-red)",
-      paused: "var(--atlas-amber)"
-    };
-    return colors[status] || "var(--atlas-text-secondary)";
-  };
-
-  const getStepColorBg = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const proximoStep = getProximoStep();
-
-    // Mimetizar OrchestratorLogDrawer: rodando = fundo azul
-    if (status === "running") {
-      return "rgba(59,130,246,0.15)";
-    }
-
-    // Próximo step tem destaque azul sutil
-    if (status === "idle" && stepKey === proximoStep) {
-      return "rgba(59,130,246,0.08)";
-    }
-
-    const colors = {
-      idle: "transparent",
-      done: "rgba(34,197,94,0.1)",
-      error: "rgba(239,68,68,0.1)",
-      paused: "rgba(245,158,11,0.1)"
-    };
-    return colors[status] || "transparent";
-  };
-
-  const getStepBorderColor = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const proximoStep = getProximoStep();
-
-    // Mimetizar OrchestratorLogDrawer: rodando = borda azul
-    if (status === "running") {
-      return "var(--atlas-blue)";
-    }
-
-    // Próximo step tem borda azul sutil
-    if (status === "idle" && stepKey === proximoStep) {
-      return "rgba(59,130,246,0.3)";
-    }
-
-    const colors = {
-      idle: "transparent",
-      done: "var(--atlas-green)",
-      error: "var(--atlas-red)",
-      paused: "var(--atlas-amber)"
-    };
-    return colors[status] || "transparent";
-  };
-
-  const getStepOpacity = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const proximoStep = getProximoStep();
-
-    // Mimetizar OrchestratorLogDrawer: espera = opacidade 0.5
-    if (status === "idle" && stepKey !== proximoStep) {
-      return 0.5;
-    }
-    return 1;
-  };
-
-  const calculateDuration = (stepKey) => {
-    const step = steps[stepKey];
-    if (!step?.iniciado_em || !step?.concluido_em) return null;
-
-    const start = new Date(step.iniciado_em);
-    const end = new Date(step.concluido_em);
-    const diffMs = end - start;
-
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-
-    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  };
-
-  const getStepDescription = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    const proximoStep = getProximoStep();
-
-    // Descrição prévia para TUNE quando é o próximo (sem estimativa)
-    if (status === "idle" && stepKey === "2_tune" && stepKey === proximoStep) {
-      return "Optuna 200 trials";
-    }
-
-    const descriptions = {
-      idle: "Aguardando início",
-      running: "Em execução",
-      done: "Concluído",
-      error: "Falhou",
-      paused: "Pausado"
-    };
-    return descriptions[status] || "Aguardando início";
-  };
-
-  // Função para exibir sub-módulos do step 1 (TAPE, ORBIT, REFLECT)
-  const getSubModulesDisplay = (stepKey) => {
-    if (stepKey !== "1_backtest_dados") return null;
-    const modules = ["TAPE", "ORBIT", "REFLECT"];
-    const parts = [];
-    for (const mod of modules) {
-      const status = subModules[mod];
-      if (status === null) continue;
-      if (status === "running") {
-        parts.push(mod);
-      } else if (status === "ok") {
-        parts.push(`${mod} ok`);
-      } else if (status === "error") {
-        parts.push(`${mod} erro`);
-      }
-    }
-    return parts.length > 0 ? parts.join(" | ") : null;
-  };
-
-  const getStepTime = (stepKey) => {
-    const status = getStepStatus(stepKey);
-    if (status === "done" && steps[stepKey]?.concluido_em) {
-      const timestamp = new Date(steps[stepKey].concluido_em).toLocaleString("pt-BR");
-      const duration = calculateDuration(stepKey);
-      if (duration) {
-        return `${timestamp} · duração: ${duration}`;
-      }
-      return timestamp;
-    }
-    return "";
-  };
-
-  const handleRetomar = async () => {
+  async function refreshGateResult() {
     try {
-      const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}/retomar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      if (!res.ok) {
-        // Apenas em caso de erro, atualizar estado
-        setSteps(prev => ({
+      const res = await fetch(`${API_BASE}/ativos/${ticker}/gate-resultado`);
+      if (res.ok) {
+        const data = await res.json();
+        setGateResult(data);
+        if (data?.resultado && data.resultado !== "OPERAR") {
+          setSteps((prev) => ({
+            ...prev,
+            "3_gate_fire": {
+              ...prev["3_gate_fire"],
+              status: "done",
+              concluido_em: prev["3_gate_fire"]?.concluido_em || new Date().toISOString(),
+            },
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Erro gate-resultado:", error);
+    }
+  }
+
+  async function refreshFireDiag() {
+    try {
+      const res = await fetch(`${API_BASE}/ativos/${ticker}/fire-diagnostico`);
+      if (res.ok) setFireDiag(await res.json());
+    } catch (error) {
+      console.error("Erro fire-diagnostico:", error);
+    }
+  }
+
+  const wsUrl = `ws://${window.location.hostname}:${window.location.port || "8000"}/ws/events`;
+  useWebSocket(wsUrl, (evento) => {
+    const modulo = evento?.data?.modulo;
+    setUltimoEventoEm(Date.now());
+
+    if (evento?.type === "dc_module_start") {
+      if (modulo === "ORBIT" || modulo === "TAPE" || modulo === "REFLECT") {
+        setSteps((prev) => ({
+          ...prev,
+          "1_backtest_dados": {
+            ...prev["1_backtest_dados"],
+            status: "running",
+            iniciado_em: evento?.data?.timestamp || new Date().toISOString(),
+          },
+        }));
+      }
+      if (modulo === "TUNE") {
+        setSteps((prev) => ({
           ...prev,
           "2_tune": {
             ...prev["2_tune"],
-            status: "error"
-          }
+            status: "running",
+            iniciado_em: evento?.data?.timestamp || new Date().toISOString(),
+          },
         }));
-        console.error("Erro ao retomar calibração:", res.statusText);
+        setStep2IniciadoEm(Date.now());
+        setIndexProgress({ current: 0, total: 0 });
+        setIndexComplete(false);
+        setBestTp(null);
+        setBestStop(null);
       }
-      // Em caso de sucesso, NÃO atualizar - aguardar evento WebSocket
-    } catch (error) {
-      console.error("Erro ao retomar:", error);
-      setSteps(prev => ({
-        ...prev,
-        "2_tune": {
-          ...prev["2_tune"],
-          status: "error"
-        }
-      }));
+      if (modulo === "GATE" || modulo === "FIRE") {
+        setSteps((prev) => ({
+          ...prev,
+          "3_gate_fire": {
+            ...prev["3_gate_fire"],
+            status: "running",
+            iniciado_em: prev["3_gate_fire"]?.iniciado_em || evento?.data?.timestamp || new Date().toISOString(),
+          },
+        }));
+      }
     }
-  };
 
-  const handleIniciar = async () => {
-    // Feedback imediato: atualizar estado para "EXECUTANDO" antes mesmo do fetch
-    const agora = new Date().toISOString();
-    setSteps(prev => ({
-      ...prev,
-      "1_backtest_dados": {
-        ...prev["1_backtest_dados"],
-        status: "running",
-        iniciado_em: agora
+    if (evento?.type === "dc_module_complete") {
+      if (modulo === "ORBIT" || modulo === "TAPE" || modulo === "REFLECT") {
+        const ok = evento?.data?.status === "ok";
+        setSteps((prev) => ({
+          ...prev,
+          "1_backtest_dados": {
+            ...prev["1_backtest_dados"],
+            status: ok ? "done" : "error",
+            concluido_em: evento?.data?.timestamp || new Date().toISOString(),
+          },
+        }));
       }
-    }));
-    setStep2IniciadoEm(new Date().getTime());
+      if (modulo === "TUNE") {
+        const ok = evento?.data?.status === "ok";
+        setSteps((prev) => ({
+          ...prev,
+          "2_tune": {
+            ...prev["2_tune"],
+            status: ok ? "done" : "error",
+            concluido_em: evento?.data?.timestamp || new Date().toISOString(),
+          },
+        }));
+      }
+      if (modulo === "GATE") {
+        const ok = evento?.data?.status === "ok";
+        const payloadGate = evento?.data?.gate_resultado || null;
+        if (payloadGate) setGateResult(payloadGate);
+        const gateAprovado = payloadGate?.resultado === "OPERAR";
+        setSteps((prev) => ({
+          ...prev,
+          "3_gate_fire": {
+            ...prev["3_gate_fire"],
+            status: ok ? (gateAprovado ? "running" : "done") : "error",
+            concluido_em: ok && !gateAprovado ? (evento?.data?.timestamp || new Date().toISOString()) : prev["3_gate_fire"]?.concluido_em,
+          },
+        }));
+        if (ok) refreshGateResult();
+      }
+      if (modulo === "FIRE") {
+        const ok = evento?.data?.status === "ok";
+        if (evento?.data?.fire_diagnostico) setFireDiag(evento.data.fire_diagnostico);
+        setSteps((prev) => ({
+          ...prev,
+          "3_gate_fire": {
+            ...prev["3_gate_fire"],
+            status: ok ? "done" : "error",
+            concluido_em: evento?.data?.timestamp || new Date().toISOString(),
+          },
+        }));
+        if (ok) refreshFireDiag();
+      }
+    }
 
-    // Resetar sub-módulos do step 1
-    setSubModules({
-      "TAPE": null,
-      "ORBIT": null,
-      "REFLECT": null
-    });
+    if (evento?.type === "dc_tune_progress") {
+      const d = evento.data || {};
+      if (d.trial != null) setTrialAtual(d.trial);
+      if (d.total != null) setTrialTotal(d.total);
+      if (d.ir != null) setBestIr(d.ir);
+      if (d.best_tp != null) setBestTp(d.best_tp);
+      if (d.best_stop != null) setBestStop(d.best_stop);
+    }
 
+    if (evento?.type === "dc_tune_index_start") {
+      setIndexProgress({ current: evento?.data?.current || 0, total: evento?.data?.total || 0 });
+      setIndexComplete(false);
+    }
+    if (evento?.type === "dc_tune_index_progress") {
+      setIndexProgress({ current: evento?.data?.current || 0, total: evento?.data?.total || 0 });
+      setIndexComplete(false);
+    }
+    if (evento?.type === "dc_tune_index_complete") {
+      setIndexComplete(true);
+    }
+
+    if (evento?.type === "terminal_log") {
+      const message = evento?.data?.message || "";
+      const indexRegex = /TUNE \[([A-Z0-9]+)\] indexando dias: ([\d,]+)\/([\d,]+)/;
+      const match = message.match(indexRegex);
+      if (match) {
+        const current = parseInt(match[2].replace(/,/g, ""), 10);
+        const total = parseInt(match[3].replace(/,/g, ""), 10);
+        setIndexProgress({ current, total });
+        setIndexComplete(false);
+      }
+      if (message.includes("pré-cômputo concluído")) {
+        setIndexComplete(true);
+      }
+    }
+  });
+
+  function getStepName(key) {
+    if (key === "1_backtest_dados") return "backtest_dados";
+    if (key === "2_tune") return "tune";
+    return "gate + fire";
+  }
+
+  function getStepDescription(key) {
+    const status = steps[key]?.status || "idle";
+    if (status === "running") return "Em execução";
+    if (status === "done" && key === "1_backtest_dados" && steps[key]?.skipped) return "PULADO";
+    if (status === "done") return "Concluído";
+    if (status === "error") return "Falhou";
+    if (key === "2_tune" && proximoStep === key) return "Optuna 200 trials · estimativa 4-8h";
+    return "Aguardando início";
+  }
+
+  function getStepTime(key) {
+    const s = steps[key];
+    if (!s || s.status !== "done" || !s.concluido_em) return "";
+    const dt = formatDateTimeBR(s.concluido_em);
+    const duration = formatDuration(s.iniciado_em, s.concluido_em);
+    return duration ? `Concluído ${dt} · duração: ${duration}` : `Concluído ${dt}`;
+  }
+
+  async function handleIniciar() {
     try {
       const res = await fetch(`${API_BASE}/delta-chaos/calibracao/iniciar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, confirm: true, description: "Iniciar calibração" })
+        body: JSON.stringify({ ticker, confirm: true, description: "Iniciar calibração" }),
       });
       if (!res.ok) {
-        // Apenas em caso de erro, atualizar estado para error
-        setSteps(prev => ({
+        setSteps((prev) => ({
           ...prev,
-          "1_backtest_dados": {
-            ...prev["1_backtest_dados"],
-            status: "error"
-          }
+          "1_backtest_dados": { ...prev["1_backtest_dados"], status: "error" },
         }));
-        console.error("Erro ao iniciar calibração:", res.statusText);
+      } else {
+        setShowStep1Guard(false);
       }
-      // Em caso de sucesso, NÃO atualizar - aguardar evento WebSocket para confirmar
     } catch (error) {
-      console.error("Erro ao iniciar:", error);
-      setSteps(prev => ({
+      console.error("Erro ao iniciar calibração:", error);
+      setSteps((prev) => ({
         ...prev,
-        "1_backtest_dados": {
-          ...prev["1_backtest_dados"],
-          status: "error"
-        }
+        "1_backtest_dados": { ...prev["1_backtest_dados"], status: "error" },
       }));
     }
-  };
+  }
 
-  const calculateElapsedTime = (iniciado_em) => {
-    if (!iniciado_em) return "0s";
-    const start = new Date(iniciado_em);
-    const now = new Date();
-    const diff = now - start;
-    const seconds = Math.floor(diff / 1000) % 60;
-    const minutes = Math.floor(diff / (1000 * 60)) % 60;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
+  function handleSkipStep1() {
+    const now = new Date().toISOString();
+    setShowStep1Guard(false);
+    setSteps((prev) => ({
+      ...prev,
+      "1_backtest_dados": { ...prev["1_backtest_dados"], status: "done", iniciado_em: now, concluido_em: now, skipped: true },
+    }));
+  }
 
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  };
-
-  const calculateAverageTime = (iniciado_em, trials_completos) => {
-    if (!iniciado_em || trials_completos <= 0) return "0s";
-    const start = new Date(iniciado_em);
-    const now = new Date();
-    const diff = now - start;
-    const avgMs = diff / trials_completos;
-    const seconds = Math.floor(avgMs / 1000);
-
-    return `${seconds}s`;
-  };
-
-  const calculateEstimatedTime = (iniciado_em, trials_completos, trials_total) => {
-    if (!iniciado_em || trials_completos <= 0) return "0s";
-    const start = new Date(iniciado_em);
-    const now = new Date();
-    const diff = now - start;
-    const avgMs = diff / trials_completos;
-    const remainingTrials = trials_total - trials_completos;
-    const remainingMs = remainingTrials * avgMs;
-
-    const seconds = Math.floor(remainingMs / 1000) % 60;
-    const minutes = Math.floor(remainingMs / (1000 * 60)) % 60;
-    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
-
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  };
-
-  // TAREFA 5: Implementar botões de conclusão
-  const handleConfirmarOperar = async () => {
+  async function handleRetomar() {
     try {
-      const res = await fetch(`${API_BASE}/ativos/${ticker}/status`, {
+      await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}/retomar`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    } catch (error) {
+      console.error("Erro ao retomar:", error);
+    }
+  }
+
+  async function handleConfirmarOperar() {
+    try {
+      await fetch(`${API_BASE}/ativos/${ticker}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "OPERAR" })
+        body: JSON.stringify({ status: "OPERAR" }),
       });
-      if (res.ok) {
-        onClose();
-      }
+      onClose();
     } catch (error) {
       console.error("Erro ao confirmar OPERAR:", error);
     }
-  };
+  }
 
-  // Não bloquear renderização — WebSocket precisa montar independente do fetch
-  // if (!calibracao) return null;
+  function handleExport() {
+    const now = new Date().toISOString().slice(0, 10);
+    const cycle = gateResult?.ciclo || now.slice(0, 7);
+    const blocked = gateResult?.resultado !== "OPERAR";
+    const filename = blocked
+      ? `GATE_${ticker}_${cycle}_${now}_BLOQUEADO.md`
+      : `CALIBRACAO_${ticker}_${cycle}_${now}.md`;
+    const markdown = buildMarkdownReport({
+      ticker,
+      cycle,
+      gateResult,
+      fireDiag: blocked ? null : fireDiag,
+    });
+    downloadTextFile(filename, markdown);
+  }
+
+  function elapsedForStep2() {
+    if (!step2IniciadoEm) return "0s";
+    const diff = Date.now() - step2IniciadoEm;
+    const s = Math.floor(diff / 1000) % 60;
+    const m = Math.floor(diff / 60000) % 60;
+    const h = Math.floor(diff / 3600000);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function estimatedForStep2() {
+    if (!step2IniciadoEm || trialAtual <= 0 || trialTotal <= 0) return "0s";
+    const avgMs = (Date.now() - step2IniciadoEm) / trialAtual;
+    const rem = Math.max(trialTotal - trialAtual, 0) * avgMs;
+    const s = Math.floor(rem / 1000) % 60;
+    const m = Math.floor(rem / 60000) % 60;
+    const h = Math.floor(rem / 3600000);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  const gateBlocked = gateResult && gateResult.resultado !== "OPERAR";
+  const concluidoComFire = gateResult?.resultado === "OPERAR" && steps["3_gate_fire"]?.status === "done";
 
   return (
-      <><div style={{
-      position: "fixed",
-      top: 0,
-      right: 0,
-      width: "400px",
-      height: "100%",
-      background: "var(--atlas-surface)",
-      borderLeft: "1px solid var(--atlas-border)",
-      zIndex: 1000,
-      padding: 16,
-      overflowY: "auto",
-      boxShadow: "-5px 0 15px rgba(0,0,0,0.1)"
-    }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 16
-      }}>
-        <h3 style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: "var(--atlas-text-primary)" }}>
-          CALIBRAÇÃO — {ticker}
-        </h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: "transparent",
-            border: "none",
-            fontSize: 16,
-            color: "var(--atlas-text-secondary)",
-            cursor: "pointer"
-          }}
-        >
-          ×
-        </button>
-      </div>
-
-      {watchdogAlert && (
-        <div style={{
-          background: "var(--atlas-amber)",
-          color: "var(--atlas-text-primary)",
-          padding: "8px 12px",
-          borderRadius: 4,
-          marginBottom: 16,
-          fontSize: 10,
-          fontFamily: "monospace"
-        }}>
-          {watchdogAlert}
+    <>
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          width: "400px",
+          height: "100%",
+          background: "var(--atlas-surface)",
+          borderLeft: "1px solid var(--atlas-border)",
+          zIndex: 1000,
+          padding: 16,
+          overflowY: "auto",
+          boxShadow: "-5px 0 15px rgba(0,0,0,0.1)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: "var(--atlas-text-primary)" }}>CALIBRAÇÃO - {ticker}</h3>
+          <button
+            onClick={onClose}
+            style={{ background: "transparent", border: "none", fontSize: 16, color: "var(--atlas-text-secondary)", cursor: "pointer" }}
+          >
+            ×
+          </button>
         </div>
-      )}
 
+        {watchdogAlert && (
+          <div style={{ background: "rgba(245,158,11,0.2)", color: "var(--atlas-text-primary)", padding: "8px 12px", borderRadius: 4, marginBottom: 16, fontSize: 10, fontFamily: "monospace" }}>
+            {watchdogAlert}
+          </div>
+        )}
 
-
-      <div style={{
-        background: "var(--atlas-bg)",
-        padding: 12,
-        borderRadius: 4,
-        marginBottom: 16
-      }}>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          marginBottom: 8,
-          padding: "8px 12px",
-          background: getStepColorBg("1_backtest_dados"),
-          border: `1px solid ${getStepBorderColor("1_backtest_dados")}`,
-          borderRadius: 2,
-          opacity: getStepOpacity("1_backtest_dados")
-        }}>
-          <span style={{
-            fontSize: 14,
-            color: getStepColor("1_backtest_dados"),
-            fontWeight: "bold",
-            marginRight: 8,
-            animation: (getStepStatus("1_backtest_dados") === "running" || (getStepStatus("1_backtest_dados") === "idle" && "1_backtest_dados" === getProximoStep())) ? "pulse 1s infinite" : "none"
-          }}>
-            {getStepIcon("1_backtest_dados")}
-          </span>
-          <div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 11,
-              color: getStepColor("1_backtest_dados"),
-              fontWeight: "bold"
-            }}>
-              {getStepLabel("1_backtest_dados")}
+        {concluidoComFire && (
+          <div style={{ border: "1px solid var(--atlas-green)", background: "rgba(34,197,94,0.08)", padding: 12, marginBottom: 12, borderRadius: 4 }}>
+            <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--atlas-green)", fontWeight: "bold", marginBottom: 8 }}>
+              CALIBRAÇÃO CONCLUÍDA - {ticker}
             </div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepName("1_backtest_dados")}
+            <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", marginBottom: 10 }}>
+              {ticker} aprovado pelo GATE. Confirmar entrada em OPERAR?
             </div>
-            {getSubModulesDisplay("1_backtest_dados") && (
-              <div style={{
-                fontFamily: "monospace",
-                fontSize: 8,
-                color: "var(--atlas-blue)",
-                marginTop: 2
-              }}>
-                {getSubModulesDisplay("1_backtest_dados")}
-              </div>
-            )}
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepDescription("1_backtest_dados")}
-              {getStepTime("1_backtest_dados") && (
-                <span style={{ marginLeft: 8 }}>
-                  {getStepTime("1_backtest_dados")}
-                </span>
-              )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={handleConfirmarOperar}
+                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-green)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+              >
+                Confirmar OPERAR
+              </button>
+              <button
+                onClick={onClose}
+                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+              >
+                Manter MONITORAR
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          marginBottom: 8,
-          padding: "8px 12px",
-          background: getStepColorBg("2_tune"),
-          border: `1px solid ${getStepBorderColor("2_tune")}`,
-          borderRadius: 2,
-          opacity: getStepOpacity("2_tune")
-        }}>
-          <span style={{
-            fontSize: 14,
-            color: getStepColor("2_tune"),
-            fontWeight: "bold",
-            marginRight: 8,
-            animation: (getStepStatus("2_tune") === "running" || (getStepStatus("2_tune") === "idle" && "2_tune" === getProximoStep())) ? "pulse 1s infinite" : "none"
-          }}>
-            {getStepIcon("2_tune")}
-          </span>
-          <div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 11,
-              color: getStepColor("2_tune"),
-              fontWeight: "bold"
-            }}>
-              {getStepLabel("2_tune")}
+        {gateBlocked && (
+          <div style={{ border: "1px solid var(--atlas-red)", background: "rgba(239,68,68,0.08)", padding: 12, marginBottom: 12, borderRadius: 4 }}>
+            <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--atlas-red)", fontWeight: "bold", marginBottom: 8 }}>
+              GATE BLOQUEADO - {ticker}
             </div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepName("2_tune")}
+            <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", marginBottom: 10 }}>
+              Critério(s) reprovado(s): {(gateResult?.falhas || []).join(", ") || "N/D"}
             </div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepStatus("2_tune") === "running" && bestTp !== null && bestStop !== null
-                ? <span style={{ color: "var(--atlas-blue)" }}>TP {bestTp.toFixed(2)} | SL {bestStop.toFixed(2)}</span>
-                : getStepDescription("2_tune")
-              }
-              {getStepTime("2_tune") && (
-                <span style={{ marginLeft: 8 }}>
-                  {getStepTime("2_tune")}
-                </span>
-              )}
-            </div>
-
-            {getStepStatus("2_tune") === "running" && (
-              <>
-                <div style={{
-                  marginTop: 8,
-                  padding: "8px 12px",
-                  background: "var(--atlas-surface)",
-                  borderRadius: 4,
-                  border: "1px solid var(--atlas-border)"
-                }}>
-
-                  {/* Barra de progresso da indexação de dias */}
-                  {!indexComplete && (
-                    <div style={{
-                      marginBottom: 12,
-                      padding: "8px 12px",
-                      background: "var(--atlas-surface)",
-                      borderRadius: 4,
-                      border: "1px solid var(--atlas-border)"
-                    }}>
-                      <div style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 4
-                      }}>
-                        <span style={{
-                          fontFamily: "monospace",
-                          fontSize: 9,
-                          color: "var(--atlas-text-secondary)"
-                        }}>
-                          {indexProgress.total > 0
-                            ? `Indexando dias: ${indexProgress.current} / ${indexProgress.total}`
-                            : "Indexando dias..."}
-                        </span>
-                        <span style={{
-                          fontFamily: "monospace",
-                          fontSize: 9,
-                          color: "var(--atlas-text-secondary)"
-                        }}>
-                          {indexProgress.total > 0
-                            ? `${Math.round((indexProgress.current / indexProgress.total) * 100)}%`
-                            : ""}
-                        </span>
-                      </div>
-                      <div style={{
-                        width: "100%",
-                        height: 8,
-                        background: "var(--atlas-border)",
-                        borderRadius: 4,
-                        overflow: "hidden"
-                      }}>
-                        <div style={{
-                          height: "100%",
-                          background: "var(--atlas-blue)",
-                          width: `${indexProgress.total > 0 ? (indexProgress.current / indexProgress.total) * 100 : 0}%`
-                        }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Texto de conclusão da indexação */}
-                  {indexComplete && (
-                    <div style={{
-                      marginBottom: 12,
-                      padding: "8px 12px",
-                      background: "var(--atlas-surface)",
-                      borderRadius: 4,
-                      border: "1px solid var(--atlas-border)"
-                    }}>
-                      <span style={{
-                        fontFamily: "monospace",
-                        fontSize: 9,
-                        color: "var(--atlas-green)"
-                      }}>
-                        {indexProgress.total} dias indexados
-                      </span>
-                    </div>
-                  )}
-
-{/* Barra de progresso dos trials */}
-{steps["2_tune"].status === "running" && (
-                    <div style={{
-                      marginBottom: 12,
-                      padding: "8px 12px",
-                      background: "var(--atlas-surface)",
-                      borderRadius: 4,
-                      border: "1px solid var(--atlas-border)"
-                    }}>
-                      <div style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 4
-                      }}>
-                        <span style={{
-                          fontFamily: "monospace",
-                          fontSize: 9,
-                          color: "var(--atlas-text-secondary)"
-                        }}>
-                          {trialAtual} / {trialTotal} trials
-                        </span>
-                        <span style={{
-                          fontFamily: "monospace",
-                          fontSize: 9,
-                          color: "var(--atlas-text-secondary)"
-                        }}>
-                          IR: {bestIr.toFixed(3) || "0.000"}
-                        </span>
-                      </div>
-                      <div style={{
-                        width: "100%",
-                        height: 8,
-                        background: "var(--atlas-border)",
-                        borderRadius: 4,
-                        overflow: "hidden"
-                      }}>
-                        <div style={{
-                          height: "100%",
-                          background: "var(--atlas-blue)",
-                          width: `${trialTotal > 0 ? (trialAtual / trialTotal * 100) : 0}%`
-                        }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tempo decorrido e estimativa */}
-                <div style={{
-                  marginTop: 8,
-                  fontSize: 9,
-                  fontFamily: "monospace",
-                  color: "var(--atlas-text-secondary)"
-                }}>
-                  Tempo decorrido {calculateElapsedTime(step2IniciadoEm)} (est. restante {calculateEstimatedTime(step2IniciadoEm, trialAtual, trialTotal)})
-                </div>
-              </>
-            )}
-
-            {getStepStatus("2_tune") === "paused" && (
+            <div style={{ display: "flex", gap: 8 }}>
               <button
-                onClick={handleRetomar}
+                onClick={handleExport}
+                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+              >
+                Exportar relatório GATE
+              </button>
+              <button
+                onClick={onClose}
+                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ background: "var(--atlas-bg)", padding: 12, borderRadius: 4, marginBottom: 16 }}>
+          {STEP_KEYS.map((key) => {
+            const status = steps[key]?.status || "idle";
+            const isNext = status === "idle" && proximoStep === key;
+            const visual = statusColors(status, isNext);
+            const stepDone = status === "done";
+            const icon = status === "done" ? "●" : status === "running" ? "⟳" : status === "error" ? "×" : "○";
+            return (
+              <div
+                key={key}
                 style={{
-                  marginTop: 8,
-                  padding: "4px 10px",
-                  background: "var(--atlas-blue)",
-                  border: "none",
-                  color: "#fff",
-                  fontFamily: "monospace",
-                  fontSize: 9,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  marginBottom: 8,
+                  padding: "8px 12px",
+                  background: visual.bg,
+                  border: `1px solid ${visual.border}`,
                   borderRadius: 2,
-                  cursor: "pointer"
+                  opacity: status === "idle" && !isNext ? 0.7 : 1,
                 }}
               >
-                Retomar
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          marginBottom: 8,
-          padding: "8px 12px",
-          background: getStepColorBg("3_backtest_gate"),
-          border: `1px solid ${getStepBorderColor("3_backtest_gate")}`,
-          borderRadius: 2,
-          opacity: getStepOpacity("3_backtest_gate")
-        }}>
-          <span style={{
-            fontSize: 14,
-            color: getStepColor("3_backtest_gate"),
-            fontWeight: "bold",
-            marginRight: 8,
-            animation: (getStepStatus("3_backtest_gate") === "running" || (getStepStatus("3_backtest_gate") === "idle" && "3_backtest_gate" === getProximoStep())) ? "pulse 1s infinite" : "none"
-          }}>
-            {getStepIcon("3_backtest_gate")}
-          </span>
-          <div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 11,
-              color: getStepColor("3_backtest_gate"),
-              fontWeight: "bold"
-            }}>
-              {getStepLabel("3_backtest_gate")}
-            </div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepName("3_backtest_gate")}
-            </div>
-            <div style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {getStepDescription("3_backtest_gate")}
-              {getStepTime("3_backtest_gate") && (
-                <span style={{ marginLeft: 8 }}>
-                  {getStepTime("3_backtest_gate")}
+                <span style={{ fontSize: 14, color: visual.color, fontWeight: "bold", marginRight: 8, animation: status === "running" || isNext ? "pulse 1s infinite" : "none" }}>
+                  {icon}
                 </span>
-              )}
-            </div>
-          </div>
+                <div style={{ width: "100%" }}>
+                  <div style={{ fontFamily: "monospace", fontSize: 11, color: visual.color, fontWeight: "bold" }}>{steps[key]?.skipped ? "PULADO" : visual.label}</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>{getStepName(key)}</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                    {getStepDescription(key)}
+                    {stepDone && getStepTime(key) ? ` · ${getStepTime(key)}` : ""}
+                  </div>
+
+                  {key === "1_backtest_dados" && showStep1Guard && status === "idle" && cotahistInfo?.data_ultimo_cotahist && (
+                    <div style={{ marginTop: 8, border: "1px solid var(--atlas-amber)", background: "rgba(245,158,11,0.08)", padding: 8, borderRadius: 4 }}>
+                      <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-amber)", marginBottom: 8 }}>
+                        Dados atualizados em {formatDateTimeBR(cotahistInfo.data_ultimo_cotahist)} - deseja rodar mesmo assim?
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={handleSkipStep1}
+                          style={{ flex: 1, padding: "5px 8px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                        >
+                          Pular step 1
+                        </button>
+                        <button
+                          onClick={handleIniciar}
+                          style={{ flex: 1, padding: "5px 8px", background: "var(--atlas-blue)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                        >
+                          Rodar mesmo assim
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {key === "2_tune" && status === "running" && (
+                    <div style={{ marginTop: 8 }}>
+                      {!indexComplete && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                              Indexando dias: {indexProgress.current.toLocaleString("pt-BR")} / {indexProgress.total.toLocaleString("pt-BR")}
+                            </span>
+                            <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                              {indexProgress.total > 0 ? `${Math.round((indexProgress.current / indexProgress.total) * 100)}%` : "0%"}
+                            </span>
+                          </div>
+                          <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${indexProgress.total > 0 ? (indexProgress.current / indexProgress.total) * 100 : 0}%`, height: "100%", background: "var(--atlas-blue)" }} />
+                          </div>
+                        </div>
+                      )}
+                      {indexComplete && (
+                        <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-green)", marginBottom: 8 }}>
+                          {indexProgress.total.toLocaleString("pt-BR")} dias indexados
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                          {trialAtual} / {trialTotal} trials
+                        </span>
+                        <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>IR: {Number(bestIr || 0).toFixed(3)}</span>
+                      </div>
+                      <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ width: `${trialTotal > 0 ? (trialAtual / trialTotal) * 100 : 0}%`, height: "100%", background: "var(--atlas-blue)" }} />
+                      </div>
+                      {(bestTp != null || bestStop != null) && (
+                        <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-blue)", marginTop: 4 }}>
+                          TP {bestTp != null ? Number(bestTp).toFixed(2) : "--"} | STOP {bestStop != null ? Number(bestStop).toFixed(2) : "--"}
+                        </div>
+                      )}
+                      <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 4 }}>
+                        Tempo decorrido {elapsedForStep2()} (est. restante {estimatedForStep2()})
+                      </div>
+                    </div>
+                  )}
+
+                  {key === "2_tune" && status === "paused" && (
+                    <button
+                      onClick={handleRetomar}
+                      style={{ marginTop: 8, padding: "4px 10px", background: "var(--atlas-blue)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                    >
+                      Retomar
+                    </button>
+                  )}
+
+                  {key === "3_gate_fire" && (gateResult || fireDiag) && (
+                    <div style={{ marginTop: 8, border: "1px solid var(--atlas-border)", background: "var(--atlas-surface)", borderRadius: 4, padding: 8 }}>
+                      {gateResult && (
+                        <>
+                          <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)", marginBottom: 6 }}>GATE</div>
+                          {(gateResult.criterios || []).map((c) => (
+                            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace", fontSize: 9, color: c.passou ? "var(--atlas-green)" : "var(--atlas-red)" }}>
+                              <span>{c.id} {c.nome}</span>
+                              <span>{c.passou ? "✓" : "✗"} {c.valor ?? "N/D"}</span>
+                            </div>
+                          ))}
+                          <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 10, color: gateResult.resultado === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-red)", fontWeight: "bold" }}>
+                            RESULTADO: {gateResult.resultado === "OPERAR" ? "OPERAR" : "BLOQUEADO"}
+                          </div>
+                        </>
+                      )}
+
+                      {gateResult?.resultado === "OPERAR" && (
+                        <>
+                          <div style={{ marginTop: 10, fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)" }}>FIRE - Diagnóstico histórico</div>
+                          {fireDiag?.regimes?.length ? (
+                            <>
+                              {fireDiag.regimes.map((r) => (
+                                <div key={r.regime} style={{ display: "grid", gridTemplateColumns: "1.2fr .7fr .7fr .6fr", gap: 6, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                                  <span>{r.regime}</span>
+                                  <span>{r.trades} trades</span>
+                                  <span>{r.acerto_pct}%</span>
+                                  <span>IR {r.ir}</span>
+                                </div>
+                              ))}
+                              <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 6 }}>
+                                Cobertura: {fireDiag?.cobertura?.ciclos_com_operacao ?? 0}/{fireDiag?.cobertura?.total_ciclos ?? 0}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>Aguardando diagnóstico FIRE...</div>
+                          )}
+                        </>
+                      )}
+
+                      <button
+                        onClick={handleExport}
+                        style={{ marginTop: 10, width: "100%", padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                      >
+                        Exportar relatório .md
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
+
+        {steps["1_backtest_dados"]?.status === "idle" && !showStep1Guard && (
+          <button
+            onClick={handleIniciar}
+            style={{ width: "100%", padding: "8px 16px", background: "var(--atlas-blue)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 11, borderRadius: 4, cursor: "pointer", marginBottom: 8 }}
+          >
+            Iniciar calibração
+          </button>
+        )}
       </div>
-
-      {getStepStatus("3_backtest_gate") === "done" && (
-        <>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: 16,
-            borderBottom: "1px solid var(--atlas-border)",
-            paddingBottom: 8
-          }}>
-            <span style={{
-              fontFamily: "monospace",
-              fontSize: 14,
-              fontWeight: "bold",
-              color: "var(--atlas-text)"
-            }}>
-              Parametrização
-            </span>
-            <span style={{
-              marginLeft: 8,
-              fontFamily: "monospace",
-              fontSize: 11,
-              color: "var(--atlas-text-secondary)"
-            }}>
-              {ticker}
-            </span>
-          </div>
-
-          {/* Sub-título dinâmico */}
-          <div style={{
-            fontFamily: "monospace",
-            fontSize: 10,
-            color: "var(--atlas-text-secondary)",
-            marginTop: 2
-          }}>
-{faseCalibracao === "integridade" && "Integridade de dados"}
-{faseCalibracao === "indexacao" && "Indexação"}
-{faseCalibracao === "otimizacao" && "Otimização"}
-</div>
-
-{/* Valores de parametrização em azul */}
-{parametros.take_profit !== null && parametros.stop_loss !== null && (
-  <div style={{
-    fontFamily: "monospace",
-    fontSize: 9,
-    color: "var(--atlas-blue)",
-    marginTop: 6
-  }}>
-    TP: {parametros.take_profit.toFixed(2)} | STOP: {parametros.stop_loss.toFixed(2)}
-  </div>
-)}
-</>
-)}
-
-      {/* Botão de reinício apenas em caso de erro - não mostra "Iniciar" pois já foi iniciado na aba Gestão */}
-
-      {getStepStatus("1_backtest_dados") === "error" && (
-        <button
-          onClick={handleIniciar}
-          style={{
-            width: "100%",
-            padding: "8px 16px",
-            background: "var(--atlas-blue)",
-            border: "none",
-            color: "#fff",
-            fontFamily: "monospace",
-            fontSize: 11,
-            borderRadius: 4,
-            cursor: "pointer",
-            marginBottom: 8
-          }}
-        >
-          Reiniciar Step 1
-        </button>
-      )}
-
-      {getStepStatus("2_tune") === "error" && (
-        <button
-          onClick={handleIniciar}
-          style={{
-            width: "100%",
-            padding: "8px 16px",
-            background: "var(--atlas-blue)",
-            border: "none",
-            color: "#fff",
-            fontFamily: "monospace",
-            fontSize: 11,
-            borderRadius: 4,
-            cursor: "pointer",
-            marginBottom: 8
-          }}
-        >
-          Reiniciar Step 2
-        </button>
-      )}
-
-      {getStepStatus("3_backtest_gate") === "error" && (
-        <button
-          onClick={handleIniciar}
-          style={{
-            width: "100%",
-            padding: "8px 16px",
-            background: "var(--atlas-blue)",
-            border: "none",
-            color: "#fff",
-            fontFamily: "monospace",
-            fontSize: 11,
-            borderRadius: 4,
-            cursor: "pointer",
-            marginBottom: 8
-          }}
-        >
-          Reiniciar Step 3
-        </button>
-)}
-</div>
-<style>{PULSE_ANIMATION}</style>
-</>
+      <style>{PULSE_ANIMATION}</style>
+    </>
   );
 }

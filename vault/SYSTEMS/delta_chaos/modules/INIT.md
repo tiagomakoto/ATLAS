@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-011
-version: 1.0
+version: 1.0.1
 status: validated
 owner: Chan
 
@@ -45,6 +45,7 @@ constraints:
   - DIRETORIOS: TAPE_DIR, COTAHIST_DIR, GREGAS_DIR, OHLCV_DIR, EXTERNAS_DIR, ORBIT_DIR, TRADELOG_DIR, BOOK_DIR, OPCOES_HOJE_DIR, OPCOES_HISTORICO_DIR, ATIVOS_DIR
 
 notes:
+  - 2026-04-17: código modificado — init.py
   - Prints de inicializacao sob if __name__ == "__main__" — nao poluem imports
   - Logging via emit_log/emit_error com fallback graceful para print quando ATLAS indisponivel
 ---

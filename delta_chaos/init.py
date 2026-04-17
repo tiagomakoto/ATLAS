@@ -176,7 +176,7 @@ def verificar_cache():
                 mb = os.path.getsize(
                     os.path.join(ATIVOS_DIR, f)) / 1e6
                 try:
-                    with open(os.path.join(ATIVOS_DIR, f)) as fh:
+                    with open(os.path.join(ATIVOS_DIR, f), encoding="utf-8") as fh:
                         dados = json.load(fh)
                     n_ciclos = len(dados.get("historico", []))
                     emit_log(
@@ -213,7 +213,7 @@ CAPITAL_PADRAO = 10000.0
 
 def carregar_config() -> dict:
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             config = json.load(f)
         
         if "backtest" not in config:

@@ -1,6 +1,8 @@
 # atlas_backend/api/routes/delta_chaos.py
 
 import re
+import json
+import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -14,6 +16,18 @@ from atlas_backend.core.dc_runner import (
 from atlas_backend.core.delta_chaos_reader import list_ativos, get_ativo, update_ativo
 from atlas_backend.core.paths import get_paths
 from atlas_backend.core.relatorios import gerar_relatorio, marcar_aplicado
+from atlas_backend.core.calibracao_contract import (
+    build_calibracao_payload,
+    normalize_gate_resultado,
+    normalize_fire_diagnostico,
+    normalize_guard_payload,
+)
+from atlas_backend.core.delta_chaos_reader import (
+    get_ativo_raw,
+    get_cotahist_recente_info,
+    get_gate_resultado,
+    get_fire_diagnostico,
+)
 
 router = APIRouter(prefix="/delta-chaos", tags=["delta-chaos"])
 
@@ -222,7 +236,7 @@ async def calibracao(payload: CalibracaoPayload):
 
     try:
         from atlas_backend.core.terminal_stream import emit_log
-        from atlas_backend.core.dc_runner import dc_orbit_backtest, dc_tune, dc_gate_backtest
+        from atlas_backend.core.dc_runner import dc_orbit_backtest, dc_tune, dc_gate_backtest, dc_fire_diagnostico
 
         emit_log(f"[CALIBRAÇÃO] Iniciando {ticker}", level="info")
 
@@ -231,7 +245,9 @@ async def calibracao(payload: CalibracaoPayload):
         anos_orbit = list(range(2002, ano_atual + 1))
         await dc_orbit_backtest(ticker=ticker, anos=anos_orbit)
         await dc_tune(ticker=ticker)
-        await dc_gate_backtest(ticker=ticker)
+        gate_result = await dc_gate_backtest(ticker=ticker)
+        if gate_result.get("status") == "OK" and gate_result.get("gate_resultado", {}).get("resultado") == "OPERAR":
+            await dc_fire_diagnostico(ticker=ticker)
 
         emit_log(f"[CALIBRAÇÃO] {ticker} concluído", level="info")
         return {"status": "OK", "ticker": ticker}
@@ -381,7 +397,17 @@ async def calibracao_iniciar(payload: CalibracaoPayload):
     try:
         from atlas_backend.core.dc_runner import dc_calibracao_iniciar
         result = await dc_calibracao_iniciar(ticker)
-        return result
+        return {
+            "versao_contrato": "calibracao.v3.0",
+            "ticker": ticker,
+            "status": result.get("status", "started"),
+            "step_atual": int(result.get("step", 1)),
+            "steps": {
+                "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+            },
+        }
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -398,11 +424,11 @@ async def calibracao_status(ticker: str):
     _validar_ticker(ticker)
     
     try:
-        from atlas_backend.core.delta_chaos_reader import get_ativo
         from datetime import datetime, timedelta
-        
+
         dados = get_ativo(ticker)
-        calibracao = dados.get("calibracao", {})
+        dados_raw = get_ativo_raw(ticker)
+        calibracao = (dados_raw.get("calibracao") or {}).copy()
         
         # Reconciliação watchdog: se running e ultimo_evento_em > 10min → paused
         if calibracao.get("step_atual") and calibracao.get("steps"):
@@ -420,14 +446,25 @@ async def calibracao_status(ticker: str):
                             path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
                             path_tmp = path_ativo.with_suffix(".tmp")
                             
+                            dados_raw["calibracao"] = calibracao
                             with open(path_tmp, "w", encoding="utf-8") as f:
-                                json.dump(dados, f, indent=2, ensure_ascii=False)
+                                json.dump(dados_raw, f, indent=2, ensure_ascii=False)
                             os.replace(path_tmp, path_ativo)
                             
                             # Atualizar dados locais
                             dados["calibracao"] = calibracao
-        
-        return calibracao
+
+        guard = normalize_guard_payload(get_cotahist_recente_info(ticker), ticker)
+        gate = normalize_gate_resultado(get_gate_resultado(ticker), ticker)
+        fire = normalize_fire_diagnostico(get_fire_diagnostico(ticker), ticker)
+
+        return build_calibracao_payload(
+            ticker=ticker,
+            calibracao=calibracao,
+            guard=guard,
+            gate_resultado=gate,
+            fire_diagnostico=fire,
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

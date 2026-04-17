@@ -1,0 +1,17 @@
+Revise o código acima com atenção.
+
+Pense o suficiente para encontrar problemas reais, mas seja direto.
+
+Verifique:
+- erros de sintaxe
+- imports quebrados
+- variáveis indefinidas
+- indentação
+- fechamento de blocos
+- inconsistência entre arquivos
+
+Se houver problemas:
+- reescreva o código COMPLETO corrigido
+
+Se estiver correto:
+- responda apenas: OK

@@ -11,6 +11,7 @@ delta_chaos.py EXPÕE o botão — endpoints HTTP apenas
 import asyncio
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -543,14 +544,69 @@ async def dc_gate_backtest(ticker: str) -> dict:
     emit_dc_event("dc_module_start", "GATE", "running", **action_payload)
     try:
         res = await asyncio.to_thread(edge.rodar_backtest_gate, ticker)
-        emit_dc_event("dc_module_complete", "GATE", "ok", **action_payload)
+        output = res.get("output", "")
+        gate_resultado = _parse_gate_output(output, ticker)
+        emit_dc_event("dc_module_complete", "GATE", "ok", gate_resultado=gate_resultado, **action_payload)
         log_action("dc_backtest_gate", action_payload, {"status": "OK"})
-        return {"status": "OK", "returncode": 0, "output": res.get("output", "")}
+        return {"status": "OK", "returncode": 0, "output": output, "gate_resultado": gate_resultado}
     except Exception as e:
         emit_dc_event("dc_module_complete", "GATE", "error", **action_payload)
         emit_log(f"[GATE] {ticker}: erro — {e}", level="error")
         log_action("dc_backtest_gate", action_payload, {"status": "ERRO", "error": repr(e)})
         return {"status": "ERRO", "output": repr(e)}
+
+def _parse_gate_output(output: str, ticker: str) -> dict:
+    criterios = []
+    pattern = re.compile(r"^\s*([✓✗])\s+(E\d+\s+[^\n\r]+)$", re.MULTILINE)
+    for marker, title in pattern.findall(output or ""):
+        match_id = re.match(r"^(E\d+)\s*[—-]?\s*(.+)$", title.strip())
+        if not match_id:
+            continue
+        criterios.append(
+            {
+                "id": match_id.group(1),
+                "nome": match_id.group(2).strip(),
+                "passou": marker == "✓",
+                "valor": "N/D",
+            }
+        )
+
+    if not criterios:
+        criterios = [
+            {"id": "E1", "nome": "Taxa de acerto", "passou": False, "valor": "N/D"},
+            {"id": "E2", "nome": "IR mínimo", "passou": False, "valor": "N/D"},
+            {"id": "E3", "nome": "N mínimo de trades", "passou": False, "valor": "N/D"},
+            {"id": "E4", "nome": "Consistência anual", "passou": False, "valor": "N/D"},
+            {"id": "E5", "nome": "IR por regime", "passou": False, "valor": "N/D"},
+            {"id": "E6", "nome": "Drawdown máximo", "passou": False, "valor": "N/D"},
+            {"id": "E7", "nome": "Consecutivos negativos", "passou": False, "valor": "N/D"},
+            {"id": "E8", "nome": "Cobertura de regimes", "passou": False, "valor": "N/D"},
+        ]
+
+    resultado = "OPERAR" if "OPERAR" in (output or "").upper() else "BLOQUEADO"
+    falhas = [c["id"] for c in criterios if not c["passou"]]
+    return {
+        "ticker": ticker,
+        "criterios": criterios,
+        "resultado": resultado,
+        "falhas": falhas if resultado != "OPERAR" else [],
+    }
+
+
+async def dc_fire_diagnostico(ticker: str) -> dict:
+    action_payload = {"ticker": ticker}
+    emit_dc_event("dc_module_start", "FIRE", "running", **action_payload)
+    try:
+        from atlas_backend.core.delta_chaos_reader import get_fire_diagnostico
+
+        diagnostico = await asyncio.to_thread(get_fire_diagnostico, ticker)
+        emit_dc_event("dc_module_complete", "FIRE", "ok", fire_diagnostico=diagnostico, **action_payload)
+        return {"status": "OK", "fire_diagnostico": diagnostico}
+    except Exception as e:
+        emit_dc_event("dc_module_complete", "FIRE", "error", erro=str(e), **action_payload)
+        emit_log(f"[FIRE] {ticker}: erro â€” {e}", level="error")
+        return {"status": "ERRO", "output": repr(e)}
+
 
 async def dc_orbit_update(ticker: str, anos: Optional[list] = None) -> dict:
     action_payload = {"ticker": ticker, "anos": anos}
@@ -609,7 +665,7 @@ async def dc_reflect_cycle(ticker: str) -> dict:
 async def dc_calibracao_iniciar(ticker: str) -> dict:
     """
     Inicia calibração completa de novo ativo.
-    Sequência: backtest_dados → tune → backtest_gate
+    Sequência: backtest_dados → tune → gate + fire
     Cria/atualiza campo calibracao no master JSON, dispara step 1 via subprocess EM BACKGROUND
     """
     # Validação básica do ticker
@@ -638,9 +694,11 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
                 "steps": {
                     "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
                     "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
-                    "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+                    "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
                 },
-                "ultimo_evento_em": None
+                "ultimo_evento_em": None,
+                "gate_resultado": None,
+                "fire_diagnostico": None
             },
             "historico": [],
             "historico_config": [],
@@ -660,9 +718,11 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
         "steps": {
             "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
             "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
-            "3_backtest_gate": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
+            "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
         },
-        "ultimo_evento_em": None
+        "ultimo_evento_em": None,
+        "gate_resultado": None,
+        "fire_diagnostico": None
     }
 
     # Atualizar no master JSON usando versão simplificada
@@ -794,27 +854,37 @@ async def _executar_calibracao_step1(ticker: str):
             if result_tune.get("status") == "OK":
                 # Atualizar step_atual para 3
                 dados["calibracao"]["step_atual"] = 3
-                dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "running"
-                dados["calibracao"]["steps"]["3_backtest_gate"]["iniciado_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "running"
+                dados["calibracao"]["steps"]["3_gate_fire"]["iniciado_em"] = datetime.now().isoformat()
                 dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
-                # Executar step 3 (GATE)
-                from atlas_backend.core.dc_runner import dc_gate_backtest
+                # Executar step 3 fase A (GATE)
                 try:
                     result_gate = await dc_gate_backtest(ticker)
                 except Exception as e:
                     result_gate = {"status": "ERRO", "returncode": 1, "output": str(e)}
 
-                # Atualizar status do step 3
+                # Atualizar status do step 3 (GATE + FIRE)
                 dados = get_ativo(ticker)
                 if result_gate.get("status") == "OK":
-                    dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "done"
+                    dados["calibracao"]["gate_resultado"] = result_gate.get("gate_resultado")
+                    gate_aprovado = result_gate.get("gate_resultado", {}).get("resultado") == "OPERAR"
+                    if gate_aprovado:
+                        result_fire = await dc_fire_diagnostico(ticker)
+                        if result_fire.get("status") == "OK":
+                            dados["calibracao"]["fire_diagnostico"] = result_fire.get("fire_diagnostico")
+                            dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "done"
+                        else:
+                            dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "error"
+                            dados["calibracao"]["steps"]["3_gate_fire"]["erro"] = result_fire.get("output", "Erro desconhecido")
+                    else:
+                        dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "done"
                 else:
-                    dados["calibracao"]["steps"]["3_backtest_gate"]["status"] = "error"
-                    dados["calibracao"]["steps"]["3_backtest_gate"]["erro"] = result_gate.get("output", "Erro desconhecido")
+                    dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "error"
+                    dados["calibracao"]["steps"]["3_gate_fire"]["erro"] = result_gate.get("output", "Erro desconhecido")
 
-                dados["calibracao"]["steps"]["3_backtest_gate"]["concluido_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["3_gate_fire"]["concluido_em"] = datetime.now().isoformat()
                 dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
@@ -827,7 +897,7 @@ async def _executar_calibracao_step1(ticker: str):
                 emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
                 
                 # Atualizar status do step atual
-                step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+                step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'gate_fire'}"
                 dados["calibracao"]["steps"][step_key]["status"] = "error"
                 dados["calibracao"]["steps"][step_key]["erro"] = str(e)
                 dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
@@ -845,7 +915,7 @@ async def _executar_calibracao_step1(ticker: str):
             emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, erro=str(e))
 
             # Atualizar status do step atual
-            step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+            step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'gate_fire'}"
             dados["calibracao"]["steps"][step_key]["status"] = "error"
             dados["calibracao"]["steps"][step_key]["erro"] = str(e)
             dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
@@ -873,7 +943,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
     step_atual = calibracao.get("step_atual", 1)
 
     # Verificar se está pausado
-    step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'backtest_gate'}"
+    step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'gate_fire'}"
     if calibracao.get("steps", {}).get(step_key, {}).get("status") != "paused":
         raise ValueError(f"Step {step_atual} não está pausado")
 
@@ -897,9 +967,14 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
         dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
 
     elif step_atual == 3:
-        # Retomar backtest_gate
-        from atlas_backend.core.dc_runner import dc_gate_backtest
+        # Retomar gate + fire
         result = await dc_gate_backtest(ticker)
+        if result.get("status") == "OK":
+            dados["calibracao"]["gate_resultado"] = result.get("gate_resultado")
+            if result.get("gate_resultado", {}).get("resultado") == "OPERAR":
+                fire_result = await dc_fire_diagnostico(ticker)
+                if fire_result.get("status") == "OK":
+                    dados["calibracao"]["fire_diagnostico"] = fire_result.get("fire_diagnostico")
 
         # Atualizar estado
         dados["calibracao"]["steps"][step_key]["status"] = "running"

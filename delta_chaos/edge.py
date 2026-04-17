@@ -423,6 +423,8 @@ class EDGE:
 
         df_regimes["ciclo_id"] = \
             df_regimes["ciclo_id"].astype(str)
+        df_regimes = df_regimes.drop_duplicates(
+            subset=["ciclo_id", "ativo"], keep="last")
         regime_idx = df_regimes.set_index(
             ["ciclo_id","ativo"]).to_dict("index")
 

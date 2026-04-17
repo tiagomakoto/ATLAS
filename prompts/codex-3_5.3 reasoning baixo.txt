@@ -1,0 +1,20 @@
+Implemente EXATAMENTE o passo abaixo.
+
+Se necessário, pense brevemente. Depois execute diretamente.
+
+Regras:
+- gere código completo
+- não explique
+- não omita imports
+- respeite a estrutura atual do projeto
+- se criar arquivos, indique claramente o caminho
+- não invente coisas fora do escopo do passo
+
+Se houver ambiguidade:
+- peça clarificação antes de continuar
+
+Após gerar o código:
+- aguarde revisão do FIXER
+
+Passo:
+{{cole 1 passo do planner}}

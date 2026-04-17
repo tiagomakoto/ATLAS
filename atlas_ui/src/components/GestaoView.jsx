@@ -11,7 +11,7 @@ export default function GestaoView() {
   const [carregando, setCarregando] = useState(false);
   const [novoAtivo, setNovoAtivo] = useState("");
   const [calibracaoMsg, setCalibracaoMsg] = useState("");
-  const [drawerOnboarding, setDrawerOnboarding] = useState(null);
+  const [drawerCalibracao, setDrawerCalibracao] = useState(null);
 
   useEffect(() => {
     fetchAtivos();
@@ -27,13 +27,13 @@ export default function GestaoView() {
     }
   }
 
-  async function handleOnboarding() {
+  async function handleCalibracao() {
     if (!novoAtivo.trim()) return;
     
     const ticker = novoAtivo.trim().toUpperCase();
     
     // 1. ABRIR DRAWER IMEDIATAMENTE (não aguardar resposta HTTP)
-    setDrawerOnboarding(ticker);
+    setDrawerCalibracao(ticker);
     
     // 2. Chamar endpoint (não bloquear UI)
     setCarregando(true);
@@ -51,7 +51,7 @@ export default function GestaoView() {
       
       if (!res.ok) {
         // Se erro HTTP, fechar drawer e mostrar mensagem
-        setDrawerOnboarding(null);
+        setDrawerCalibracao(null);
         const data = await res.json();
         setCalibracaoMsg(`✗ ${data.detail || "Erro desconhecido"}`);
       } else {
@@ -64,7 +64,7 @@ export default function GestaoView() {
       }
     } catch (e) {
       // Se erro de rede, fechar drawer
-      setDrawerOnboarding(null);
+      setDrawerCalibracao(null);
       setCalibracaoMsg(`✗ Erro: ${e.message}`);
     } finally {
       setCarregando(false);
@@ -239,7 +239,7 @@ export default function GestaoView() {
             }}
           />
           <button
-            onClick={handleOnboarding}
+            onClick={handleCalibracao}
             disabled={!novoAtivo.trim() || carregando}
             style={{
               padding: "6px 14px",
@@ -377,10 +377,10 @@ export default function GestaoView() {
     )}
 
 {/* Drawer de Calibração */}
-        {drawerOnboarding && (
+        {drawerCalibracao && (
           <CalibracaoDrawer
-            ticker={drawerOnboarding}
-            onClose={() => setDrawerOnboarding(null)}
+            ticker={drawerCalibracao}
+            onClose={() => setDrawerCalibracao(null)}
           />
         )}
 

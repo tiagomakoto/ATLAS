@@ -60,7 +60,7 @@ def gate_executar(ticker: str) -> str:
     tape_ativo_inicializar(TICKER)
 
     # Lê apenas TP, STOP e estrategias antes do backtest
-    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json")) as f:
+    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json"), encoding="utf-8") as f:
         _cfg_ativo = json.load(f)
 
     # Lê do master JSON — específico por ativo
@@ -83,7 +83,7 @@ def gate_executar(ticker: str) -> str:
     print(f"  {sep}")
 
     # ── Carrega dados ─────────────────────────────────────────────────
-    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json")) as f:
+    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json"), encoding="utf-8") as f:
         dados = json.load(f)
 
 
@@ -136,7 +136,7 @@ def gate_executar(ticker: str) -> str:
 
     # ── Recarrega master JSON após backtest interno ───────────────
     # O ORBIT popula historico durante edge.executar — necessário recarregar
-    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json")) as f:
+    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json"), encoding="utf-8") as f:
         dados = json.load(f)
 
     historico     = pd.DataFrame(dados["historico"])

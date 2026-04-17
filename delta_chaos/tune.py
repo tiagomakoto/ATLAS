@@ -120,7 +120,7 @@ def executar_tune(ticker: str) -> dict:
 
     print(f"\n  [4/4] Regimes ORBIT + REFLECT...")
     path_ativo = os.path.join(ATIVOS_DIR, f"{TICKER}.json")
-    with open(path_ativo) as f:
+    with open(path_ativo, encoding="utf-8") as f:
         dados_ativo = json.load(f)
 
     historico_c = pd.DataFrame(dados_ativo["historico"])
@@ -129,7 +129,7 @@ def executar_tune(ticker: str) -> dict:
         _orbit_tune = ORBIT(universo={TICKER: {}})
         externas = tape_externas_carregar([TICKER], ANOS)
         _orbit_tune.orbit_rodar(df_tape_c, ANOS, modo="cache", externas_dict=externas)
-        with open(path_ativo) as f:
+        with open(path_ativo, encoding="utf-8") as f:
             dados_ativo = json.load(f)
         historico_c = pd.DataFrame(dados_ativo["historico"])
         if len(historico_c) == 0:
@@ -158,7 +158,7 @@ def executar_tune(ticker: str) -> dict:
     )
     print(f"  ✓ REFLECT mask: {n_mask}/{len(historico_c)} ciclos bloqueados (Edge C/D/E)")
 
-    with open(CONFIG_PATH) as f:
+    with open(CONFIG_PATH, encoding="utf-8") as f:
         _cfg_baseline = json.load(f)
     tp_baseline_ant   = _cfg_baseline["fire"]["take_profit"]
     stop_baseline_ant = _cfg_baseline["fire"]["stop_loss"]
@@ -550,7 +550,7 @@ level="info"
     print(f"{'═' * 60}")
 
     # Registro no historico_config[]
-    with open(path_ativo) as f:
+    with open(path_ativo, encoding="utf-8") as f:
         dados = json.load(f)
 
     if "historico_config" not in dados:
@@ -659,7 +659,7 @@ def tune_diagnostico_estrategia(ticker: str) -> dict:
             f"book_backtest.json não encontrado em {BOOK_DIR}. "
             f"Execute EDGE backtest antes do diagnóstico.")
 
-    with open(book_path) as f:
+    with open(book_path, encoding="utf-8") as f:
         book_raw = json.load(f)
 
     ops = book_raw.get("ops", [])
@@ -799,7 +799,7 @@ def tune_aplicar_estrategias(ticker: str, diagnostico: dict) -> None:
     TICKER = ticker.strip().upper()
     path_ativo = os.path.join(ATIVOS_DIR, f"{TICKER}.json")
 
-    with open(path_ativo) as f:
+    with open(path_ativo, encoding="utf-8") as f:
         dados = json.load(f)
 
     if "estrategias" not in dados:

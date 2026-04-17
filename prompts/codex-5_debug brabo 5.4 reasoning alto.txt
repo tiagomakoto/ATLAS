@@ -1,0 +1,15 @@
+O sistema apresentou o seguinte problema:
+
+{{erro ou comportamento}}
+
+Pense cuidadosamente antes de responder.
+
+Analise:
+- causa raiz (não só o sintoma)
+- fluxo de dados
+- dependências entre componentes
+- possíveis efeitos colaterais
+
+Proponha a correção mais segura.
+
+Se necessário, reescreva o código corrigido completo.

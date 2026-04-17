@@ -1,0 +1,7 @@
+Revise os passos e:
+
+- agrupe dependências
+- garanta ordem correta de implementação
+- identifique quais passos podem quebrar o sistema se feitos fora de ordem
+
+Reescreva a lista otimizada.
