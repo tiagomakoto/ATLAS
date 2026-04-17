@@ -211,6 +211,363 @@ def obter_todos_relatorios() -> list:
 
 
 # =============================================================================
+# RELATÓRIOS DE CALIBRAÇÃO (GATE bloqueado / completo com FIRE)
+# =============================================================================
+
+def gerar_relatorio_calibracao_gate_bloqueado(
+    ticker: str,
+    gate_resultado: dict,
+    calibracao: dict,
+) -> dict:
+    """
+    Gera relatório .md para cenário de GATE bloqueado.
+    Inclui: critérios que falharam, estado dos steps, recomendações.
+
+    Returns:
+        {
+            "id": int,
+            "arquivo": "CALIB_GATE_BLOQUEADO_{ticker}_{data}.md",
+            "caminho": str,
+            "gate_resultado": dict,
+            "steps": dict,
+            "data": str
+        }
+    """
+    id_rel = _gerar_id()
+    id_str = f"{id_rel:03d}"
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    arquivo = f"CALIB_GATE_BLOQUEADO_{id_str}_{ticker}_{data_hoje}.md"
+    path_rel = RELATORIOS_DIR / arquivo
+
+    steps = calibracao.get("steps", {})
+    step1 = steps.get("1_backtest_dados", {})
+    step2 = steps.get("2_tune", {})
+    step3 = steps.get("3_gate_fire", {})
+
+    criterios = gate_resultado.get("criterios", [])
+    falhas = gate_resultado.get("falhas", [])
+
+    # Template do relatório
+    template = f"""# Relatório de Calibração — {ticker} — GATE BLOQUEADO
+
+**ID:** {id_str}
+**Data:** {data_hoje}
+**Status:** Calibração incompleta — GATE não aprovou
+**Gerado por:** ATLAS v2.6
+
+---
+
+## Resumo
+
+A calibração do ativo **{ticker}** foi interrompida na etapa de GATE.
+O sistema de validação histórica identificou falhas nos critérios mínimos
+necessários para operação.
+
+**Resultado GATE:** BLOQUEADO
+
+---
+
+## Critérios que Falharam
+
+| ID | Critério | Status |
+|{"|---|---|---|"}
+"""
+    for c in criterios:
+        status_icon = "✗ FALHOU" if not c.get("passou") else "✓ OK"
+        template += f"| {c.get('id', 'N/D')} | {c.get('nome', 'N/D')} | {status_icon} |\n"
+
+    template += f"""
+---
+
+## Detalhamento dos Critérios
+
+"""
+    for c in criterios:
+        if not c.get("passou"):
+            template += f"### {c.get('id')} — {c.get('nome', 'N/D')}\n"
+            template += f"- **Status:** ✗ FALHOU\n"
+            template += f"- **Valor observado:** {c.get('valor', 'N/D')}\n"
+            template += f"- **Recomendação:** Revisar parâmetros ou aguardar mais dados históricos\n\n"
+
+    template += f"""---
+
+## Estado dos Steps
+
+| Step | Módulo | Status | Iniciado | Concluído |
+|{"|---|---|---|---|---|"}
+| 1 | backtest_dados | {step1.get('status', 'N/D')} | {step1.get('iniciado_em', '-')} | {step1.get('concluido_em', '-')} |
+| 2 | tune | {step2.get('status', 'N/D')} | {step2.get('iniciado_em', '-')} | {step2.get('concluido_em', '-')} |
+| 3 | gate_fire | {step3.get('status', 'N/D')} | {step3.get('iniciado_em', '-')} | {step3.get('concluido_em', '-')} |
+
+---
+
+## Recomendações
+
+1. **Não operar** este ativo até que GATE seja aprovado
+2. Revisar parâmetros de TP/STOP sugeridos pelo TUNE
+3. Aguardar mais ciclos de dados históricos para validação
+4. Considerar reexecutar TUNE com janela de teste diferente
+
+---
+
+## Dados Técnicos
+
+```json
+{json.dumps({
+    "ticker": ticker,
+    "id": id_str,
+    "data": data_hoje,
+    "tipo": "CALIB_GATE_BLOQUEADO",
+    "gate_resultado": gate_resultado,
+    "calibracao_steps": steps,
+    "falhas": falhas
+}, indent=2, ensure_ascii=False)}
+```
+
+---
+
+*Este relatório foi gerado automaticamente pelo sistema ATLAS.*
+*Para retomar a calibração, utilize o endpoint /delta-chaos/calibracao/{{ticker}}/retomar*
+"""
+
+    with open(path_rel, "w", encoding="utf-8") as f:
+        f.write(template)
+
+    entry = {
+        "id": id_str,
+        "ticker": ticker,
+        "data": data_hoje,
+        "tipo": "CALIB_GATE_BLOQUEADO",
+        "arquivo": arquivo,
+        "gate_resultado": gate_resultado,
+        "steps": steps,
+    }
+
+    index = _carregar_index()
+    index.append(entry)
+    _salvar_index(index)
+
+    return {
+        "id": id_rel,
+        "arquivo": arquivo,
+        "caminho": str(path_rel),
+        "gate_resultado": gate_resultado,
+        "steps": steps,
+        "data": data_hoje,
+    }
+
+
+def gerar_relatorio_calibracao_completo(
+    ticker: str,
+    gate_resultado: dict,
+    fire_diagnostico: dict,
+    calibracao: dict,
+) -> dict:
+    """
+    Gera relatório .md para cenário de calibração completa (GATE + FIRE aprovados).
+    Inclui: validação GATE, diagnóstico FIRE, parâmetros, recomendações.
+
+    Returns:
+        {
+            "id": int,
+            "arquivo": "CALIB_COMPLETA_{ticker}_{data}.md",
+            "caminho": str,
+            "gate_resultado": dict,
+            "fire_diagnostico": dict,
+            "steps": dict,
+            "data": str
+        }
+    """
+    id_rel = _gerar_id()
+    id_str = f"{id_rel:03d}"
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    arquivo = f"CALIB_COMPLETA_{id_str}_{ticker}_{data_hoje}.md"
+    path_rel = RELATORIOS_DIR / arquivo
+
+    steps = calibracao.get("steps", {})
+    step1 = steps.get("1_backtest_dados", {})
+    step2 = steps.get("2_tune", {})
+    step3 = steps.get("3_gate_fire", {})
+
+    criterios = gate_resultado.get("criterios", [])
+    regimes = fire_diagnostico.get("regimes", [])
+    cobertura = fire_diagnostico.get("cobertura", {})
+
+    # Template do relatório
+    template = f"""# Relatório de Calibração — {ticker} — CALIBRAÇÃO COMPLETA
+
+**ID:** {id_str}
+**Data:** {data_hoje}
+**Status:** Calibração concluída com sucesso
+**Gerado por:** ATLAS v2.6
+
+---
+
+## Resumo
+
+A calibração do ativo **{ticker}** foi concluída com sucesso.
+Todos os critérios de validação histórica (GATE) foram aprovados
+e o diagnóstico de estratégia (FIRE) está disponível.
+
+**Resultado GATE:** OPERAR ✓
+**Resultado FIRE:** DIAGNÓSTICO DISPONÍVEL ✓
+
+---
+
+## Validação GATE — Critérios Aprovados
+
+| ID | Critério | Status | Valor |
+|{"|---|---|---|"}
+"""
+    for c in criterios:
+        status_icon = "✓ APROVADO" if c.get("passou") else "✗ FALHOU"
+        template += f"| {c.get('id', 'N/D')} | {c.get('nome', 'N/D')} | {status_icon} | {c.get('valor', 'N/D')} |\n"
+
+    template += f"""
+---
+
+## Diagnóstico FIRE — Estratégia por Regime
+
+"""
+    if regimes:
+        template += "| Regime | Trades | Acerto | IR | Estratégia Dominante |\n"
+        template += "|---|---|---|---|---|\n"
+        for r in regimes:
+            template += f"| {r.get('regime', 'N/D')} | {r.get('trades', 0)} | {r.get('acerto_pct', 0):.1f}% | {r.get('ir', 0):.2f} | {r.get('estrategia_dominante', 'N/D')} |\n"
+
+    template += f"""
+### Cobertura Geral
+
+- **Ciclos com operação:** {cobertura.get('ciclos_com_operacao', 0)} de {cobertura.get('total_ciclos', 0)}
+- **Total de trades:** {cobertura.get('total_trades', 0)}
+- **Acerto geral:** {cobertura.get('acerto_geral_pct', 0):.1f}%
+- **P&L total:** R$ {cobertura.get('pnl_total', 0):,.2f}
+
+"""
+    if fire_diagnostico.get("stops_por_regime"):
+        template += "### Stops por Regime\n\n"
+        stops = fire_diagnostico.get("stops_por_regime", {})
+        for regime, stop_info in stops.items():
+            template += f"- **{regime}:** {stop_info}\n"
+        template += "\n"
+
+    template += f"""---
+
+## Estado dos Steps
+
+| Step | Módulo | Status | Iniciado | Concluído |
+|{"|---|---|---|---|---|"}
+| 1 | backtest_dados | {step1.get('status', 'N/D')} | {step1.get('iniciado_em', '-')} | {step1.get('concluido_em', '-')} |
+| 2 | tune | {step2.get('status', 'N/D')} | {step2.get('iniciado_em', '-')} | {step2.get('concluido_em', '-')} |
+| 3 | gate_fire | {step3.get('status', 'N/D')} | {step3.get('iniciado_em', '-')} | {step3.get('concluido_em', '-')} |
+
+---
+
+## Recomendações
+
+1. **Ativo aprovado para operação** — parâmetros validados historicamente
+2. Monitorar regime diariamente via ORBIT
+3. Executar /daily/run para verificação automática de TP/STOP
+4. Revisar FIRE periodicamente para identificar mudanças de regime
+
+---
+
+## Dados Técnicos
+
+```json
+{json.dumps({
+    "ticker": ticker,
+    "id": id_str,
+    "data": data_hoje,
+    "tipo": "CALIB_COMPLETA",
+    "gate_resultado": gate_resultado,
+    "fire_diagnostico": fire_diagnostico,
+    "calibracao_steps": steps
+}, indent=2, ensure_ascii=False)}
+```
+
+---
+
+*Este relatório foi gerado automaticamente pelo sistema ATLAS.*
+*O ativo está pronto para operação via FIRE.*
+"""
+
+    with open(path_rel, "w", encoding="utf-8") as f:
+        f.write(template)
+
+    entry = {
+        "id": id_str,
+        "ticker": ticker,
+        "data": data_hoje,
+        "tipo": "CALIB_COMPLETA",
+        "arquivo": arquivo,
+        "gate_resultado": gate_resultado,
+        "fire_diagnostico": fire_diagnostico,
+        "steps": steps,
+    }
+
+    index = _carregar_index()
+    index.append(entry)
+    _salvar_index(index)
+
+    return {
+        "id": id_rel,
+        "arquivo": arquivo,
+        "caminho": str(path_rel),
+        "gate_resultado": gate_resultado,
+        "fire_diagnostico": fire_diagnostico,
+        "steps": steps,
+        "data": data_hoje,
+    }
+
+
+def exportar_relatorio_calibracao(ticker: str) -> dict:
+    """
+    Lê o estado atual da calibração do ticker e gera o relatório apropriado.
+    Detecta se GATE foi aprovado ou bloqueado e gera o relatório correto.
+
+    Returns:
+        dict com dados do relatório gerado ou erro se calibração incompleta
+    """
+    from atlas_backend.core.delta_chaos_reader import get_ativo_raw
+
+    dados_raw = get_ativo_raw(ticker)
+    calibracao = dados_raw.get("calibracao", {})
+    steps = calibracao.get("steps", {})
+
+    step3 = steps.get("3_gate_fire", {})
+    step3_status = step3.get("status", "idle")
+
+    # Verificar se step 3 foi executado
+    if step3_status not in ("done", "error"):
+        return {
+            "erro": "Calibração não chegou ao step 3 (gate_fire)",
+            "step_atual": calibracao.get("step_atual"),
+            "step3_status": step3_status,
+        }
+
+    gate_resultado = calibracao.get("gate_resultado") or {}
+    fire_diagnostico = calibracao.get("fire_diagnostico") or {}
+
+    # Determinar tipo de relatório
+    gate_aprovado = gate_resultado.get("resultado") == "OPERAR"
+
+    if gate_aprovado:
+        return gerar_relatorio_calibracao_completo(
+            ticker=ticker,
+            gate_resultado=gate_resultado,
+            fire_diagnostico=fire_diagnostico,
+            calibracao=calibracao,
+        )
+    else:
+        return gerar_relatorio_calibracao_gate_bloqueado(
+            ticker=ticker,
+            gate_resultado=gate_resultado,
+            calibracao=calibracao,
+        )
+
+
+# =============================================================================
 # NOVO: RELATÓRIO DE TUNE v2.0 (SPEC_RELATORIO_TUNE_v1.0.md)
 # =============================================================================
 

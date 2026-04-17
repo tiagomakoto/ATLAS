@@ -500,11 +500,59 @@ async def calibracao_progresso_tune(ticker: str):
     Conexão deve ser read-only explícita para evitar conflito com processo de escrita
     """
     _validar_ticker(ticker)
-    
+
     try:
         from atlas_backend.core.dc_runner import dc_calibracao_progresso_tune
         result = await dc_calibracao_progresso_tune(ticker)
         return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/calibracao/{ticker}/exportar-relatorio")
+async def calibracao_exportar_relatorio(ticker: str):
+    """
+    Gera e exporta relatório .md da calibração do ticker.
+    Detecta automaticamente o cenário:
+    - GATE bloqueado: gera relatório de bloqueio com critérios que falharam
+    - Calibração completa (GATE + FIRE): gera relatório de sucesso
+
+    Retorna:
+    {
+        "status": "ok",
+        "tipo": "CALIB_GATE_BLOQUEADO" | "CALIB_COMPLETA",
+        "arquivo": "CALIB_XXX_TICKER_DATA.md",
+        "caminho": "/caminho/para/arquivo.md",
+        "gate_resultado": {...},
+        "fire_diagnostico": {...} (só se completo),
+        "data": "2026-04-17"
+    }
+    """
+    _validar_ticker(ticker)
+
+    try:
+        from atlas_backend.core.relatorios import exportar_relatorio_calibracao
+
+        result = exportar_relatorio_calibracao(ticker)
+
+        if "erro" in result:
+            raise HTTPException(status_code=400, detail=result["erro"])
+
+        return {
+            "status": "ok",
+            "tipo": result.get("gate_resultado", {}).get("resultado") == "OPERAR"
+                and "CALIB_COMPLETA" or "CALIB_GATE_BLOQUEADO",
+            "arquivo": result.get("arquivo"),
+            "caminho": result.get("caminho"),
+            "gate_resultado": result.get("gate_resultado"),
+            "fire_diagnostico": result.get("fire_diagnostico"),
+            "steps": result.get("steps"),
+            "data": result.get("data"),
+        }
+    except HTTPException:
+        raise
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

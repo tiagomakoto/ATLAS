@@ -42,6 +42,7 @@ def normalize_gate_resultado(payload: Dict[str, Any] | None, ticker: str) -> Dic
                 "nome": item.get("nome") or f"Critério {idx}",
                 "passou": bool(item.get("passou", False)),
                 "valor": item.get("valor", "N/D"),
+                "detalhe": item.get("detalhe"),
             }
         )
 
@@ -71,10 +72,19 @@ def normalize_fire_diagnostico(payload: Dict[str, Any] | None, ticker: str) -> D
             {
                 "regime": item.get("regime") or "DESCONHECIDO",
                 "trades": int(item.get("trades") or 0),
+                "wins": int(item.get("wins") or 0),
+                "losses": int(item.get("losses") or 0),
                 "acerto_pct": float(item.get("acerto_pct") or 0.0),
                 "ir": float(item.get("ir") or 0.0),
                 "worst_trade": item.get("worst_trade"),
+                "best_trade": item.get("best_trade"),
+                "avg_win": item.get("avg_win"),
+                "avg_loss": item.get("avg_loss"),
+                "profit_factor": item.get("profit_factor"),
+                "expectancy": item.get("expectancy"),
                 "estrategia_dominante": item.get("estrategia_dominante"),
+                "estrategias": item.get("estrategias") or [],
+                "motivos_saida": item.get("motivos_saida") or {},
             }
         )
 
@@ -85,6 +95,9 @@ def normalize_fire_diagnostico(payload: Dict[str, Any] | None, ticker: str) -> D
         "cobertura": {
             "ciclos_com_operacao": int(cobertura.get("ciclos_com_operacao") or 0),
             "total_ciclos": int(cobertura.get("total_ciclos") or 0),
+            "total_trades": int(cobertura.get("total_trades") or 0),
+            "acerto_geral_pct": float(cobertura.get("acerto_geral_pct") or 0.0),
+            "pnl_total": float(cobertura.get("pnl_total") or 0.0),
         },
         "stops_por_regime": payload.get("stops_por_regime") or {},
     }

@@ -297,3 +297,4 @@
 {"timestamp": "2026-04-17T10:00:30.230754", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-17T10:10:26.592049", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-17T10:11:49.042187", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
+{"timestamp": "2026-04-17T23:10:15.007568", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}

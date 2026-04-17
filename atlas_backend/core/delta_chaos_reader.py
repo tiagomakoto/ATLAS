@@ -7,6 +7,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from atlas_backend.core.paths import get_paths
+from atlas_backend.core.gate_helper import compute_gate_criterios
+from atlas_backend.core.fire_helper import compute_fire_diagnostico
 
 
 def sanitize_nan(value):
@@ -189,28 +191,71 @@ def get_cotahist_recente_info(ticker: str) -> Dict[str, Any]:
     }
 
 
-_GATE_CRITERIOS_PADRAO = [
-    "E1 Taxa de acerto",
-    "E2 IR mínimo",
-    "E3 N mínimo de trades",
-    "E4 Consistência anual",
-    "E5 IR por regime",
-    "E6 Drawdown máximo",
-    "E7 Consecutivos negativos",
-    "E8 Cobertura de regimes",
-]
-
-
 def get_gate_resultado(ticker: str) -> Dict[str, Any]:
     """
-    Retorna resultado GATE granular com leitura do master JSON e fallback robusto.
+    Retorna resultado GATE granular com os 8 critérios, valores, pass/fail e lista de falhas.
+    Fonte primária: compute_gate_criterios (lê book_backtest.parquet + master JSON).
+    Fallback: calibracao.gate_resultado armazenado ou historico_config.
     """
     raw = get_ativo_raw(ticker)
     calibracao = raw.get("calibracao", {})
     gate_stored = calibracao.get("gate_resultado")
-    if isinstance(gate_stored, dict) and gate_stored.get("criterios"):
-        return gate_stored
 
+    # Fonte primária: helper que computa os 8 critérios diretamente
+    if gate_stored and isinstance(gate_stored, dict) and gate_stored.get("criterios"):
+        # Usa dados armazenados se já existirem
+        return _normalize_gate_stored(gate_stored, ticker, raw)
+
+    # Tenta computar os 8 critérios a partir do book_backtest.parquet
+    try:
+        computed = compute_gate_criterios(ticker)
+        if computed.get("criterios") and len(computed["criterios"]) == 8:
+            return computed
+    except Exception:
+        pass
+
+    # Fallback: histórico config ou defaults
+    return _get_gate_fallback(ticker, raw)
+
+
+def _normalize_gate_stored(gate_stored: Dict[str, Any], ticker: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza dados GATE armazenados em calibracao.gate_resultado."""
+    criterios_raw = gate_stored.get("criterios", [])
+    criterios = []
+    for idx, c in enumerate(criterios_raw, start=1):
+        criterios.append({
+            "id": c.get("id") or f"E{idx}",
+            "nome": c.get("nome") or f"Critério {idx}",
+            "passou": bool(c.get("passou", False)),
+            "valor": c.get("valor", "N/D"),
+            "detalhe": c.get("detalhe"),
+        })
+
+    resultado = str(gate_stored.get("resultado") or "BLOQUEADO").upper()
+    if resultado not in {"OPERAR", "MONITORAR", "EXCLUÍDO"}:
+        resultado = "BLOQUEADO"
+
+    falhas = gate_stored.get("falhas")
+    if not isinstance(falhas, list):
+        falhas = [c["id"] for c in criterios if not c["passou"]]
+
+    historico = raw.get("historico", []) or []
+    ciclo = None
+    if historico:
+        ciclo = historico[-1].get("ciclo_id") or historico[-1].get("mes_ano")
+
+    return {
+        "ticker": ticker,
+        "ciclo": ciclo,
+        "criterios": criterios,
+        "resultado": resultado,
+        "falhas": falhas if resultado != "OPERAR" else [],
+        "fonte_dados": "calibracao.gate_resultado",
+    }
+
+
+def _get_gate_fallback(ticker: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Fallback quando nem computed nem stored data estão disponíveis."""
     historico_config = raw.get("historico_config", [])
     gate_entry = None
     for item in reversed(historico_config):
@@ -220,12 +265,9 @@ def get_gate_resultado(ticker: str) -> Dict[str, Any]:
             break
 
     historico = raw.get("historico", []) or []
-    ultimo = historico[-1] if historico else {}
-    ir_ultimo = _safe_float(ultimo.get("ir"))
-    trades_ultimo = _safe_int(ultimo.get("trades")) or _safe_int(ultimo.get("n_trades"))
-
     gates_aprovados = None
     resultado = "BLOQUEADO"
+
     if gate_entry:
         gates_aprovados = gate_entry.get("gates_aprovados")
         resultado_raw = str(
@@ -239,53 +281,18 @@ def get_gate_resultado(ticker: str) -> Dict[str, Any]:
         elif resultado_raw in {"MONITORAR", "EXCLUIDO", "FALHA"}:
             resultado = "BLOQUEADO"
 
-    criterios = []
-    criterios_raw = None
-    if gate_entry:
-        if isinstance(gate_entry.get("criterios"), list):
-            criterios_raw = gate_entry.get("criterios")
-        elif isinstance(gate_entry.get("gates"), dict):
-            criterios_raw = []
-            for key, value in gate_entry.get("gates", {}).items():
-                criterios_raw.append(
-                    {
-                        "id": str(key).split(" ")[0],
-                        "nome": str(key),
-                        "passou": bool(value),
-                        "valor": "N/D",
-                    }
-                )
+    gates_pass_count = gates_aprovados if isinstance(gates_aprovados, int) else 0
 
-    if isinstance(criterios_raw, list) and criterios_raw:
-        for idx, c in enumerate(criterios_raw, start=1):
-            cid = str(c.get("id") or f"E{idx}")
-            nome = c.get("nome") or c.get("criterio") or f"Critério {idx}"
-            passou = bool(c.get("passou", False))
-            valor = c.get("valor", "N/D")
-            criterios.append({"id": cid, "nome": nome, "passou": passou, "valor": valor})
-
-    if not criterios:
-        default_values = {
-            1: f"{ir_ultimo:.3f}" if ir_ultimo is not None else "N/D",
-            2: f"{ir_ultimo:.3f}" if ir_ultimo is not None else "N/D",
-            3: str(trades_ultimo) if trades_ultimo is not None else "N/D",
-            4: "N/D",
-            5: "N/D",
-            6: "N/D",
-            7: "N/D",
-            8: "N/D",
-        }
-        gates_pass_count = gates_aprovados if isinstance(gates_aprovados, int) else 0
-        for idx, nome in enumerate(_GATE_CRITERIOS_PADRAO, start=1):
-            passou = idx <= max(min(gates_pass_count, 8), 0)
-            criterios.append(
-                {
-                    "id": f"E{idx}",
-                    "nome": nome,
-                    "passou": bool(passou),
-                    "valor": default_values[idx],
-                }
-            )
+    criterios = [
+        {"id": "E0", "nome": "E0 — Integridade", "passou": gates_pass_count >= 1, "valor": "N/D", "detalhe": None},
+        {"id": "E1", "nome": "E1 — Regime", "passou": gates_pass_count >= 2, "valor": "N/D", "detalhe": None},
+        {"id": "E2", "nome": "E2 — Acerto", "passou": gates_pass_count >= 3, "valor": "N/D", "detalhe": None},
+        {"id": "E3", "nome": "E3 — Estratégia", "passou": gates_pass_count >= 4, "valor": "N/D", "detalhe": None},
+        {"id": "E4", "nome": "E4 — TP e STOP", "passou": gates_pass_count >= 5, "valor": "N/D", "detalhe": None},
+        {"id": "E5", "nome": "E5 — ORBIT", "passou": gates_pass_count >= 6, "valor": "N/D", "detalhe": None},
+        {"id": "E6", "nome": "E6 — Externas", "passou": gates_pass_count >= 7, "valor": "N/D", "detalhe": None},
+        {"id": "E7", "nome": "E7 — Stress", "passou": gates_pass_count >= 8, "valor": "N/D", "detalhe": None},
+    ]
 
     falhas = [c["id"] for c in criterios if not c["passou"]]
     ciclo = None
@@ -298,135 +305,126 @@ def get_gate_resultado(ticker: str) -> Dict[str, Any]:
         "criterios": criterios,
         "resultado": resultado,
         "falhas": falhas if resultado != "OPERAR" else [],
-        "fonte_dados": "master_json",
+        "fonte_dados": "historico_config_fallback",
     }
 
 
 def get_fire_diagnostico(ticker: str) -> Dict[str, Any]:
     """
-    Retorna diagnóstico FIRE por regime.
-    Fonte primária: book_backtest.json (trades fechados).
-    Fallback: historico do master JSON.
+    Retorna diagnóstico FIRE por regime com métricas completas.
+    Fonte primária: compute_fire_diagnostico (lê book_backtest.parquet).
+    Fallback: calibracao.fire_diagnostico armazenado.
     """
     raw = get_ativo_raw(ticker)
     calibracao = raw.get("calibracao", {})
     fire_stored = calibracao.get("fire_diagnostico")
-    if isinstance(fire_stored, dict) and fire_stored.get("regimes"):
-        return fire_stored
 
+    # Fonte primária: helper que computa do parquet
+    if fire_stored and isinstance(fire_stored, dict) and fire_stored.get("regimes"):
+        return _normalize_fire_stored(fire_stored, ticker, raw)
+
+    # Tenta computar a partir do book_backtest.parquet
+    try:
+        computed = compute_fire_diagnostico(ticker)
+        if computed.get("regimes") and len(computed["regimes"]) > 0:
+            return computed
+    except Exception:
+        pass
+
+    # Fallback mínimo
+    return _get_fire_fallback(ticker, raw)
+
+
+def _normalize_fire_stored(fire_stored: Dict[str, Any], ticker: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza dados FIRE armazenados em calibracao.fire_diagnostico."""
+    regimes_raw = fire_stored.get("regimes", [])
+    regimes = []
+    for item in regimes_raw:
+        regimes.append({
+            "regime": item.get("regime") or "DESCONHECIDO",
+            "trades": int(item.get("trades") or 0),
+            "wins": int(item.get("wins") or 0),
+            "losses": int(item.get("losses") or 0),
+            "acerto_pct": float(item.get("acerto_pct") or 0.0),
+            "ir": float(item.get("ir") or 0.0),
+            "worst_trade": item.get("worst_trade"),
+            "best_trade": item.get("best_trade"),
+            "avg_win": item.get("avg_win"),
+            "avg_loss": item.get("avg_loss"),
+            "profit_factor": item.get("profit_factor"),
+            "expectancy": item.get("expectancy"),
+            "estrategia_dominante": item.get("estrategia_dominante"),
+            "estrategias": item.get("estrategias", []),
+            "motivos_saida": item.get("motivos_saida", {}),
+        })
+
+    cobertura = fire_stored.get("cobertura") or {}
+    return {
+        "ticker": ticker,
+        "regimes": regimes,
+        "cobertura": {
+            "ciclos_com_operacao": int(cobertura.get("ciclos_com_operacao") or 0),
+            "total_ciclos": int(cobertura.get("total_ciclos") or 0),
+            "total_trades": int(cobertura.get("total_trades") or 0),
+            "acerto_geral_pct": float(cobertura.get("acerto_geral_pct") or 0.0),
+            "pnl_total": float(cobertura.get("pnl_total") or 0.0),
+        },
+        "stops_por_regime": fire_stored.get("stops_por_regime") or {},
+        "fonte_dados": "calibracao.fire_diagnostico",
+    }
+
+
+def _get_fire_fallback(ticker: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Fallback quando nenhum dado FIRE está disponível."""
     historico = raw.get("historico", []) or []
     total_ciclos = len(historico)
+
     regimes_map: Dict[str, Dict[str, Any]] = {}
     stops_por_regime: Dict[str, int] = {}
 
-    rows = []
-    for op in _read_book_backtest_ops():
-        core = op.get("core", {}) if isinstance(op, dict) else {}
-        orbit = op.get("orbit", {}) if isinstance(op, dict) else {}
-        if core.get("ativo") != ticker:
-            continue
-        if core.get("motivo_saida") is None:
-            continue
-        if core.get("motivo_nao_entrada"):
-            continue
-        rows.append(
-            {
-                "regime": orbit.get("regime_entrada") or orbit.get("regime") or "DESCONHECIDO",
-                "estrategia": core.get("estrategia"),
-                "pnl": _safe_float(core.get("pnl")),
-                "ciclo_id": orbit.get("ciclo_id") or core.get("ciclo_id"),
-                "motivo_saida": str(core.get("motivo_saida", "")).upper(),
-            }
-        )
+    for item in historico:
+        regime = item.get("regime") or item.get("regime_entrada") or "DESCONHECIDO"
+        estrategia = item.get("estrategia") or item.get("strategy")
+        pnl = _safe_float(item.get("pnl"))
+        motivo_saida = str(item.get("motivo_saida", "")).upper()
 
-    if not rows:
-        for item in historico:
-            rows.append(
-                {
-                    "regime": (
-                        item.get("regime")
-                        or item.get("regime_entrada")
-                        or item.get("regime_atual")
-                        or "DESCONHECIDO"
-                    ),
-                    "estrategia": item.get("estrategia") or item.get("strategy"),
-                    "pnl": _safe_float(item.get("pnl")),
-                    "ciclo_id": item.get("ciclo_id"),
-                    "motivo_saida": str(item.get("motivo_saida", "")).upper(),
-                }
-            )
-
-    ciclos_operados = set()
-    for row in rows:
-        regime = row.get("regime") or "DESCONHECIDO"
-        estrategia = row.get("estrategia")
-        pnl = row.get("pnl")
-        motivo_saida = row.get("motivo_saida", "")
-
-        reg = regimes_map.setdefault(
-            regime,
-            {
-                "trades": 0,
-                "wins": 0,
-                "pnl_values": [],
-                "worst_trade": None,
-                "estrategias": {},
-            },
-        )
+        reg = regimes_map.setdefault(regime, {
+            "trades": 0, "wins": 0, "pnl_values": [], "estrategias": {},
+        })
         reg["trades"] += 1
-
         if isinstance(pnl, (int, float)):
             reg["pnl_values"].append(float(pnl))
             if pnl > 0:
                 reg["wins"] += 1
-            if reg["worst_trade"] is None or float(pnl) < reg["worst_trade"]:
-                reg["worst_trade"] = float(pnl)
-
         if estrategia:
             reg["estrategias"][estrategia] = reg["estrategias"].get(estrategia, 0) + 1
-
-        ciclo_id = row.get("ciclo_id")
-        if ciclo_id:
-            ciclos_operados.add(str(ciclo_id))
-        elif estrategia:
-            ciclos_operados.add(f"row_{len(ciclos_operados)}")
-
         if "STOP" in motivo_saida:
             stops_por_regime[regime] = stops_por_regime.get(regime, 0) + 1
-
-    ciclos_com_op = len(ciclos_operados)
-    if ciclos_com_op == 0:
-        ciclos_com_op = sum(1 for h in historico if h.get("estrategia"))
 
     regimes = []
     for regime, acc in regimes_map.items():
         trades = acc["trades"]
         acerto = (acc["wins"] / trades * 100.0) if trades else 0.0
+        estrategia_dominante = max(acc["estrategias"], key=acc["estrategias"].get) if acc["estrategias"] else None
+        regimes.append({
+            "regime": regime,
+            "trades": trades,
+            "wins": acc["wins"],
+            "losses": trades - acc["wins"],
+            "acerto_pct": round(acerto, 1),
+            "ir": 0.0,
+            "worst_trade": min(acc["pnl_values"]) if acc["pnl_values"] else None,
+            "best_trade": max(acc["pnl_values"]) if acc["pnl_values"] else None,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "profit_factor": 0.0,
+            "expectancy": 0.0,
+            "estrategia_dominante": estrategia_dominante,
+            "estrategias": [{"estrategia": k, "trades": v} for k, v in acc["estrategias"].items()],
+            "motivos_saida": {},
+        })
 
-        ir_medio = 0.0
-        if len(acc["pnl_values"]) > 1:
-            media = sum(acc["pnl_values"]) / len(acc["pnl_values"])
-            variancia = sum((x - media) ** 2 for x in acc["pnl_values"]) / (len(acc["pnl_values"]) - 1)
-            desvio = variancia ** 0.5
-            if desvio > 0:
-                ir_medio = (media / desvio) * ((252.0 / 21.0) ** 0.5)
-        elif len(acc["pnl_values"]) == 1 and acc["pnl_values"][0] > 0:
-            ir_medio = 1.0
-
-        estrategia_dominante = None
-        if acc["estrategias"]:
-            estrategia_dominante = max(acc["estrategias"], key=acc["estrategias"].get)
-
-        regimes.append(
-            {
-                "regime": regime,
-                "trades": trades,
-                "acerto_pct": round(acerto, 1),
-                "ir": round(ir_medio, 3),
-                "worst_trade": acc["worst_trade"],
-                "estrategia_dominante": estrategia_dominante,
-            }
-        )
+    ciclos_com_op = sum(1 for h in historico if h.get("estrategia"))
 
     return {
         "ticker": ticker,
@@ -434,9 +432,12 @@ def get_fire_diagnostico(ticker: str) -> Dict[str, Any]:
         "cobertura": {
             "ciclos_com_operacao": ciclos_com_op,
             "total_ciclos": total_ciclos,
+            "total_trades": sum(r["trades"] for r in regimes),
+            "acerto_geral_pct": 0.0,
+            "pnl_total": 0.0,
         },
         "stops_por_regime": stops_por_regime,
-        "fonte_dados": "book_backtest+master_json",
+        "fonte_dados": "historico_config_fallback",
     }
 
 

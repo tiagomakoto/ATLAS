@@ -232,8 +232,8 @@ describe('CalibracaoDrawer', () => {
 
     render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
-    // Encontrar e clicar no botão "Iniciar Onboarding"
-    const iniciarButton = screen.getByText(/Iniciar Onboarding/i);
+// Encontrar e clicar no botão "Iniciar Calibração"
+  const iniciarButton = screen.getByText(/Iniciar Calibração/i);
     fireEvent.click(iniciarButton);
 
     // Aguardar a chamada fetch
@@ -358,30 +358,30 @@ describe('CalibracaoDrawer', () => {
 
     render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
-    // Restaurar window.location
-    window.location = originalLocation;
+// Restaurar window.location
+  window.location = originalLocation;
+});
+
+it('deve atualizar estado para error quando fetch falhar', async () => {
+  mockUseWebSocket.mockImplementation((url, callback) => {
+    return null;
   });
 
-  it('deve atualizar estado para error quando fetch falhar', async () => {
-    mockUseWebSocket.mockImplementation((url, callback) => {
-      return null;
-    });
+  global.fetch.mockResolvedValueOnce({
+    ok: false,
+    statusText: 'Internal Server Error'
+  });
 
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-      statusText: 'Internal Server Error'
-    });
+  render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
-    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+  const iniciarButton = screen.getByText(/Iniciar Calibração/i);
+  fireEvent.click(iniciarButton);
 
-    const iniciarButton = screen.getByText(/Iniciar Onboarding/i);
-    fireEvent.click(iniciarButton);
-
-    await waitFor(() => {
-      // Verificar que o estado foi atualizado para "error"
-      const step1 = screen.getByText(/ERRO/i);
-      expect(step1).toBeInTheDocument();
-    });
+  await waitFor(() => {
+    // Verificar que o estado foi atualizado para "error"
+    const step1 = screen.getByText(/ERRO/i);
+    expect(step1).toBeInTheDocument();
+  });
     
     // Verifica que o sub-título é "Integridade de dados"
     expect(screen.getByText(/Integridade de dados/)).toBeInTheDocument();
@@ -618,8 +618,8 @@ describe('CalibracaoDrawer', () => {
 
     render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
-    // Encontrar e clicar no botão "Iniciar Onboarding"
-    const iniciarButton = screen.getByText(/Iniciar Onboarding/i);
+// Encontrar e clicar no botão "Iniciar Calibração"
+  const iniciarButton = screen.getByText(/Iniciar Calibração/i);
     fireEvent.click(iniciarButton);
 
     // Aguardar a chamada fetch
@@ -733,33 +733,33 @@ describe('CalibracaoDrawer', () => {
       return null;
     });
 
-    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
-    // Restaurar window.location
-    window.location = originalLocation;
+  // Restaurar window.location
+  window.location = originalLocation;
+});
+
+it('deve atualizar estado para error quando fetch falhar', async () => {
+  mockUseWebSocket.mockImplementation((url, callback) => {
+    return null;
   });
 
-  it('deve atualizar estado para error quando fetch falhar', async () => {
-    mockUseWebSocket.mockImplementation((url, callback) => {
-      return null;
-    });
-
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-      statusText: 'Internal Server Error'
-    });
-
-    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
-
-    const iniciarButton = screen.getByText(/Iniciar Onboarding/i);
-    fireEvent.click(iniciarButton);
-
-    await waitFor(() => {
-      // Verificar que o estado foi atualizado para "error"
-      const step1 = screen.getByText(/ERRO/i);
-      expect(step1).toBeInTheDocument();
-    });
+  global.fetch.mockResolvedValueOnce({
+    ok: false,
+    statusText: 'Internal Server Error'
   });
+
+  render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+
+  const iniciarButton = screen.getByText(/Iniciar Calibração/i);
+  fireEvent.click(iniciarButton);
+
+  await waitFor(() => {
+    // Verificar que o estado foi atualizado para "error"
+    const step1 = screen.getByText(/ERRO/i);
+    expect(step1).toBeInTheDocument();
+  });
+});
 
   it('deve logar eventos recebidos no console', () => {
     const consoleSpy = jest.spyOn(console, 'log').mockImplementation();

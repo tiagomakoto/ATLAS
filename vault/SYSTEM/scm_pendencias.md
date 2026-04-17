@@ -12,3 +12,13 @@ Ap√≥s resolu√ß√£o, o CEO apaga a entrada correspondente.
   campos pendentes: intent, constraints, role, function
 
 status: pendente
+
+---
+## 290be0c ó 2026-04-17
+
+### MÛdulos novos (Categoria B ó todos os campos pendentes)
+- SYSTEMS/atlas/modules/calibracao_contract.md
+  arquivo de cÛdigo: atlas_backend/core/calibracao_contract.py
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

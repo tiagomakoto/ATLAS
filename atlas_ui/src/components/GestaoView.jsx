@@ -219,7 +219,7 @@ export default function GestaoView() {
     <div style={sectionStyle}>
       <span style={labelStyle}>Seção Por Ativo</span>
 
-      {/* Onboarding */}
+      {/* Calibração */}
       <div style={{ marginBottom: 16, padding: 12, background: "rgba(59,130,246,0.08)", borderRadius: 2 }}>
         <span style={{...labelStyle, marginBottom: 4}}>Calibração de novo ativo</span>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>

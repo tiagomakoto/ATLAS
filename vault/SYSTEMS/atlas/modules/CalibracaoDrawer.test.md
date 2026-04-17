@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-023
-version: 1.0.1
+version: 1.0.2
 status: draft
 owner: Chan
 
@@ -17,6 +17,7 @@ intent:
   - ÓRFÃO detectado na varredura 2026-04-14. Módulo cobre arquivo de teste — fora do escopo SCM.
 constraints:
 notes:
+  - 2026-04-17: código modificado — CalibracaoDrawer.test.jsx
   - 2026-04-14: detectado como ÓRFÃO na varredura completa — arquivo de teste
   - Aguardando decisão do CEO: deletar | manter como referência
 ---

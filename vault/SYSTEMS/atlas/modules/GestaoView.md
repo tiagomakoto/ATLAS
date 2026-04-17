@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-017
-version: 1.0.4
+version: 1.0.5
 status: validated
 owner: Chan
 
@@ -32,6 +32,7 @@ constraints:
   - Ações passam por confirmação (confirm=true + description obrigatória)
 
 notes:
+  - 2026-04-17: código modificado — GestaoView.jsx
   - 2026-04-17: código modificado — GestaoView.jsx
   - 2026-04-14: código modificado — GestaoView.jsx
   - 2026-04-14: código modificado — GestaoView.jsx

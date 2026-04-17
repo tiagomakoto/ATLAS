@@ -1,11 +1,11 @@
 ---
-uid: mod-atlas-024
-version: 1.0.1
+uid: mod-atlas-026
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_backend/core/calibracao_contract.py
+file: atlas_backend/core/gate_helper.py
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,6 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-17: código modificado — calibracao_contract.py
-  - 2026-04-17 — módulo criado automaticamente a partir de atlas_backend/core/calibracao_contract.py
+  - 2026-04-17 — módulo criado automaticamente a partir de atlas_backend/core/gate_helper.py
   - <edge cases ou riscos>
