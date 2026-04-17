@@ -452,10 +452,26 @@ def gate_executar(ticker: str) -> str:
         print(f"     {8-n_passou} gates falharam")
 
     # ── Retorno da função ──────────────────────────────────────────
-    decisao_final = "OPERAR" if todos_passaram else "MONITORAR"
+    decisao_final = "OPERAR" if todos_passaram else "MONITORAR" if n_passou >= 6 else "EXCLUÍDO"
+
+    # ── Registrar decisão no historico_config ──────────────────────
+    dados = tape_ativo_carregar(TICKER)
+    if "historico_config" not in dados:
+        dados["historico_config"] = []
+    dados["historico_config"].append({
+        "data": str(datetime.now())[:10],
+        "modulo": "GATE v1.0",
+        "parametro": "gate_decisao",
+        "valor_novo": decisao_final,
+        "resultado": decisao_final,
+        "gates_aprovados": n_passou,
+        "motivo": f"GATE completo — {n_passou}/8 gates aprovados"
+    })
+    tape_ativo_salvar(TICKER, dados)
+
     return decisao_final
 
-    print(f"\n  {sep}")
+    print(f"\n {sep}")
 
 
 if __name__ == "__main__":

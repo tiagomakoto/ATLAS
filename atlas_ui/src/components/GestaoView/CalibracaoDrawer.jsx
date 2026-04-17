@@ -42,6 +42,10 @@ const [subModules, setSubModules] = useState({
 // Estado para armazenar valores de parametrização (TP/STOP)
 const [parametros, setParametros] = useState({ take_profit: null, stop_loss: null });
 
+  // Melhor TP/STOP da otimização em andamento (atualizado a cada trial progress)
+  const [bestTp, setBestTp] = useState(null);
+  const [bestStop, setBestStop] = useState(null);
+
   // Carregar estado inicial da calibração
   useEffect(() => {
     const fetchOnboarding = async () => {
@@ -180,12 +184,12 @@ useEffect(() => {
         }));
         if (stepKey === "2_tune") {
           setStep2IniciadoEm(new Date().getTime());
-          // Resetar progresso de indexação quando step 2 inicia
           setIndexProgress({ current: 0, total: 0 });
           setShowIndexProgress(false);
           setIndexComplete(false);
-          // Quando step 2 inicia, resetar fase para integridade (ainda não começou a indexação)
           setFaseCalibracao("integridade");
+          setBestTp(null);
+          setBestStop(null);
         }
       }
     }
@@ -220,10 +224,11 @@ if (evento.type === "dc_module_complete") {
 
 if (evento.type === "dc_tune_progress") {
     const d = evento.data;
-    console.log("[CALIBRACAO] dc_tune_progress:", d); // Debug para verificar se eventos estão chegando
     if (d?.trial !== undefined) setTrialAtual(d.trial);
     if (d?.total !== undefined) setTrialTotal(d.total);
     if (d?.ir !== undefined) setBestIr(d.ir);
+    if (d?.best_tp != null) setBestTp(d.best_tp);
+    if (d?.best_stop != null) setBestStop(d.best_stop);
     setUltimoEventoEm(Date.now());
   }
 
@@ -784,7 +789,10 @@ if (match) {
               fontSize: 9,
               color: "var(--atlas-text-secondary)"
             }}>
-              {getStepDescription("2_tune")}
+              {getStepStatus("2_tune") === "running" && bestTp !== null && bestStop !== null
+                ? <span style={{ color: "var(--atlas-blue)" }}>TP {bestTp.toFixed(2)} | SL {bestStop.toFixed(2)}</span>
+                : getStepDescription("2_tune")
+              }
               {getStepTime("2_tune") && (
                 <span style={{ marginLeft: 8 }}>
                   {getStepTime("2_tune")}
@@ -803,7 +811,7 @@ if (match) {
                 }}>
 
                   {/* Barra de progresso da indexação de dias */}
-                  {showIndexProgress && !indexComplete && (
+                  {!indexComplete && (
                     <div style={{
                       marginBottom: 12,
                       padding: "8px 12px",
@@ -821,14 +829,18 @@ if (match) {
                           fontSize: 9,
                           color: "var(--atlas-text-secondary)"
                         }}>
-                          Indexando dias: {indexProgress.current} / {indexProgress.total}
+                          {indexProgress.total > 0
+                            ? `Indexando dias: ${indexProgress.current} / ${indexProgress.total}`
+                            : "Indexando dias..."}
                         </span>
                         <span style={{
                           fontFamily: "monospace",
                           fontSize: 9,
                           color: "var(--atlas-text-secondary)"
                         }}>
-                          {Math.round((indexProgress.current / indexProgress.total) * 100)}%
+                          {indexProgress.total > 0
+                            ? `${Math.round((indexProgress.current / indexProgress.total) * 100)}%`
+                            : ""}
                         </span>
                       </div>
                       <div style={{
@@ -841,7 +853,7 @@ if (match) {
                         <div style={{
                           height: "100%",
                           background: "var(--atlas-blue)",
-                          width: `${(indexProgress.current / indexProgress.total) * 100}%`
+                          width: `${indexProgress.total > 0 ? (indexProgress.current / indexProgress.total) * 100 : 0}%`
                         }} />
                       </div>
                     </div>
@@ -912,34 +924,14 @@ if (match) {
                   )}
                 </div>
 
-                {/* Tempo decorrido e estimativas - agora fora da caixa preta */}
+                {/* Tempo decorrido e estimativa */}
                 <div style={{
                   marginTop: 8,
-                  display: "flex",
-                  justifyContent: "space-between",
                   fontSize: 9,
                   fontFamily: "monospace",
                   color: "var(--atlas-text-secondary)"
                 }}>
-                  <span>
-                    Tempo decorrido: {calculateElapsedTime(step2IniciadoEm)}
-                  </span>
-                  <span>
-                    Estimativa restante: {calculateEstimatedTime(step2IniciadoEm, trialAtual, trialTotal)}
-                  </span>
-                </div>
-
-                <div style={{
-                  marginTop: 4,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 9,
-                  fontFamily: "monospace",
-                  color: "var(--atlas-text-secondary)"
-                }}>
-                  <span>
-                    Tempo médio/trial: {calculateAverageTime(step2IniciadoEm, trialAtual)}
-                  </span>
+                  Tempo decorrido {calculateElapsedTime(step2IniciadoEm)} (est. restante {calculateEstimatedTime(step2IniciadoEm, trialAtual, trialTotal)})
                 </div>
               </>
             )}

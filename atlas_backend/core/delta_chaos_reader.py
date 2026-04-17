@@ -26,7 +26,10 @@ def list_ativos() -> List[str]:
     paths = get_paths()
     pattern = os.path.join(paths["config_dir"], "*.json")
     files = glob.glob(pattern)
-    return [Path(f).stem for f in files]
+    return [
+        Path(f).stem for f in files
+        if "_corrupto_" not in Path(f).stem.lower()
+    ]
 
 
 def get_ativo(ticker: str) -> Dict[str, Any]:

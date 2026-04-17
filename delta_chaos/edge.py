@@ -802,14 +802,12 @@ def rodar_reflect_daily(ticker: str, xlsx_path: str):
         raise e
 
 def rodar_gate_eod(ticker: str):
-    emit_dc_event("dc_module_start", "GATE", "running", ticker=ticker)
     try:
         resultado = gate_eod_verificar(ticker, verbose=True)
         emit_log(f"[GATE_EOD] {ticker}: {resultado}", "info")
-        emit_dc_event("dc_module_complete", "GATE", "ok", ticker=ticker)
         return {"status": "OK", "output": str(resultado)}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "GATE", "error", ticker=ticker, erro=str(e))
+        emit_dc_event("dc_module_complete", "GATE_EOD", "error", ticker=ticker, erro=str(e))
         raise e
 
 

@@ -55,7 +55,7 @@ def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
     ticker = ticker.replace(".SA", "").upper()
     
     # ═══ Emitir evento de início para ATLAS frontend ═══
-    emit_event("GATE", "start", ticker=ticker, acao="gate_eod")
+    emit_event("GATE_EOD", "start", ticker=ticker)
     
     dados  = tape_ativo_carregar(ticker)
     hoje   = date.today().strftime("%Y-%m-%d")
@@ -246,7 +246,7 @@ def gate_eod_verificar(ticker: str, verbose: bool = True) -> str:
         print(f"  {sep2}\n")
 
     # ═══ Emitir evento de conclusão para ATLAS frontend ═══
-    emit_event("GATE", "done", ticker=ticker, parecer=parecer)
+    emit_event("GATE_EOD", "done", ticker=ticker, parecer=parecer)
 
     return parecer
 

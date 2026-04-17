@@ -240,7 +240,7 @@ async def dc_daily(tickers: list) -> dict:
         if not gate_ok:
             emit_log(f"[DAILY] {ticker}: calibração incompleta — aguardando GATE", level="warning")
             # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══
-            emit_dc_event("dc_module_complete", "GATE", "error",
+            emit_dc_event("dc_module_complete", "GATE_EOD", "error",
                           ticker=ticker, descricao="calibração incompleta — aguardando GATE")
             # ═══ NOVO: Adicionar à lista de eventos críticos para fallback na API ═══
             _eventos_criticos.append({
@@ -329,23 +329,15 @@ async def dc_daily(tickers: list) -> dict:
             gate_output = gate_result.get("output", "")
             if "BLOQUEADO" in gate_output:
                 ticker_digest["gate_eod"] = "BLOQUEADO"
-                emit_dc_event("dc_module_complete", "GATE", "error",
-                              ticker=ticker, descricao="GATE EOD = BLOQUEADO")
                 emit_log(f"[DAILY] {ticker}: BLOQUEADO — aguardando atualização de ciclo", level="info")
             elif "OPERAR" in gate_output:
                 ticker_digest["gate_eod"] = "OPERAR"
-                emit_dc_event("dc_module_complete", "GATE", "ok",
-                              ticker=ticker, descricao="GATE EOD = OPERAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = OPERAR", level="info")
             elif "MONITORAR" in gate_output:
                 ticker_digest["gate_eod"] = "MONITORAR"
-                emit_dc_event("dc_module_complete", "GATE", "ok",
-                              ticker=ticker, descricao="GATE EOD = MONITORAR")
                 emit_log(f"[DAILY] {ticker}: gate_eod = MONITORAR", level="info")
             else:
                 ticker_digest["gate_eod"] = gate_output.strip()
-                emit_dc_event("dc_module_complete", "GATE", "error",
-                              ticker=ticker, descricao=f"GATE EOD = {gate_output.strip()}")
         except Exception as e:
             ticker_digest["gate_eod"] = f"erro: {str(e)}"
             emit_log(f"[DAILY] {ticker}: gate_eod erro — {e}", level="error")
@@ -461,14 +453,11 @@ async def dc_eod(xlsx_dir: str) -> dict:
 
 async def dc_orbit_backtest(ticker: str, anos: Optional[list] = None) -> dict:
     action_payload = {"ticker": ticker, "anos": anos}
-    emit_dc_event("dc_module_start", "ORBIT", "running", **action_payload)
     try:
         await asyncio.to_thread(edge.rodar_backtest_dados, ticker, anos)
-        emit_dc_event("dc_module_complete", "ORBIT", "ok", **action_payload)
         log_action("dc_orbit", action_payload, {"status": "OK"})
         return {"status": "OK", "returncode": 0, "output": ""}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "ORBIT", "error", **action_payload)
         emit_log(f"[ORBIT] {ticker}: erro — {e}", level="error")
         log_action("dc_orbit", action_payload, {"status": "ERRO", "error": repr(e)})
         return {"status": "ERRO", "output": repr(e)}
@@ -491,19 +480,41 @@ async def dc_tune(ticker: str) -> dict:
                     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
                     try:
                         cur = conn.cursor()
-                        cur.execute("SELECT COUNT(*) FROM trial WHERE state = 'COMPLETE'")
+                        cur.execute("SELECT COUNT(*) FROM trials WHERE state = 'COMPLETE'")
                         count = cur.fetchone()[0]
-                        cur.execute("SELECT MAX(value) FROM trial WHERE state = 'COMPLETE'")
-                        best = cur.fetchone()[0] or 0.0
+                        cur.execute("""
+                            SELECT COALESCE(MAX(tv.value), 0.0)
+                            FROM trial_values tv
+                            JOIN trials t ON tv.trial_id = t.trial_id
+                            WHERE t.state = 'COMPLETE'
+                        """)
+                        row = cur.fetchone()
+                        best = row[0] if row and row[0] is not None else 0.0
+
+                        if count != last_count:
+                            last_count = count
+                            best_tp, best_stop = None, None
+                            cur.execute("""
+                                SELECT tp.param_name, tp.param_value
+                                FROM trial_params tp
+                                JOIN trials t ON tp.trial_id = t.trial_id
+                                JOIN trial_values tv ON tv.trial_id = t.trial_id
+                                WHERE t.state = 'COMPLETE' AND tv.value = ?
+                                AND tp.param_name IN ('tp', 'stop')
+                            """, (float(best),))
+                            params = {r[0]: r[1] for r in cur.fetchall()}
+                            if "tp" in params:
+                                best_tp = round(float(params["tp"]), 2)
+                            if "stop" in params:
+                                best_stop = round(float(params["stop"]), 2)
+                            emit_dc_event(
+                                "dc_tune_progress", "TUNE", "running",
+                                trial=count, total=TOTAL, ir=round(float(best), 3),
+                                best_tp=best_tp, best_stop=best_stop,
+                                **action_payload
+                            )
                     finally:
                         conn.close()
-
-                    if count != last_count:
-                        last_count = count
-                        emit_dc_event(
-                            "dc_tune_progress", "TUNE", "running",
-                            trial=count, total=TOTAL, ir=round(float(best), 3), **action_payload
-                        )
             except Exception:
                 pass
             time.sleep(0.2)
@@ -571,15 +582,12 @@ async def dc_reflect_daily(ticker: str, xlsx_path: str) -> dict:
 
 async def dc_gate_eod(ticker: str) -> dict:
     action_payload = {"ticker": ticker}
-    emit_dc_event("dc_module_start", "GATE", "running", **action_payload)
     try:
         res = await asyncio.to_thread(edge.rodar_gate_eod, ticker)
-        emit_dc_event("dc_module_complete", "GATE", "ok", **action_payload)
         log_action("dc_gate_eod", action_payload, {"status": "OK"})
         return {"status": "OK", "returncode": 0, "output": res.get("output", "")}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "GATE", "error", **action_payload)
-        emit_log(f"[GATE] {ticker}: erro — {e}", level="error")
+        emit_log(f"[GATE_EOD] {ticker}: erro — {e}", level="error")
         log_action("dc_gate_eod", action_payload, {"status": "ERRO", "error": repr(e)})
         return {"status": "ERRO", "output": repr(e)}
 

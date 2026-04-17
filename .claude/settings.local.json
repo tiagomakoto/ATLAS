@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from delta_chaos.tune import executar_tune; print\\('OK — importação bem-sucedida'\\)\")",
+      "Bash(python -c \"import optuna; print\\(optuna.__version__\\)\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

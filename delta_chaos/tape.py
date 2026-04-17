@@ -331,7 +331,7 @@ def tape_ativo_carregar(ticker: str) -> dict:
 
     if os.path.exists(path):
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 dados = json.load(f)
 
             # Migração — garante que todos os campos novos existam
@@ -390,7 +390,7 @@ def tape_ativo_inicializar(ticker: str) -> dict:
 
     # Carrega existente ou cria vazio
     if os.path.exists(json_path):
-        with open(json_path) as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
     else:
         cfg = {}
@@ -479,7 +479,7 @@ def tape_ativo_salvar(ticker: str, cfg_data: dict) -> None:
 
     cfg_data["atualizado_em"] = str(datetime.now())[:19]
 
-    with open(path_tmp, "w") as f:
+    with open(path_tmp, "w", encoding="utf-8") as f:
         json.dump(cfg_data, f, indent=2,
                   ensure_ascii=False, default=str)
     os.replace(path_tmp, path)  # atômico no mesmo filesystem

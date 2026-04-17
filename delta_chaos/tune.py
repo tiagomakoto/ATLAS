@@ -201,28 +201,28 @@ def executar_tune(ticker: str) -> dict:
 level="info"
 )
             emit_dc_event("dc_tune_index_progress", "TUNE", "running", ticker=TICKER, current=i+1, total=len(datas))
-emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
-emit_dc_event("dc_tune_index_complete", "TUNE", "ok", ticker=TICKER)
+    emit_log(f"TUNE [{TICKER}] pré-cômputo concluído — iniciando Optuna", level="info")
+    emit_dc_event("dc_tune_index_complete", "TUNE", "ok", ticker=TICKER)
 
-# C1 — constantes do BOOK extraídas uma vez fora de _simular()
-# Evita carregar_config() dentro do loop de 200 trials × N_pregões
-_cfg_book_tune = carregar_config()["book"]
-_RT = _cfg_book_tune["risco_trade"]
-_FM = _cfg_book_tune["fator_margem"]
-_NM = _cfg_book_tune["n_contratos_minimo"]
+    # C1 — constantes do BOOK extraídas uma vez fora de _simular()
+    # Evita carregar_config() dentro do loop de 200 trials × N_pregões
+    _cfg_book_tune = carregar_config()["book"]
+    _RT = _cfg_book_tune["risco_trade"]
+    _FM = _cfg_book_tune["fator_margem"]
+    _NM = _cfg_book_tune["n_contratos_minimo"]
 
-def _get_regime(ciclo_id):
-    raw = regime_idx_c.get(ciclo_id, {})
-    return {
-        "regime": raw.get("regime", "DESCONHECIDO"),
-        "ir": float(raw.get("ir", 0.0)),
-        "sizing": float(raw.get("sizing", 0.0)),
-    }
+    def _get_regime(ciclo_id):
+        raw = regime_idx_c.get(ciclo_id, {})
+        return {
+            "regime": raw.get("regime", "DESCONHECIDO"),
+            "ir": float(raw.get("ir", 0.0)),
+            "sizing": float(raw.get("sizing", 0.0)),
+        }
 
-def _reflect_bloqueado(ciclo_id):
-    """Fase 3: retorna True se ciclo está em Edge C/D/E."""
-    estado = reflect_cycle_hist.get(ciclo_id, {}).get("reflect_state", "B")
-    return estado in REFLECT_ESTADOS_BLOQUEADOS
+    def _reflect_bloqueado(ciclo_id):
+        """Fase 3: retorna True se ciclo está em Edge C/D/E."""
+        estado = reflect_cycle_hist.get(ciclo_id, {}).get("reflect_state", "B")
+        return estado in REFLECT_ESTADOS_BLOQUEADOS
 
     _cfg_f      = carregar_config()["fire"]
     DIAS_MIN    = _cfg_f["dias_min"]
