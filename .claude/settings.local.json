@@ -3,7 +3,21 @@
     "allow": [
       "Bash(python -c \"from delta_chaos.tune import executar_tune; print\\('OK — importação bem-sucedida'\\)\")",
       "Bash(python -c \"import optuna; print\\(optuna.__version__\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs -I{} sh -c 'jq -r \"select\\(.message.role==\\\\\"assistant\\\\\"\\) | .message.content[]? | select\\(.type==\\\\\"tool_use\\\\\"\\) | if .name==\\\\\"Bash\\\\\" then \\\\\"BASH: \\\\\" + \\(.input.command // \\\\\"\\\\\"\\) else \\\\\"MCP: \\\\\" + .name end\" \"{}\" 2>/dev/null')",
+      "Bash(read f *)",
+      "Bash(python3 -c ' import json, sys for line in open\\('\\\\''__TRACKED_VAR__'\\\\''\\): try: obj = json.loads\\(line\\) msg = obj.get\\('\\\\''message'\\\\'', {}\\) if msg.get\\('\\\\''role'\\\\''\\) == '\\\\''assistant'\\\\'': for c in msg.get\\('\\\\''content'\\\\'', []\\): if isinstance\\(c, dict\\) and c.get\\('\\\\''type'\\\\''\\) == '\\\\''tool_use'\\\\'': name = c.get\\('\\\\''name'\\\\'', '\\\\'''\\\\''\\) if name == '\\\\''Bash'\\\\'': cmd = c.get\\('\\\\''input'\\\\'', {}\\).get\\('\\\\''command'\\\\'', '\\\\'''\\\\''\\) print\\('\\\\''BASH:'\\\\'', cmd[:120]\\) elif name.startswith\\('\\\\''mcp__'\\\\''\\): print\\('\\\\''MCP:'\\\\'', name\\) except: pass ' done)",
+      "Bash(python3)",
+      "Bash(python3 -c \"import json; print\\(json.loads\\(open\\(list\\(__import__\\('glob'\\).glob\\('/c/Users/tiago/.claude/projects/**/*.jsonl', recursive=True\\)\\)[0]\\).readline\\(\\)\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(cmd /c \"dir \\\\\"%USERPROFILE%\\\\\\\\.claude\\\\\\\\projects\\\\\" /b\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const s=fs.statSync\\('/c/Users/tiago/.claude/projects/C--Users-tiago-OneDrive-Documentos-ATLAS/d6d77230-c58f-4af4-bd90-25fe115f3659.jsonl'\\); console.log\\(s.size\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const s=fs.statSync\\('C:/Users/tiago/.claude/projects/C--Users-tiago-OneDrive-Documentos-ATLAS/d6d77230-c58f-4af4-bd90-25fe115f3659.jsonl'\\); console.log\\(s.size\\);\")",
+      "Bash(python -c \"import atlas_backend.core.relatorios as r; print\\('OK — funções:', [x for x in dir\\(r\\) if not x.startswith\\('__'\\)]\\)\")",
+      "Bash(python -c \"import sys; sys.stdout.buffer.write\\(sys.stdin.buffer.read\\(\\)\\)\")",
+      "Bash(del \"C:\\\\Users\\\\tiago\\\\OneDrive\\\\Documentos\\\\ATLAS\\\\atlas_backend\\\\core\\\\relatorios\\\\CALIB_GATE_BLOQUEADO_001_TEST11_2026-04-22.md\")",
+      "Bash(python -c \"import json, pathlib; p = pathlib.Path\\('C:/Users/tiago/OneDrive/Documentos/ATLAS/atlas_backend/core/relatorios/index.json'\\); idx = json.loads\\(p.read_text\\(\\)\\); idx = [e for e in idx if e.get\\('ticker'\\) != 'TEST11']; p.write_text\\(json.dumps\\(idx, indent=2, ensure_ascii=False\\)\\); print\\('index limpo, entradas restantes:', len\\(idx\\)\\)\")"
     ]
   }
 }

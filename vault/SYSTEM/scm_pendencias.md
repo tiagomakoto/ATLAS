@@ -22,3 +22,25 @@ status: pendente
   campos pendentes: function, role, intent, constraints
 
 status: pendente
+
+---
+## a7db5ac — 2026-04-17 20:17
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/calibracao_contract.md
+  arquivo de código: atlas_backend/core/calibracao_contract.py
+  campos pendentes: function, role, intent, constraints
+
+- SYSTEMS/atlas/modules/fire_helper.md
+  arquivo de código: atlas_backend/core/fire_helper.py
+  campos pendentes: function, role, intent, constraints
+
+- SYSTEMS/atlas/modules/gate_helper.md
+  arquivo de código: atlas_backend/core/gate_helper.py
+  campos pendentes: function, role, intent, constraints
+
+- SYSTEMS/atlas/modules/CalibracaoDrawer.new_tests.md
+  arquivo de código: atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.new_tests.jsx
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

@@ -14,16 +14,48 @@ export default function GestaoView() {
   const [drawerCalibracao, setDrawerCalibracao] = useState(null);
 
   useEffect(() => {
-    fetchAtivos();
+    fetchAtivos().then(fetchedAtivos => {
+      // Reabrir drawer se há calibração ativa (qualquer step running)
+      if (drawerCalibracao) return; // já está aberto
+      checkCalibracaoAtiva(fetchedAtivos);
+    });
   }, []);
+
+  async function checkCalibracaoAtiva(listaAtivos) {
+    for (const ativo of (listaAtivos || [])) {
+      try {
+        const ticker = typeof ativo === "string" ? ativo : ativo.ticker;
+        if (!ticker) continue;
+        const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const steps = data?.steps || {};
+
+        // Só reabrir se a calibração é recente (últimas 24h)
+        const ultimoEvento = data?.ultimo_evento_em ? new Date(data.ultimo_evento_em) : null;
+        const horasDecorridas = ultimoEvento ? (Date.now() - ultimoEvento.getTime()) / 3600000 : Infinity;
+        if (horasDecorridas > 24) continue;
+
+        // Só reabrir se há processo realmente em execução
+        const algumAtivo = Object.values(steps).some(s => s?.status === "running");
+        if (algumAtivo) {
+          setDrawerCalibracao(ticker);
+          break;
+        }
+      } catch (e) { /* ignora */ }
+    }
+  }
 
   async function fetchAtivos() {
     try {
       const res = await fetch(`${API_BASE}/ativos`);
       const data = await res.json();
-      setAtivos(data.ativos || []);
+      const lista = data.ativos || [];
+      setAtivos(lista);
+      return lista;
     } catch (e) {
       console.error("Erro ao carregar ativos:", e);
+      return [];
     }
   }
 

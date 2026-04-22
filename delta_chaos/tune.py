@@ -49,10 +49,6 @@ def executar_tune(ticker: str) -> dict:
     Lança ValueError se ORBIT não gerou histórico.
     """
     TICKER = ticker.strip().upper()
-    from pathlib import Path as _Path
-    _TMP_DIR = _Path(__file__).resolve().parent.parent / "tmp"
-    _TMP_DIR.mkdir(parents=True, exist_ok=True)
-    _study_db = _TMP_DIR / f"tune_{TICKER}.db"
 
     emit_log(f"TUNE PING — {TICKER} | conexão WebSocket ativa", level="debug")
 
@@ -458,15 +454,11 @@ level="info"
         n_startup_trials=OPTUNA_STARTUP,
         seed=OPTUNA_SEED
     )
-    # Apaga estudo anterior — cada TUNE é calibração nova, não retomada
-    if _study_db.exists():
-        _study_db.unlink()
-        emit_log(f"TUNE [{TICKER}] estudo anterior removido — iniciando do zero", level="info")
-
+    # Storage em memória — sem arquivo SQLite, sem risco de lock no Windows.
+    # Progresso emitido via emit_dc_event no callback, não há necessidade de persistência.
     study = optuna.create_study(
-        storage=f"sqlite:///{_study_db}",
+        storage=None,
         study_name=TICKER,
-        load_if_exists=False,
         direction="maximize",
         sampler=sampler,
     )
@@ -476,17 +468,32 @@ level="info"
     _melhor_valor = [study.best_value if study.trials else -999.0]
 
     def _early_stop_cb(study, trial):
-        # C3: não conta paciência durante warm-up do TPE
-        # Evita early stop prematuro antes do surrogate model estar ativo
+        # Emite progresso para todos os trials (incluindo warmup)
+        try:
+            best_tp, best_stop = None, None
+            if study.trials:
+                bt = study.best_trial
+                best_tp = round(float(bt.params.get("tp", 0)), 2)
+                best_stop = round(float(bt.params.get("stop", 0)), 2)
+            emit_dc_event(
+                "dc_tune_progress", "TUNE", "running",
+                trial=trial.number + 1,
+                total=OPTUNA_N_TRIALS,
+                ir=round(float(study.best_value if study.trials else 0.0), 3),
+                best_tp=best_tp,
+                best_stop=best_stop,
+                ticker=TICKER,
+            )
+        except Exception:
+            pass
+        # Early stopping só conta após warmup (C3: surrogate model precisa de startup trials)
         if trial.number < OPTUNA_STARTUP:
             return
-        # emit_log de progresso só no TPE — warmup já emite via objective()
         if study.best_value > _melhor_valor[0] + OPTUNA_MIN_DELTA:
             _melhor_valor[0] = study.best_value
             _sem_melhoria[0] = 0
         else:
             _sem_melhoria[0] += 1
-        # NOVO — emite evento por trial para WebSocket/EventFeed do ATLAS
         emit_log(
             f"TUNE [{TICKER}] trial {trial.number + 1}/{OPTUNA_N_TRIALS} "
             f"best_ir={_melhor_valor[0]:+.4f} sem_melhoria={_sem_melhoria[0]}",

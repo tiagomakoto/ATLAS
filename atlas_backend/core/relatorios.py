@@ -6,6 +6,7 @@ Módulo para geração de relatórios de TUNE e ONBOARDING.
 
 import os
 import json
+import tempfile
 from datetime import datetime
 from pathlib import Path
 import re
@@ -214,14 +215,146 @@ def obter_todos_relatorios() -> list:
 # RELATÓRIOS DE CALIBRAÇÃO (GATE bloqueado / completo com FIRE)
 # =============================================================================
 
+# --- Regex para parsear campo `motivo` do TUNE em historico_config ---
+_RE_IR_CAL      = re.compile(r'IR=([+-]?\d+\.\d+)')
+_RE_CONF_CAL    = re.compile(r'\b(Alta|Baixa|amostra_insuficiente)\b')
+_RE_TRADES_CAL  = re.compile(r'N trades:\s*(\d+)')
+_RE_TRIALS_CAL  = re.compile(r'Trials:\s*(\d+)/(\d+)')
+_RE_REFLECT_CAL = re.compile(r'Ciclos com REFLECT real:\s*(\d+)')
+_RE_FALLBACK_CAL = re.compile(r'Fallback B:\s*(\d+)')
+_RE_TP_STOP_CAL = re.compile(r'TP=(\d+\.\d+)\s+STOP=(\d+\.\d+)')
+_RE_ACERTO_CAL  = re.compile(r'Acerto:\s*([\d.]+)%')
+_RE_MASKED_CAL  = re.compile(r'(\d+) ciclos mascarados de (\d+)')
+
+
+def _get_ativo_env(ticker: str) -> dict:
+    """
+    Retorna campos ambientais do ativo para uso no relatório.
+    Fallback None/[] em caso de erro ou campo ausente.
+    """
+    try:
+        from atlas_backend.core.delta_chaos_reader import get_ativo_raw
+        raw = get_ativo_raw(ticker)
+    except Exception:
+        raw = {}
+    return {
+        "iv_rank":        raw.get("iv_rank"),
+        "regime":         raw.get("regime"),
+        "reflect_state":  raw.get("reflect_state"),
+        "take_profit":    raw.get("take_profit"),
+        "stop_loss":      raw.get("stop_loss"),
+        "historico_config": raw.get("historico_config") or [],
+    }
+
+
+def _parse_tune_historico(historico_config: list) -> dict:
+    """
+    Extrai dados do último registro TUNE v2.0 de historico_config.
+    Todos os campos têm fallback None quando ausentes.
+    """
+    empty = {
+        "tp_sug": None, "stop_sug": None, "ir": None, "n_trades": None,
+        "confianca": None, "janela_anos": None, "ano_ini": None, "ano_fim": None,
+        "trials_feitos": None, "trials_total": None, "early_stop": False,
+        "reflect_real": None, "total_ciclos": None, "reflect_masked": None,
+        "acerto_pct": None, "ciclos_fallback": None,
+    }
+    tune_records = [r for r in (historico_config or []) if r.get("modulo") == "TUNE v2.0"]
+    if not tune_records:
+        return empty
+
+    tune_records.sort(key=lambda x: x.get("data", ""), reverse=True)
+    rec = tune_records[0]
+    motivo    = rec.get("motivo", "") or ""
+    valor_novo = rec.get("valor_novo", "") or ""
+
+    # TP / STOP sugerido — preferir valor_novo; fallback para motivo
+    tp_sug = stop_sug = None
+    m = _RE_TP_STOP_CAL.search(valor_novo) or _RE_TP_STOP_CAL.search(motivo)
+    if m:
+        tp_sug, stop_sug = float(m.group(1)), float(m.group(2))
+
+    # IR
+    ir = None
+    m = _RE_IR_CAL.search(motivo)
+    if m:
+        ir = float(m.group(1))
+
+    # Confiança
+    confianca = None
+    m = _RE_CONF_CAL.search(motivo)
+    if m:
+        confianca = m.group(1)
+
+    # N trades
+    n_trades = None
+    m = _RE_TRADES_CAL.search(motivo)
+    if m:
+        n_trades = int(m.group(1))
+
+    # Trials
+    trials_feitos = trials_total = None
+    m = _RE_TRIALS_CAL.search(motivo)
+    if m:
+        trials_feitos, trials_total = int(m.group(1)), int(m.group(2))
+    early_stop = "early stop" in motivo.lower()
+
+    # Janela de teste (campo periodo_teste: "AAAA-AAAA")
+    janela_anos = ano_ini = ano_fim = None
+    periodo = rec.get("periodo_teste", "") or ""
+    if periodo and "-" in periodo:
+        parts = periodo.split("-")
+        if len(parts) == 2:
+            try:
+                ano_ini, ano_fim = int(parts[0]), int(parts[1])
+                janela_anos = ano_fim - ano_ini
+            except ValueError:
+                pass
+
+    # REFLECT real
+    reflect_real = None
+    m = _RE_REFLECT_CAL.search(motivo)
+    if m:
+        reflect_real = int(m.group(1))
+
+    # Ciclos mascarados / total
+    total_ciclos = reflect_masked = None
+    m = _RE_MASKED_CAL.search(motivo)
+    if m:
+        reflect_masked, total_ciclos = int(m.group(1)), int(m.group(2))
+
+    # Fallback B
+    ciclos_fallback = None
+    m = _RE_FALLBACK_CAL.search(motivo)
+    if m:
+        ciclos_fallback = int(m.group(1))
+
+    # Acerto %
+    acerto_pct = None
+    m = _RE_ACERTO_CAL.search(motivo)
+    if m:
+        acerto_pct = float(m.group(1))
+
+    return {
+        "tp_sug": tp_sug, "stop_sug": stop_sug, "ir": ir, "n_trades": n_trades,
+        "confianca": confianca, "janela_anos": janela_anos,
+        "ano_ini": ano_ini, "ano_fim": ano_fim,
+        "trials_feitos": trials_feitos, "trials_total": trials_total,
+        "early_stop": early_stop, "reflect_real": reflect_real,
+        "total_ciclos": total_ciclos, "reflect_masked": reflect_masked,
+        "acerto_pct": acerto_pct, "ciclos_fallback": ciclos_fallback,
+    }
+
+
 def gerar_relatorio_calibracao_gate_bloqueado(
     ticker: str,
     gate_resultado: dict,
     calibracao: dict,
 ) -> dict:
     """
-    Gera relatório .md para cenário de GATE bloqueado.
-    Inclui: critérios que falharam, estado dos steps, recomendações.
+    Gera relatório .md de calibração com 5 seções obrigatórias.
+    Funciona tanto para GATE BLOQUEADO quanto para outros resultados.
+    Campos ausentes degradam graciosamente exibindo "não disponível".
 
     Returns:
         {
@@ -239,100 +372,236 @@ def gerar_relatorio_calibracao_gate_bloqueado(
     arquivo = f"CALIB_GATE_BLOQUEADO_{id_str}_{ticker}_{data_hoje}.md"
     path_rel = RELATORIOS_DIR / arquivo
 
-    steps = calibracao.get("steps", {})
-    step1 = steps.get("1_backtest_dados", {})
-    step2 = steps.get("2_tune", {})
-    step3 = steps.get("3_gate_fire", {})
+    # === Dados ambientais e TUNE ===
+    env  = _get_ativo_env(ticker)
+    tune = _parse_tune_historico(env["historico_config"])
 
-    criterios = gate_resultado.get("criterios", [])
-    falhas = gate_resultado.get("falhas", [])
+    # === Dados do gate / fire ===
+    criterios     = gate_resultado.get("criterios") or []
+    resultado_gate = gate_resultado.get("resultado") or "BLOQUEADO"
+    ciclo         = gate_resultado.get("ciclo") or datetime.now().strftime("%Y-%m")
+    fire_diag     = calibracao.get("fire_diagnostico") or {}
+    steps         = calibracao.get("steps") or {}
 
-    # Template do relatório
-    template = f"""# Relatório de Calibração — {ticker} — GATE BLOQUEADO
+    # --- helpers locais ---
+    def _fmt(v, fmt=None):
+        """Formata valor ou retorna 'não disponível' se None."""
+        if v is None:
+            return "não disponível"
+        return f"{v:{fmt}}" if fmt else str(v)
 
-**ID:** {id_str}
-**Data:** {data_hoje}
-**Status:** Calibração incompleta — GATE não aprovou
-**Gerado por:** ATLAS v2.6
+    def _delta(atual, sug):
+        """Calcula delta formatado ou 'N/D'."""
+        if atual is None or sug is None:
+            return "N/D"
+        return f"{sug - atual:+.2f}"
 
----
+    # =========================================================
+    # Seção 1 — IDENTIFICAÇÃO
+    # =========================================================
+    sec1 = (
+        f"# Relatório de Calibração — {ticker} — {resultado_gate}\n"
+        f"**ID:** {id_str}  **Data:** {data_hoje}  **Ciclo:** {ciclo}\n"
+        f"**Sistema:** Delta Chaos v1.0 / ATLAS v2.6\n"
+        f"**Gerado por:** ATLAS\n\n"
+        f"| Campo | Valor |\n"
+        f"|-------|-------|\n"
+        f"| IV Rank (último ciclo) | {_fmt(env['iv_rank'])} |\n"
+        f"| Regime ORBIT atual | {_fmt(env['regime'])} |\n"
+        f"| Estado REFLECT atual | {_fmt(env['reflect_state'])} |\n"
+    )
 
-## Resumo
+    # =========================================================
+    # Seção 2 — GATE — CRITÉRIOS
+    # =========================================================
+    if criterios:
+        rows_gate = ""
+        for c in criterios:
+            icon = "✓" if c.get("passou") else "✗"
+            rows_gate += (
+                f"| {c.get('id', 'N/D')} — {c.get('nome', 'N/D')} "
+                f"| {c.get('valor', 'N/D')} | {icon} |\n"
+            )
 
-A calibração do ativo **{ticker}** foi interrompida na etapa de GATE.
-O sistema de validação histórica identificou falhas nos critérios mínimos
-necessários para operação.
+        resultado_icon = (
+            "✗ BLOQUEADO" if resultado_gate == "BLOQUEADO"
+            else f"✓ {resultado_gate}"
+        )
 
-**Resultado GATE:** BLOQUEADO
+        falhas_block = ""
+        if resultado_gate == "BLOQUEADO":
+            falhou = [c for c in criterios if not c.get("passou")]
+            if falhou:
+                falhas_block = "\n### Critérios que falharam\n\n"
+                for c in falhou:
+                    falhas_block += (
+                        f"- **{c.get('id', 'N/D')} — {c.get('nome', 'N/D')}**: "
+                        f"observado `{c.get('valor', 'N/D')}` (threshold não atingido)\n"
+                    )
 
----
+        sec2 = (
+            "## GATE — Critérios de Validação\n\n"
+            "| Critério | Valor observado | Resultado |\n"
+            "|----------|-----------------|-----------|\n"
+            f"{rows_gate}\n"
+            f"**Resultado:** {resultado_icon}\n"
+            f"{falhas_block}"
+        )
+    else:
+        sec2 = (
+            "## GATE — Critérios de Validação\n\n"
+            "Detalhamento de critérios não disponível — "
+            "verificar gate_resultado no JSON do ativo.\n"
+        )
 
-## Critérios que Falharam
+    # =========================================================
+    # Seção 3 — TUNE — PARÂMETROS CALIBRADOS
+    # =========================================================
+    tp_atual   = env["take_profit"]
+    stop_atual = env["stop_loss"]
 
-| ID | Critério | Status |
-|{"|---|---|---|"}
-"""
-    for c in criterios:
-        status_icon = "✗ FALHOU" if not c.get("passou") else "✓ OK"
-        template += f"| {c.get('id', 'N/D')} | {c.get('nome', 'N/D')} | {status_icon} |\n"
+    if tune["tp_sug"] is not None or tune["stop_sug"] is not None:
+        # Janela
+        if tune["janela_anos"] is not None and tune["ano_ini"] is not None:
+            janela_str = f"{tune['janela_anos']} anos ({tune['ano_ini']}–{tune['ano_fim']})"
+        else:
+            janela_str = "não disponível"
 
-    template += f"""
----
+        # Trials
+        if tune["trials_feitos"] is not None and tune["trials_total"] is not None:
+            trials_str = f"{tune['trials_feitos']}/{tune['trials_total']}"
+            if tune["early_stop"]:
+                trials_str += " — early stop"
+        else:
+            trials_str = "não disponível"
 
-## Detalhamento dos Critérios
+        # REFLECT mask
+        if tune["reflect_real"] is not None and tune["total_ciclos"] is not None and tune["total_ciclos"] > 0:
+            pct_real = tune["reflect_real"] / tune["total_ciclos"] * 100
+            reflect_str = f"{tune['reflect_real']} ciclos de {tune['total_ciclos']} ({pct_real:.0f}%)"
+        else:
+            reflect_str = "não disponível"
 
-"""
-    for c in criterios:
-        if not c.get("passou"):
-            template += f"### {c.get('id')} — {c.get('nome', 'N/D')}\n"
-            template += f"- **Status:** ✗ FALHOU\n"
-            template += f"- **Valor observado:** {c.get('valor', 'N/D')}\n"
-            template += f"- **Recomendação:** Revisar parâmetros ou aguardar mais dados históricos\n\n"
+        sec3 = (
+            "## TUNE — Parâmetros Calibrados\n\n"
+            "| Parâmetro | Atual | Sugerido | Delta |\n"
+            "|-----------|-------|----------|-----------|\n"
+            f"| TP | {_fmt(tp_atual, '.2f')} | {_fmt(tune['tp_sug'], '.2f')} | {_delta(tp_atual, tune['tp_sug'])} |\n"
+            f"| STOP | {_fmt(stop_atual, '.2f')} | {_fmt(tune['stop_sug'], '.2f')} | {_delta(stop_atual, tune['stop_sug'])} |\n\n"
+            f"- **IR válido:** {_fmt(tune['ir'])}\n"
+            f"- **N trades (janela):** {_fmt(tune['n_trades'])}\n"
+            f"- **Confiança:** {_fmt(tune['confianca'])}\n"
+            f"- **Janela:** {janela_str}\n"
+            f"- **Trials:** {trials_str}\n"
+            f"- **Máscara REFLECT:** {reflect_str}\n"
+        )
+    else:
+        sec3 = (
+            "## TUNE — Parâmetros Calibrados\n\n"
+            "TUNE não executado neste ciclo.\n"
+        )
 
-    template += f"""---
+    # =========================================================
+    # Seção 4 — EDGE POR REGIME
+    # =========================================================
+    regimes = fire_diag.get("regimes") or []
+    if regimes:
+        rows_fire = ""
+        for r in regimes:
+            n = r.get("trades") or 0
+            aviso = " ⚠ amostra insuficiente" if n < 10 else ""
+            rows_fire += (
+                f"| {r.get('regime', 'N/D')} | {n}{aviso} "
+                f"| {r.get('acerto_pct', 0):.1f}% "
+                f"| {r.get('ir', 0):.2f} "
+                f"| {r.get('estrategia_dominante', 'N/D')} |\n"
+            )
+        sec4 = (
+            "## Edge por Regime\n\n"
+            "| Regime | N trades | Acerto % | IR | Estratégia dominante |\n"
+            "|--------|----------|----------|----|----------------------|\n"
+            f"{rows_fire}"
+        )
+    else:
+        sec4 = (
+            "## Edge por Regime\n\n"
+            "Diagnóstico FIRE não disponível — GATE bloqueou antes do FIRE.\n"
+        )
 
-## Estado dos Steps
+    # =========================================================
+    # Seção 5 — LIMITAÇÕES CONHECIDAS
+    # =========================================================
+    limitacoes = []
 
-| Step | Módulo | Status | Iniciado | Concluído |
-|{"|---|---|---|---|---|"}
-| 1 | backtest_dados | {step1.get('status', 'N/D')} | {step1.get('iniciado_em', '-')} | {step1.get('concluido_em', '-')} |
-| 2 | tune | {step2.get('status', 'N/D')} | {step2.get('iniciado_em', '-')} | {step2.get('concluido_em', '-')} |
-| 3 | gate_fire | {step3.get('status', 'N/D')} | {step3.get('iniciado_em', '-')} | {step3.get('concluido_em', '-')} |
+    n_trades  = tune["n_trades"]
+    confianca = tune["confianca"]
+    if n_trades is not None:
+        if n_trades < 20 or (confianca and confianca != "Alta"):
+            msg = f"PE-001 (confiança estatística): N trades = {n_trades}"
+            if confianca and confianca != "Alta":
+                msg += f", confiança = {confianca}"
+            msg += " — resultado com validade limitada."
+            limitacoes.append(msg)
+    else:
+        limitacoes.append(
+            "PE-001 (confiança estatística): dados de TUNE não disponíveis para avaliação."
+        )
 
----
+    if tune["reflect_masked"] is not None and tune["total_ciclos"] and tune["total_ciclos"] > 0:
+        pct_masked = tune["reflect_masked"] / tune["total_ciclos"] * 100
+        if pct_masked > 30:
+            limitacoes.append(
+                f"PE-005/PE-006 (pesos REFLECT): {pct_masked:.0f}% dos ciclos foram mascarados "
+                "— IR válido pode estar inflado."
+            )
 
-## Recomendações
+    if tune["janela_anos"] is not None and tune["janela_anos"] <= 3:
+        limitacoes.append(
+            f"Janela curta ({tune['janela_anos']} anos) — "
+            "eventos extremos históricos podem estar fora da amostra."
+        )
 
-1. **Não operar** este ativo até que GATE seja aprovado
-2. Revisar parâmetros de TP/STOP sugeridos pelo TUNE
-3. Aguardar mais ciclos de dados históricos para validação
-4. Considerar reexecutar TUNE com janela de teste diferente
+    if not limitacoes:
+        limitacoes.append("Nenhuma limitação crítica identificada neste ciclo.")
 
----
+    lim_lines = "\n".join(
+        f"- **{l}**" if l.startswith("PE-") else f"- {l}"
+        for l in limitacoes
+    )
+    motivo_final = gate_resultado.get("motivo") or "verificar gate_resultado"
+    sec5 = (
+        "## Limitações Conhecidas\n\n"
+        f"{lim_lines}\n\n"
+        f"**Resultado final:** {resultado_gate} — {motivo_final}\n"
+    )
 
-## Dados Técnicos
+    # =========================================================
+    # Montar template completo
+    # =========================================================
+    template = (
+        sec1 + "\n---\n\n" +
+        sec2 + "\n---\n\n" +
+        sec3 + "\n---\n\n" +
+        sec4 + "\n---\n\n" +
+        sec5 +
+        "\n---\n\n*Este relatório foi gerado automaticamente pelo sistema ATLAS.*\n"
+    )
 
-```json
-{json.dumps({
-    "ticker": ticker,
-    "id": id_str,
-    "data": data_hoje,
-    "tipo": "CALIB_GATE_BLOQUEADO",
-    "gate_resultado": gate_resultado,
-    "calibracao_steps": steps,
-    "falhas": falhas
-}, indent=2, ensure_ascii=False)}
-```
+    # Escrita atômica: temp → replace
+    RELATORIOS_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(RELATORIOS_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(template)
+        os.replace(tmp_path, path_rel)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
----
-
-*Este relatório foi gerado automaticamente pelo sistema ATLAS.*
-*Para retomar a calibração, utilize o endpoint /delta-chaos/calibracao/{{ticker}}/retomar*
-"""
-
-    with open(path_rel, "w", encoding="utf-8") as f:
-        f.write(template)
-
+    # Atualizar index.json
     entry = {
         "id": id_str,
         "ticker": ticker,
@@ -342,7 +611,6 @@ necessários para operação.
         "gate_resultado": gate_resultado,
         "steps": steps,
     }
-
     index = _carregar_index()
     index.append(entry)
     _salvar_index(index)

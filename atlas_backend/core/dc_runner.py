@@ -13,7 +13,6 @@ import json
 import os
 import re
 import sys
-import threading
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -466,65 +465,6 @@ async def dc_orbit_backtest(ticker: str, anos: Optional[list] = None) -> dict:
 async def dc_tune(ticker: str) -> dict:
     action_payload = {"ticker": ticker}
     emit_dc_event("dc_module_start", "TUNE", "running", **action_payload)
-    
-    sqlite_stop = threading.Event()
-    db_path = TMP_DIR / f"tune_{ticker}.db"
-    
-    def _poll_sqlite(db_path, stop_event, action_payload):
-        import sqlite3
-        import time
-        last_count = -1
-        TOTAL = 200
-        while not stop_event.is_set():
-            try:
-                if db_path.exists():
-                    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
-                    try:
-                        cur = conn.cursor()
-                        cur.execute("SELECT COUNT(*) FROM trials WHERE state = 'COMPLETE'")
-                        count = cur.fetchone()[0]
-                        cur.execute("""
-                            SELECT COALESCE(MAX(tv.value), 0.0)
-                            FROM trial_values tv
-                            JOIN trials t ON tv.trial_id = t.trial_id
-                            WHERE t.state = 'COMPLETE'
-                        """)
-                        row = cur.fetchone()
-                        best = row[0] if row and row[0] is not None else 0.0
-
-                        if count != last_count:
-                            last_count = count
-                            best_tp, best_stop = None, None
-                            cur.execute("""
-                                SELECT tp.param_name, tp.param_value
-                                FROM trial_params tp
-                                JOIN trials t ON tp.trial_id = t.trial_id
-                                JOIN trial_values tv ON tv.trial_id = t.trial_id
-                                WHERE t.state = 'COMPLETE' AND tv.value = ?
-                                AND tp.param_name IN ('tp', 'stop')
-                            """, (float(best),))
-                            params = {r[0]: r[1] for r in cur.fetchall()}
-                            if "tp" in params:
-                                best_tp = round(float(params["tp"]), 2)
-                            if "stop" in params:
-                                best_stop = round(float(params["stop"]), 2)
-                            emit_dc_event(
-                                "dc_tune_progress", "TUNE", "running",
-                                trial=count, total=TOTAL, ir=round(float(best), 3),
-                                best_tp=best_tp, best_stop=best_stop,
-                                **action_payload
-                            )
-                    finally:
-                        conn.close()
-            except Exception:
-                pass
-            time.sleep(0.2)
-            
-    sqlite_thread = threading.Thread(
-        target=_poll_sqlite, args=(db_path, sqlite_stop, action_payload), daemon=True
-    )
-    sqlite_thread.start()
-    
     try:
         await asyncio.to_thread(edge.rodar_tune, ticker)
         emit_dc_event("dc_module_complete", "TUNE", "ok", **action_payload)
@@ -535,9 +475,6 @@ async def dc_tune(ticker: str) -> dict:
         emit_log(f"[TUNE] {ticker}: erro — {e}", level="error")
         log_action("dc_tune", action_payload, {"status": "ERRO", "error": repr(e)})
         return {"status": "ERRO", "output": repr(e)}
-    finally:
-        sqlite_stop.set()
-        sqlite_thread.join(timeout=2)
 
 async def dc_gate_backtest(ticker: str) -> dict:
     action_payload = {"ticker": ticker}

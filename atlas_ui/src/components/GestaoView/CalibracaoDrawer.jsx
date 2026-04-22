@@ -11,9 +11,9 @@ const PULSE_ANIMATION = `
 `;
 
 const STEPS = [
-  { id: "1_backtest_dados", label: "backtest_dados", modulo: "ORBIT" },
-  { id: "2_tune", label: "tune", modulo: "TUNE" },
-  { id: "3_gate_fire", label: "gate + fire", modulo: "GATE" },
+  { id: "1_backtest_dados", label: "backtest_dados", name: "Integridade de dados", modulo: "ORBIT" },
+  { id: "2_tune", label: "tune", name: "Parametrização", modulo: "TUNE" },
+  { id: "3_gate_fire", label: "gate + fire", name: "Validação", modulo: "GATE" },
 ];
 
 const DEFAULT_STEPS = {
@@ -125,6 +125,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   const [fireDiag, setFireDiag] = useState(null);
   const [cotahistInfo, setCotahistInfo] = useState(null);
   const [showStep1Guard, setShowStep1Guard] = useState(false);
+  const [subModules, setSubModules] = useState({ TAPE: null, ORBIT: null, REFLECT: null });
 
   const proximoStep = useMemo(() => {
     let ultimoDone = -1;
@@ -193,6 +194,18 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
       if (data?.fire_diagnostico) setFireDiag(data.fire_diagnostico);
       if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
       if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
+
+      // Carregar TP/Stop persistido se step 2 já concluiu
+      if (step2Data?.status === "done") {
+        try {
+          const ativoRes = await fetch(`${API_BASE}/ativos/${ticker}`);
+          if (ativoRes.ok) {
+            const ativoData = await ativoRes.json();
+            if (ativoData?.take_profit != null) setBestTp(Number(ativoData.take_profit));
+            if (ativoData?.stop_loss != null) setBestStop(Number(ativoData.stop_loss));
+          }
+        } catch (e) { /* ignora */ }
+      }
 
       // Fallback: se step 3 está done mas não tem gateResult, buscar via endpoint
       const step3Status = step3Data?.status || persistedSteps["3_gate_fire"]?.status;
@@ -265,6 +278,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
 
     if (evento?.type === "dc_module_start") {
       if (modulo === "ORBIT" || modulo === "TAPE" || modulo === "REFLECT") {
+        setSubModules((prev) => ({ ...prev, [modulo]: "running" }));
         setSteps((prev) => ({
           ...prev,
           "1_backtest_dados": {
@@ -286,8 +300,12 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
         setStep2IniciadoEm(Date.now());
         setIndexProgress({ current: 0, total: 0 });
         setIndexComplete(false);
+        setTrialAtual(0);
+        setTrialTotal(200);
+        setBestIr(0);
         setBestTp(null);
         setBestStop(null);
+        setSubModules({ TAPE: null, ORBIT: null, REFLECT: null });
       }
       if (modulo === "GATE") {
         setStep3Fase(STEP3_FASES.GATE);
@@ -308,6 +326,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
     if (evento?.type === "dc_module_complete") {
       if (modulo === "ORBIT" || modulo === "TAPE" || modulo === "REFLECT") {
         const ok = evento?.data?.status === "ok";
+        setSubModules((prev) => ({ ...prev, [modulo]: ok ? "ok" : "error" }));
         setSteps((prev) => ({
           ...prev,
           "1_backtest_dados": {
@@ -517,6 +536,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
   }
 
   async function handleExportarRelatorioBackend() {
+    // Tenta enriquecer via backend; sempre cai no fallback client-side se falhar
     try {
       const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}/exportar-relatorio`, {
         method: "POST",
@@ -525,20 +545,21 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
       if (res.ok) {
         const data = await res.json();
         if (data.caminho) {
-          const filename = data.arquivo;
-          const markdown = buildMarkdownReport({
-            ticker,
-            cycle: gateResult?.ciclo || new Date().toISOString().slice(0, 7),
-            gateResult: data.gate_resultado,
-            fireDiag: data.fire_diagnostico,
-          });
-          downloadTextFile(filename, markdown);
+          downloadTextFile(
+            data.arquivo,
+            buildMarkdownReport({
+              ticker,
+              cycle: gateResult?.ciclo || new Date().toISOString().slice(0, 7),
+              gateResult: data.gate_resultado || gateResult,
+              fireDiag: data.fire_diagnostico || fireDiag,
+            })
+          );
+          return;
         }
       }
-    } catch (error) {
-      console.error("Erro ao exportar relatório via backend:", error);
-      handleExport();
-    }
+    } catch (_) { /* ignora — cai no fallback */ }
+    // Fallback: geração client-side com dados disponíveis no estado
+    handleExport();
   }
 
   function elapsedForStep2() {
@@ -603,8 +624,36 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
             {visual.label}
           </div>
           <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
-            {getStepLabel(stepId)}
+            {STEPS.find((s) => s.id === stepId)?.name || getStepLabel(stepId)}
           </div>
+          {stepId === "1_backtest_dados" && (() => {
+            // Se step concluído, sempre mostrar todos ok; senão mostrar o que chegou via WS
+            if (status === "done") {
+              return (
+                <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+                  TAPE ok | ORBIT ok | REFLECT ok
+                </div>
+              );
+            }
+            // Quando running: mostrar os 3 sempre (mesmo que evento tenha sido perdido)
+            // Quando idle: não mostrar nada
+            if (status !== "running") return null;
+            const parts = ["TAPE", "ORBIT", "REFLECT"].map((m) => {
+              if (subModules[m] === "ok") return `${m} ok`;
+              if (subModules[m] === "error") return `${m} erro`;
+              return m;
+            });
+            return (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+                {parts.join(" | ")}
+              </div>
+            );
+          })()}
+          {stepId === "2_tune" && (bestTp != null || bestStop != null) && (
+            <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+              {`TP ${bestTp != null ? Number(bestTp).toFixed(2) : "--"} | STOP ${bestStop != null ? Number(bestStop).toFixed(2) : "--"}`}
+            </div>
+          )}
           <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
             {getStepDescription(stepId)}
             {stepDone && getStepDuration(stepId) ? ` · ${getStepDuration(stepId)}` : ""}
@@ -774,13 +823,32 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
                 </>
               )}
 
-              {/* Botão exportar */}
-              {(gateResult || fireDiag) && (
+              {/* Botão exportar — sempre visível quando step 3 não está idle */}
+              {steps["3_gate_fire"]?.status !== "idle" && (
                 <button
                   onClick={handleExportarRelatorioBackend}
-                  style={{ marginTop: 8, width: "100%", padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                  style={{
+                    marginTop: 10,
+                    width: "100%",
+                    padding: "7px 12px",
+                    background: "transparent",
+                    border: "1px solid var(--atlas-blue)",
+                    color: "var(--atlas-blue)",
+                    fontFamily: "monospace",
+                    fontSize: 9,
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  Exportar relatório .md
+                  <span style={{ fontSize: 11 }}>↓</span> Exportar relatório .md
                 </button>
               )}
             </>
@@ -865,9 +933,11 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={handleExportarRelatorioBackend}
-                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+                style={{ flex: 1, padding: "6px 10px", background: "transparent", border: "1px solid var(--atlas-blue)", color: "var(--atlas-blue)", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
-                Exportar relatório GATE
+                ↓ Exportar relatório
               </button>
               <button
                 onClick={onClose}
@@ -884,15 +954,6 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           {STEPS.map((step) => renderStepCard(step.id))}
         </div>
 
-        {/* Botão iniciar (quando step 1 está idle e sem guard) */}
-        {steps["1_backtest_dados"]?.status === "idle" && !showStep1Guard && (
-          <button
-            onClick={handleIniciar}
-            style={{ width: "100%", padding: "8px 16px", background: "var(--atlas-blue)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 11, borderRadius: 4, cursor: "pointer", marginBottom: 8 }}
-          >
-            Iniciar calibração
-          </button>
-        )}
       </div>
       <style>{PULSE_ANIMATION}</style>
     </>

@@ -3,7 +3,7 @@
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "nvidia/z-ai/glm5",
+      "model": "nvidia/z-ai/glm-5.1",
       "temperature": 0.1,
       "top_p": 0.1,
       "max_tokens": 16384,

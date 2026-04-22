@@ -298,3 +298,27 @@
 {"timestamp": "2026-04-17T10:10:26.592049", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-17T10:11:49.042187", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
 {"timestamp": "2026-04-17T23:10:15.007568", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-17T23:22:39.508353", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-17T23:24:12.129479", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
+{"timestamp": "2026-04-22T10:17:48.889084", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:17:49.050359", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:17:49.112251", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBDC4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:17:49.169174", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:26:11.558879", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:34:49.631949", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T10:35:38.169795", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
+{"timestamp": "2026-04-22T11:22:42.893986", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T11:23:00.231931", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T11:44:41.360908", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T11:52:13.401312", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T11:55:27.741675", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T11:56:59.458410", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PETR4"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
+{"timestamp": "2026-04-22T12:03:24.677897", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T12:04:21.284531", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T12:27:51.329421", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PETR4", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T13:10:10.700705", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "BOVA11", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T13:13:40.956136", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "BOVA11"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T13:14:17.324279", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "BOVA11"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
+{"timestamp": "2026-04-22T13:30:05.501205", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "BOVA11", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T13:33:54.511229", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "BOVA11"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-22T13:34:39.177529", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "BOVA11"}, "response": {"status": "ERRO", "error": "KeyError('blocked')"}}
