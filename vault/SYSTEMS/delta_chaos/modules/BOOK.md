@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-004
-version: 1.2.1
+version: 1.2.2
 status: validated
 owner: Chan
 
@@ -39,6 +39,7 @@ constraints:
   - fechar() aplica slippage_aplicado no P&L — nao ignora slippage
 
 notes:
+  - 2026-04-22: código modificado — book.py
   - 2026-04-13: código modificado — book.py
   - Dashboard exibe Edge state, score e historico dos ultimos N estados por ativo
   - Tendencia dos componentes diarios no dashboard — implementacao pendente Chan

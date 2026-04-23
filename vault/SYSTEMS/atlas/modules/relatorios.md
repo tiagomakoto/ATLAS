@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-019
-version: 1.0.3
+version: 1.0.4
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - marcar_aplicado atualiza campo aplicado=True e data_aplicado no index.json
 
 notes:
+  - 2026-04-22: código modificado — relatorios.py
   - 2026-04-22: código modificado — relatorios.py
   - 2026-04-17: código modificado — relatorios.py
   - Funções públicas: gerar_relatorio, marcar_aplicado, obter_relatorio, obter_todos_relatorios, gerar_relatorio_tune, gerar_diagnostico_executivo, formatar_relatorio_markdown

@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-006
-version: 1.0.6
+version: 1.0.7
 status: validated
 owner: Chan
 
@@ -46,6 +46,7 @@ constraints:
   - anos_validos por ativo no master JSON — nao global
 
 notes:
+  - 2026-04-22: código modificado — gate.py
   - 2026-04-17: código modificado — gate.py
   - 2026-04-16: código modificado — gate_eod.py
   - 2026-04-16: código modificado — gate.py

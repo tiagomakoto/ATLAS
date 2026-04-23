@@ -22,11 +22,29 @@ from delta_chaos.edge import EDGE
 # ── Logging ATLAS (graceful fallback) ─────────────────────────────────
 try:
     from atlas_backend.core.terminal_stream import emit_log, emit_error
+    from atlas_backend.core.event_bus import emit_event as _emit_event
     _atlas_disponivel = True
 except ImportError:
     def emit_log(msg, level="info"): print(f"[{level.upper()}] {msg}")
     def emit_error(e): print(f"[ERROR] {e}")
+    def _emit_event(e): pass
     _atlas_disponivel = False
+
+
+def _emit_criterio(ticker: str, idx: int, eid: str, nome: str, passou: bool, valor: str) -> None:
+    """Emite evento de critério individual do GATE para o frontend."""
+    _emit_event({
+        "type": "dc_gate_criterion",
+        "data": {
+            "ticker": ticker,
+            "index": idx,
+            "total": 8,
+            "id": eid,
+            "nome": nome,
+            "passou": passou,
+            "valor": valor,
+        }
+    })
 
 
 
@@ -170,6 +188,7 @@ def gate_executar(ticker: str) -> str:
     print(f"  Gregas parquet:  {n_gregas} arquivos")
     print(f"  Anos cobertos:   {anos_cobertos}")
     print(f"  {gate(e0_passou, 'cobertura mínima OK')}")
+    _emit_criterio(TICKER, 0, "E0", "Integridade", e0_passou, f"{n_ciclos} ciclos, {n_gregas} gregas")
 
     if not e0_passou:
         emit_log(f"✗ GATE 0 FALHOU — corrigir antes de avançar", level='error')
@@ -204,6 +223,7 @@ def gate_executar(ticker: str) -> str:
     e1_passou = ir_max_valido >= IR_GATE_E1
     print(f"\n  IR máximo janela válida: {ir_max_valido:+.3f}")
     print(f"  {gate(e1_passou, f'IR >= {IR_GATE_E1} em pelo menos um regime')}")
+    _emit_criterio(TICKER, 1, "E1", "Regime", e1_passou, f"IR_max={ir_max_valido:+.3f}")
 
     # ── ETAPA 2 — Diagnóstico de acerto ───────────────────────────────
     print(f"\n  ETAPA 2 — Diagnóstico de acerto por regime")
@@ -218,14 +238,18 @@ def gate_executar(ticker: str) -> str:
           f"{breakeven*100:.1f}%")
 
     e2_passou = False
+    _melhor_acerto_e2 = 0.0
     for regime in valido["regime_entrada"].unique():
         r = valido[valido["regime_entrada"] == regime]
         acerto = (r["pnl"] > 0).mean()
         passou = acerto >= breakeven
         if passou:
             e2_passou = True
+        if acerto > _melhor_acerto_e2:
+            _melhor_acerto_e2 = acerto
         print(f"  {regime:20} acerto={acerto*100:.1f}%  "
               f"{gate(passou, 'acerto >= break-even')}")
+    _emit_criterio(TICKER, 2, "E2", "Acerto", e2_passou, f"acerto={_melhor_acerto_e2*100:.1f}% (breakeven={breakeven*100:.1f}%)")
 
     # ── ETAPA 3 — Estratégias por regime ──────────────────────────────
     print(f"\n  ETAPA 3 — Estratégias por regime")
@@ -245,6 +269,7 @@ def gate_executar(ticker: str) -> str:
 
     e3_passou = valido["pnl"].sum() > 0
     print(f"\n  {gate(e3_passou, 'P&L total positivo na janela válida')}")
+    _emit_criterio(TICKER, 3, "E3", "Estratégia", e3_passou, f"P&L=R${valido['pnl'].sum():+,.2f}")
 
     # ── ETAPA 4 — Sensibilidade TP e STOP ────────────────────────────
     print(f"\n  ETAPA 4 — Sensibilidade de TP e STOP")
@@ -318,6 +343,7 @@ def gate_executar(ticker: str) -> str:
           f"(TP={melhor_e4['tp']:.2f} "
           f"STOP={melhor_e4['stop']:.1f}x)")
     print(f"  {gate(e4_passou, f'IR >= {IR_GATE_E4} em alguma combinação')}")
+    _emit_criterio(TICKER, 4, "E4", "TP e STOP", e4_passou, f"IR={melhor_e4['ir']:+.3f}")
 
     # ── ETAPA 5 — Sensibilidade ORBIT ────────────────────────────────
     print(f"\n  ETAPA 5 — Sensibilidade do ORBIT")
@@ -347,6 +373,7 @@ def gate_executar(ticker: str) -> str:
 
     e5_passou = estavel and pnl_ano_anterior > 0 and pnl_ano_mais_recente > 0
     print(f"  {gate(e5_passou, 'IR estável e P&L positivo em ambos os anos')}")
+    _emit_criterio(TICKER, 5, "E5", "ORBIT", e5_passou, f"IR({ano_anterior})={ir_ano_anterior:+.3f}, IR({ano_mais_recente})={ir_ano_atual:+.3f}")
 
     # ── ETAPA 6 — Séries externas ─────────────────────────────────────
     print(f"\n  ETAPA 6 — Séries externas")
@@ -359,6 +386,7 @@ def gate_executar(ticker: str) -> str:
     print(f"  Nota: teste isolado de minerio pendente na to-do list")
     e6_passou = True  # configuração atual validada em sessões anteriores
     print(f"  {gate(e6_passou, 'externas configuradas e validadas')}")
+    _emit_criterio(TICKER, 6, "E6", "Externas", e6_passou, f"usdbrl={'ativo' if externas.get('usdbrl') else 'inativo'}, minerio={'ativo' if externas.get('minerio') else 'inativo'}")
 
     # ── ETAPA 7 — Stress test ─────────────────────────────────────────
     print(f"\n  ETAPA 7 — Stress test")
@@ -410,6 +438,7 @@ def gate_executar(ticker: str) -> str:
 
     e7_passou = max_dd <= dd_limite and max_seq <= 3
     print(f"  {gate(e7_passou, f'drawdown <= {DD_GATE_E7}x esperado e stops <= 3')}")
+    _emit_criterio(TICKER, 7, "E7", "Stress", e7_passou, f"DD_max=R${max_dd:,.2f}, stops_seguidos={max_seq}")
     print(f"\n  Nota Q5: backtest assume execução no fechamento.")
     print(f"  Gap risk não modelado — em eventos de cauda,")
     print(f"  abertura do dia seguinte pode ser significativa-")
@@ -430,6 +459,22 @@ def gate_executar(ticker: str) -> str:
         "E5 — ORBIT":           e5_passou,
         "E6 — Externas":        e6_passou,
         "E7 — Stress":          e7_passou,
+    }
+
+    melhor_acerto = max(
+        ((valido[valido["regime_entrada"] == r]["pnl"] > 0).mean()
+         for r in valido["regime_entrada"].unique()),
+        default=0.0,
+    )
+    gate_valores = {
+        "E0 — Integridade": f"{n_ciclos} ciclos, {n_gregas} gregas",
+        "E1 — Regime":      f"IR_max={ir_max_valido:+.3f}",
+        "E2 — Acerto":      f"acerto={melhor_acerto*100:.1f}% (breakeven={breakeven*100:.1f}%)",
+        "E3 — Estratégia":  f"P&L=R${valido['pnl'].sum():+,.2f}",
+        "E4 — TP e STOP":   f"IR={melhor_e4['ir']:+.3f}",
+        "E5 — ORBIT":       f"IR({ano_anterior})={ir_ano_anterior:+.3f}, IR({ano_mais_recente})={ir_ano_atual:+.3f}",
+        "E6 — Externas":    f"usdbrl={'ativo' if externas.get('usdbrl') else 'inativo'}, minerio={'ativo' if externas.get('minerio') else 'inativo'}",
+        "E7 — Stress":      f"DD_max=R${max_dd:,.2f}, stops_seguidos={max_seq}",
     }
 
     todos_passaram = all(gates.values())
@@ -459,17 +504,33 @@ def gate_executar(ticker: str) -> str:
     if "historico_config" not in dados:
         dados["historico_config"] = []
     dados["historico_config"].append({
-        "data": str(datetime.now())[:10],
-        "modulo": "GATE v1.0",
-        "parametro": "gate_decisao",
-        "valor_novo": decisao_final,
-        "resultado": decisao_final,
+        "data":            str(datetime.now())[:10],
+        "modulo":          "GATE v1.0",
+        "parametro":       "gate_decisao",
+        "valor_novo":      decisao_final,
+        "resultado":       decisao_final,
         "gates_aprovados": n_passou,
-        "motivo": f"GATE completo — {n_passou}/8 gates aprovados"
+        "motivo":          f"GATE completo — {n_passou}/8 gates aprovados",
+        "gate_valores":    gate_valores,
+        "n_trades_valido": len(valido),
+        "pnl_total":       round(float(valido["pnl"].sum()), 4),
+        "pnl_medio":       round(float(valido["pnl"].mean()), 4) if len(valido) > 0 else None,
+        "pnl_mediana":     round(float(valido["pnl"].median()), 4) if len(valido) > 0 else None,
+        "pnl_pior":        round(float(valido["pnl"].min()), 4) if len(valido) > 0 else None,
+        "dd_max":          round(float(max_dd), 4),
+        "stops_seguidos":  max_seq,
+        "estrategia_por_regime": {
+            r: (valido[valido["regime_entrada"] == r]["estrategia"]
+                .value_counts().index[0]
+                if "estrategia" in valido.columns
+                and len(valido[valido["regime_entrada"] == r]) > 0
+                else None)
+            for r in valido["regime_entrada"].unique()
+        },
     })
     tape_ativo_salvar(TICKER, dados)
 
-    return decisao_final
+    return {"decisao": decisao_final, "gates": gates, "gate_valores": gate_valores, "n_passou": n_passou}
 
     print(f"\n {sep}")
 
@@ -479,4 +540,4 @@ if __name__ == "__main__":
     t = (sys.argv[1] if len(sys.argv) > 1
          else input("Ticker para análise GATE: ").strip().upper())
     resultado = gate_executar(t)
-    print(f"\n  Resultado final: {resultado}")
+    print(f"\n  Resultado final: {resultado.get('decisao', resultado)}")

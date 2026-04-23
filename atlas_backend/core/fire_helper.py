@@ -72,35 +72,56 @@ def compute_fire_diagnostico(ticker: str) -> Dict[str, Any]:
     if df_book.empty:
         rows = []
     else:
-        # Normaliza colunas
-        df_ticker = df_book[df_book.get("ativo") == ticker].copy()
-        if df_ticker.empty:
-            # Tenta via 'core'
-            if "core" in df_book.columns:
-                df_ticker = df_book[df_book["core"].apply(
-                    lambda x: isinstance(x, dict) and x.get("ativo") == ticker
-                )].copy()
+        # Suporte a schema plano (colunas diretas) e aninhado (core/orbit dicts)
+        has_flat = "ativo" in df_book.columns
+        has_nested = "core" in df_book.columns
+
+        if has_flat:
+            df_ticker = df_book[df_book["ativo"] == ticker].copy()
+        elif has_nested:
+            df_ticker = df_book[df_book["core"].apply(
+                lambda x: isinstance(x, dict) and x.get("ativo") == ticker
+            )].copy()
+        else:
+            df_ticker = pd.DataFrame()
 
         rows = []
         for _, row in df_ticker.iterrows():
-            core = row.get("core", {}) if isinstance(row.get("core"), dict) else {}
-            orbit = row.get("orbit", {}) if isinstance(row.get("orbit"), dict) else {}
+            if has_flat:
+                motivo_saida = row.get("motivo_saida")
+                motivo_nao_entrada = row.get("motivo_nao_entrada")
+                regime = row.get("regime_entrada") or "DESCONHECIDO"
+                estrategia = row.get("estrategia")
+                pnl = _safe_float(row.get("pnl"))
+                ciclo_id = row.get("ciclo") or row.get("ciclo_id")
+                data_entrada = row.get("data_entrada")
+                data_saida = row.get("data_saida")
+            else:
+                core = row.get("core", {}) if isinstance(row.get("core"), dict) else {}
+                orbit = row.get("orbit", {}) if isinstance(row.get("orbit"), dict) else {}
+                motivo_saida = core.get("motivo_saida")
+                motivo_nao_entrada = core.get("motivo_nao_entrada")
+                regime = orbit.get("regime_entrada") or orbit.get("regime") or "DESCONHECIDO"
+                estrategia = core.get("estrategia")
+                pnl = _safe_float(core.get("pnl"))
+                ciclo_id = orbit.get("ciclo_id") or core.get("ciclo_id")
+                data_entrada = row.get("data_entrada")
+                data_saida = row.get("data_saida")
 
-            # Ignora trades sem saída (ainda abertos)
-            motivo_saida = core.get("motivo_saida")
-            if motivo_saida is None:
+            # Ignora trades sem saída (abertos) e não-entradas
+            if motivo_saida is None or (isinstance(motivo_saida, float) and pd.isna(motivo_saida)):
                 continue
-            if core.get("motivo_nao_entrada"):
+            if motivo_nao_entrada and not (isinstance(motivo_nao_entrada, float) and pd.isna(motivo_nao_entrada)):
                 continue
 
             rows.append({
-                "regime": orbit.get("regime_entrada") or orbit.get("regime") or "DESCONHECIDO",
-                "estrategia": core.get("estrategia"),
-                "pnl": _safe_float(core.get("pnl")),
-                "ciclo_id": orbit.get("ciclo_id") or core.get("ciclo_id"),
+                "regime": regime,
+                "estrategia": estrategia,
+                "pnl": pnl,
+                "ciclo_id": ciclo_id,
                 "motivo_saida": str(motivo_saida).upper(),
-                "data_entrada": row.get("data_entrada"),
-                "data_saida": row.get("data_saida"),
+                "data_entrada": data_entrada,
+                "data_saida": data_saida,
             })
 
     # ── Fallback para historico ────────────────────────────────────

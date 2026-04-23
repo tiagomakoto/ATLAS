@@ -74,28 +74,58 @@ function statusVisual(status, isNext) {
   return { bg: "rgba(156,163,175,0.1)", border: "var(--atlas-border)", label: "PENDENTE", color: "var(--atlas-text-secondary)" };
 }
 
-function buildMarkdownReport({ ticker, cycle, gateResult, fireDiag }) {
+function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag }) {
   const now = new Date().toISOString().slice(0, 10);
   const header = `# Relatório de Calibração — ${ticker} — ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
-  const gateTableHeader = "## GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n";
-  const gateRows = (gateResult?.criterios || [])
-    .map((c) => `| ${c.id} ${c.nome} | ${c.passou ? "✓" : "✗"} | ${c.valor ?? "N/D"} |`)
-    .join("\n");
-  const gateResultText = `\n\n**Resultado:** ${gateResult?.resultado || "BLOQUEADO"}\n`;
-  if (!fireDiag || !fireDiag.regimes || gateResult?.resultado !== "OPERAR") {
-    return `${header}${gateTableHeader}${gateRows}${gateResultText}`;
+
+  // Step 1 — ORBIT / TAPE / REFLECT
+  const s1 = steps?.["1_backtest_dados"] || {};
+  const s1Status = s1.status === "done" ? "✓ ok" : s1.status === "error" ? `✗ erro: ${s1.erro || "?"}` : "–";
+  const s1Dur = formatDuration(s1.iniciado_em, s1.concluido_em);
+  const step1Section = `## Step 1 — Integridade de dados (ORBIT / TAPE / REFLECT)\n**Status:** ${s1Status}${s1Dur ? ` · duração: ${s1Dur}` : ""}\n`;
+
+  // Step 2 — TUNE
+  const s2 = steps?.["2_tune"] || {};
+  const s2Status = s2.status === "done" ? "✓ ok" : s2.status === "error" ? `✗ erro: ${s2.erro || "?"}` : "–";
+  const s2Dur = formatDuration(s2.iniciado_em, s2.concluido_em);
+  const tuneParams = (bestTp != null || bestStop != null)
+    ? `**Parâmetros:** TP ${bestTp != null ? Number(bestTp).toFixed(2) : "–"} | STOP ${bestStop != null ? Number(bestStop).toFixed(2) : "–"}${bestIr ? ` | IR ${Number(bestIr).toFixed(4)}` : ""}\n`
+    : "";
+  const step2Section = `\n## Step 2 — Parametrização (TUNE)\n**Status:** ${s2Status}${s2Dur ? ` · duração: ${s2Dur}` : ""}\n${tuneParams}`;
+
+  // Step 3 — GATE
+  const gateTableHeader = "\n## Step 3 — Validação (GATE + FIRE)\n### GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n";
+  let gateSection;
+  if (!gateResult) {
+    const errMsg = gateError ? `> GATE falhou com erro: \`${gateError}\`\n` : "> GATE não retornou dados.\n";
+    gateSection = `${gateTableHeader}${errMsg}\n**Resultado:** ERRO\n`;
+  } else {
+    const criterios = gateResult.criterios || [];
+    const gateRows = criterios.length
+      ? criterios.map((c) => `| ${c.id} ${c.nome || ""} | ${c.passou ? "✓" : "✗"} | ${c.valor ?? "N/D"} |`).join("\n")
+      : "";
+    const criteriosVazios = !criterios.length ? "\n> Critérios não disponíveis.\n" : "";
+    const resultadoLabel = gateResult.resultado === "OPERAR" ? "✓ OPERAR" : "✗ BLOQUEADO";
+    gateSection = `${gateTableHeader}${gateRows}${criteriosVazios}\n\n**Resultado:** ${resultadoLabel}\n`;
   }
-  const fireHeader = "\n---\n\n## FIRE — Diagnóstico histórico por regime\n| Regime | Trades | Acerto | IR | Worst trade |\n|--------|--------|--------|----|-------------|\n";
-  const fireRows = fireDiag.regimes
-    .map((r) => `| ${r.regime} | ${r.trades} | ${r.acerto_pct}% | ${r.ir} | ${r.worst_trade ?? "N/D"} |`)
-    .join("\n");
-  const estrategias = fireDiag.regimes
-    .filter((r) => r.estrategia_dominante)
-    .map((r) => `${r.regime} -> ${r.estrategia_dominante}`)
-    .join("\n");
-  const cobertura = fireDiag.cobertura || {};
-  const stops = fireDiag.stops_por_regime || {};
-  return `${header}${gateTableHeader}${gateRows}${gateResultText}${fireHeader}${fireRows}\n\n**Estratégia dominante por regime:**\n${estrategias || "N/D"}\n\n**Cobertura:** ${cobertura.ciclos_com_operacao ?? 0}/${cobertura.total_ciclos ?? 0} ciclos históricos com operação\n**Distribuição de stops:** ${JSON.stringify(stops)}`;
+
+  // Step 3 — FIRE (somente se GATE aprovou)
+  let fireSection = "";
+  if (fireDiag?.regimes?.length && gateResult?.resultado === "OPERAR") {
+    const fireHeader = "\n### FIRE — Diagnóstico histórico por regime\n| Regime | Trades | Acerto | IR | Worst trade |\n|--------|--------|--------|----|-------------|\n";
+    const fireRows = fireDiag.regimes
+      .map((r) => `| ${r.regime} | ${r.trades} | ${r.acerto_pct}% | ${r.ir} | ${r.worst_trade ?? "N/D"} |`)
+      .join("\n");
+    const estrategias = fireDiag.regimes
+      .filter((r) => r.estrategia_dominante)
+      .map((r) => `${r.regime} -> ${r.estrategia_dominante}`)
+      .join("\n");
+    const cobertura = fireDiag.cobertura || {};
+    const stops = fireDiag.stops_por_regime || {};
+    fireSection = `${fireHeader}${fireRows}\n\n**Estratégia dominante por regime:**\n${estrategias || "N/D"}\n\n**Cobertura:** ${cobertura.ciclos_com_operacao ?? 0}/${cobertura.total_ciclos ?? 0} ciclos históricos com operação\n**Distribuição de stops:** ${JSON.stringify(stops)}`;
+  }
+
+  return `${header}${step1Section}${step2Section}${gateSection}${fireSection}`;
 }
 
 function downloadTextFile(filename, content) {
@@ -122,7 +152,9 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   const [indexProgress, setIndexProgress] = useState({ current: 0, total: 0 });
   const [indexComplete, setIndexComplete] = useState(false);
   const [gateResult, setGateResult] = useState(null);
+  const [gateError, setGateError] = useState(null);
   const [fireDiag, setFireDiag] = useState(null);
+  const [gateCriteriosProgresso, setGateCriteriosProgresso] = useState([]);
   const [cotahistInfo, setCotahistInfo] = useState(null);
   const [showStep1Guard, setShowStep1Guard] = useState(false);
   const [subModules, setSubModules] = useState({ TAPE: null, ORBIT: null, REFLECT: null });
@@ -182,18 +214,27 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             "3_gate_fire": { ...DEFAULT_STEPS["3_gate_fire"], ...step3Data },
           });
 
+          const step3Payload = data?.step_3 || {};
+          // Trata criterios=[] como ausente — normalize_gate_resultado retorna
+          // objeto não-null mesmo quando gate_stored=null, o que causaria []
+          // (truthy) a ganhar prioridade sobre gateCriteriosProgresso no render.
+          const _gateRaw = step3Payload.gate_resultado;
+          const gateResultadoInit = (_gateRaw?.criterios?.length > 0) ? _gateRaw : null;
+          const fireDiagInit = step3Payload.fire_diagnostico || null;
+
           if (step3Data.status === "running") {
-            if (data?.gate_resultado && !data?.fire_diagnostico) {
+            if (gateResultadoInit && !fireDiagInit) {
               setStep3Fase(STEP3_FASES.FIRE);
-            } else if (!data?.gate_resultado) {
+            } else {
+              // GATE está rodando (sem resultado ainda) ou estado ambíguo
               setStep3Fase(STEP3_FASES.GATE);
             }
           }
 
-if (data?.gate_resultado) setGateResult(data.gate_resultado);
-      if (data?.fire_diagnostico) setFireDiag(data.fire_diagnostico);
-      if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
-      if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
+          if (gateResultadoInit) setGateResult(gateResultadoInit);
+          if (fireDiagInit) setFireDiag(fireDiagInit);
+          if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
+          if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
 
       // Carregar TP/Stop persistido se step 2 já concluiu
       if (step2Data?.status === "done") {
@@ -209,14 +250,14 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
 
       // Fallback: se step 3 está done mas não tem gateResult, buscar via endpoint
       const step3Status = step3Data?.status || persistedSteps["3_gate_fire"]?.status;
-      if (step3Status === "done" && !data?.gate_resultado) {
+      if (step3Status === "done" && !gateResultadoInit) {
         try {
           const gateRes = await fetch(`${API_BASE}/ativos/${ticker}/gate-resultado`);
           if (gateRes.ok) setGateResult(await gateRes.json());
         } catch (e) { console.error("Erro gate-resultado:", e); }
       }
       // Fallback: se GATE aprovou mas não tem fireDiag, buscar via endpoint
-      if (step3Status === "done" && data?.gate_resultado?.resultado === "OPERAR" && !data?.fire_diagnostico) {
+      if (step3Status === "done" && gateResultadoInit?.resultado === "OPERAR" && !fireDiagInit) {
         try {
           const fireRes = await fetch(`${API_BASE}/ativos/${ticker}/fire-diagnostico`);
           if (fireRes.ok) setFireDiag(await fireRes.json());
@@ -308,6 +349,11 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
         setSubModules({ TAPE: null, ORBIT: null, REFLECT: null });
       }
       if (modulo === "GATE") {
+        // Limpa dados de run anterior para evitar exibição fora de ordem
+        setGateResult(null);
+        setGateError(null);
+        setFireDiag(null);
+        setGateCriteriosProgresso([]);
         setStep3Fase(STEP3_FASES.GATE);
         setSteps((prev) => ({
           ...prev,
@@ -352,7 +398,16 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
       if (modulo === "GATE") {
         const ok = evento?.data?.status === "ok";
         const payloadGate = evento?.data?.gate_resultado || null;
-        if (payloadGate) setGateResult(payloadGate);
+
+        if (payloadGate) {
+          // Dados do evento são autoritativos — não chamar refreshGateResult()
+          // que pode chegar antes do JSON ser gravado e sobrescrever com N/D
+          setGateResult(payloadGate);
+        } else if (ok) {
+          // Evento veio sem gate_resultado — fallback para API
+          refreshGateResult();
+        }
+
         const gateAprovado = payloadGate?.resultado === "OPERAR";
 
         if (ok && gateAprovado) {
@@ -372,6 +427,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           }));
           setStep3Fase(null);
         } else {
+          setGateError(evento?.data?.erro || "erro desconhecido");
           setSteps((prev) => ({
             ...prev,
             "3_gate_fire": {
@@ -383,11 +439,16 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           }));
           setStep3Fase(null);
         }
-        if (ok) refreshGateResult();
       }
       if (modulo === "FIRE") {
         const ok = evento?.data?.status === "ok";
-        if (evento?.data?.fire_diagnostico) setFireDiag(evento.data.fire_diagnostico);
+        const payloadFire = evento?.data?.fire_diagnostico || null;
+        if (payloadFire) {
+          setFireDiag(payloadFire);
+        } else if (ok) {
+          // Evento sem fire_diagnostico — fallback para API
+          refreshFireDiag();
+        }
         setSteps((prev) => ({
           ...prev,
           "3_gate_fire": {
@@ -398,7 +459,21 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           },
         }));
         setStep3Fase(null);
-        if (ok) refreshFireDiag();
+      }
+    }
+
+    if (evento?.type === "dc_gate_criterion") {
+      const d = evento.data || {};
+      if (d.id) {
+        setGateCriteriosProgresso((prev) => {
+          const idx = prev.findIndex((c) => c.id === d.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = d;
+            return next;
+          }
+          return [...prev, d];
+        });
       }
     }
 
@@ -522,21 +597,27 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
   function handleExport() {
     const now = new Date().toISOString().slice(0, 10);
     const cycle = gateResult?.ciclo || now.slice(0, 7);
-    const blocked = gateResult?.resultado !== "OPERAR";
+    const blocked = !gateResult || gateResult.resultado !== "OPERAR";
+    const suffix = !gateResult ? "ERRO" : "BLOQUEADO";
     const filename = blocked
-      ? `GATE_${ticker}_${cycle}_${now}_BLOQUEADO.md`
+      ? `GATE_${ticker}_${cycle}_${now}_${suffix}.md`
       : `CALIBRACAO_${ticker}_${cycle}_${now}.md`;
     const markdown = buildMarkdownReport({
       ticker,
       cycle,
+      steps,
+      bestTp,
+      bestStop,
+      bestIr,
       gateResult,
+      gateError,
       fireDiag: blocked ? null : fireDiag,
     });
     downloadTextFile(filename, markdown);
   }
 
   async function handleExportarRelatorioBackend() {
-    // Tenta enriquecer via backend; sempre cai no fallback client-side se falhar
+    // Tenta enriquecer gate/fire via backend; sempre cai no fallback client-side se falhar
     try {
       const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}/exportar-relatorio`, {
         method: "POST",
@@ -544,13 +625,26 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.caminho) {
+        if (data.status === "ok") {
+          const now = new Date().toISOString().slice(0, 10);
+          const enrichedGate = data.gate_resultado || gateResult;
+          const cycle = enrichedGate?.ciclo || now.slice(0, 7);
+          const blocked = !enrichedGate || enrichedGate.resultado !== "OPERAR";
+          const suffix = !enrichedGate ? "ERRO" : "BLOQUEADO";
+          const filename = blocked
+            ? `GATE_${ticker}_${cycle}_${now}_${suffix}.md`
+            : `CALIBRACAO_${ticker}_${cycle}_${now}.md`;
           downloadTextFile(
-            data.arquivo,
+            filename,
             buildMarkdownReport({
               ticker,
-              cycle: gateResult?.ciclo || new Date().toISOString().slice(0, 7),
-              gateResult: data.gate_resultado || gateResult,
+              cycle,
+              steps: data.steps || steps,
+              bestTp,
+              bestStop,
+              bestIr,
+              gateResult: enrichedGate,
+              gateError,
               fireDiag: data.fire_diagnostico || fireDiag,
             })
           );
@@ -768,21 +862,43 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
                 </div>
               )}
 
-              {/* GATE critérios */}
-              {gateResult && (
-                <div style={{ marginTop: 8, border: "1px solid var(--atlas-border)", background: "var(--atlas-surface)", borderRadius: 4, padding: 8 }}>
-                  <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)", marginBottom: 6 }}>GATE</div>
-                  {(gateResult.criterios || []).map((c) => (
-                    <div key={c.id} style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace", fontSize: 9, color: c.passou ? "var(--atlas-green)" : "var(--atlas-red)" }}>
-                      <span>{c.id} {c.nome}</span>
-                      <span>{c.passou ? "✓" : "✗"} {c.valor ?? "N/D"}</span>
+              {/* GATE critérios — progressivos durante execução, definitivos após */}
+              {(gateResult || gateError || gateCriteriosProgresso.length > 0) && (() => {
+                const criterios = (gateResult?.criterios?.length > 0) ? gateResult.criterios : gateCriteriosProgresso;
+                const emExecucao = !gateResult && !gateError && gateCriteriosProgresso.length > 0;
+                const borderColor = gateResult
+                  ? (gateResult.resultado === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-red)")
+                  : emExecucao ? "var(--atlas-blue)" : "var(--atlas-red)";
+                return (
+                  <div style={{ marginTop: 8, border: `1px solid ${borderColor}`, background: "var(--atlas-surface)", borderRadius: 4, padding: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)", marginBottom: 6 }}>
+                      <span>GATE</span>
+                      {emExecucao && (
+                        <span style={{ color: "var(--atlas-blue)", fontSize: 9 }}>
+                          {gateCriteriosProgresso.length}/8
+                        </span>
+                      )}
                     </div>
-                  ))}
-                  <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 10, color: gateResult.resultado === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-red)", fontWeight: "bold" }}>
-                    RESULTADO: {gateResult.resultado === "OPERAR" ? "✓ OPERAR" : "✗ BLOQUEADO"}
+                    {gateError && !gateResult && (
+                      <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-red)", marginBottom: 4 }}>
+                        erro: {gateError}
+                      </div>
+                    )}
+                    {criterios.map((c) => (
+                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace", fontSize: 9, marginBottom: 2, color: c.passou ? "var(--atlas-green)" : "var(--atlas-red)" }}>
+                        <span style={{ color: "var(--atlas-text-secondary)", marginRight: 6 }}>{c.id}</span>
+                        <span style={{ flex: 1 }}>{c.nome || c.id}</span>
+                        <span style={{ marginLeft: 8 }}>{c.passou ? "✓" : "✗"}{c.valor != null ? ` ${c.valor}` : " N/D"}</span>
+                      </div>
+                    ))}
+                    {gateResult && (
+                      <div style={{ marginTop: 6, paddingTop: 4, borderTop: "1px solid var(--atlas-border)", fontFamily: "monospace", fontSize: 10, color: gateResult.resultado === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-red)", fontWeight: "bold" }}>
+                        {gateResult.resultado === "OPERAR" ? "✓ OPERAR" : "✗ BLOQUEADO"}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* FIRE diagnóstico */}
               {gateResult?.resultado === "OPERAR" && (
@@ -797,7 +913,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
                 <span>{r.trades}t</span>
                 <span>{r.acerto_pct}%</span>
                 <span>IR {r.ir?.toFixed(2)}</span>
-                <span style={{ color: r.worst_trade ? "var(--atlas-red)" : "inherit" }}>{r.worst_trade ? `W: ${r.worst_trade}` : "-"}</span>
+                <span style={{ color: r.worst_trade < 0 ? "var(--atlas-red)" : r.worst_trade > 0 ? "var(--atlas-green)" : "inherit" }}>{r.worst_trade != null ? `W: R$${Number(r.worst_trade).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
               </div>
             ))}
             {fireDiag.regimes.some((r) => r.estrategia_dominante) && (
@@ -823,34 +939,6 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
                 </>
               )}
 
-              {/* Botão exportar — sempre visível quando step 3 não está idle */}
-              {steps["3_gate_fire"]?.status !== "idle" && (
-                <button
-                  onClick={handleExportarRelatorioBackend}
-                  style={{
-                    marginTop: 10,
-                    width: "100%",
-                    padding: "7px 12px",
-                    background: "transparent",
-                    border: "1px solid var(--atlas-blue)",
-                    color: "var(--atlas-blue)",
-                    fontFamily: "monospace",
-                    fontSize: 9,
-                    borderRadius: 2,
-                    cursor: "pointer",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <span style={{ fontSize: 11 }}>↓</span> Exportar relatório .md
-                </button>
-              )}
             </>
           )}
         </div>
@@ -895,7 +983,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           </div>
         )}
 
-        {/* Conclusão com FIRE */}
+        {/* Conclusão com FIRE — GATE aprovado */}
         {concluidoComFire && (
           <div style={{ border: "1px solid var(--atlas-green)", background: "rgba(34,197,94,0.08)", padding: 12, marginBottom: 12, borderRadius: 4 }}>
             <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--atlas-green)", fontWeight: "bold", marginBottom: 8 }}>
@@ -921,7 +1009,7 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
           </div>
         )}
 
-        {/* GATE bloqueado */}
+        {/* GATE bloqueado — só aviso + fechar */}
         {gateBlocked && (
           <div style={{ border: "1px solid var(--atlas-red)", background: "rgba(239,68,68,0.08)", padding: 12, marginBottom: 12, borderRadius: 4 }}>
             <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--atlas-red)", fontWeight: "bold", marginBottom: 8 }}>
@@ -930,29 +1018,50 @@ if (data?.gate_resultado) setGateResult(data.gate_resultado);
             <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-secondary)", marginBottom: 10 }}>
               Critério(s) reprovado(s): {(gateResult?.falhas || []).join(", ") || "N/D"}
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={handleExportarRelatorioBackend}
-                style={{ flex: 1, padding: "6px 10px", background: "transparent", border: "1px solid var(--atlas-blue)", color: "var(--atlas-blue)", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-              >
-                ↓ Exportar relatório
-              </button>
-              <button
-                onClick={onClose}
-                style={{ flex: 1, padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
-              >
-                Fechar
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              style={{ width: "100%", padding: "6px 10px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 10, borderRadius: 2, cursor: "pointer" }}
+            >
+              Fechar
+            </button>
           </div>
         )}
 
         {/* Cards de steps */}
-        <div style={{ background: "var(--atlas-bg)", padding: 12, borderRadius: 4, marginBottom: 16 }}>
+        <div style={{ background: "var(--atlas-bg)", padding: 12, borderRadius: 4, marginBottom: 12 }}>
           {STEPS.map((step) => renderStepCard(step.id))}
         </div>
+
+        {/* Botão exportar relatório — sempre visível, habilitado quando step 3 concluiu */}
+        {(() => {
+          const s3Status = steps["3_gate_fire"]?.status;
+          const relatorioDisponivel = (s3Status === "done" || s3Status === "error") && (gateResult || gateError);
+          return (
+            <button
+              onClick={relatorioDisponivel ? handleExportarRelatorioBackend : undefined}
+              disabled={!relatorioDisponivel}
+              style={{
+                width: "100%",
+                padding: "7px 10px",
+                background: relatorioDisponivel ? "transparent" : "transparent",
+                border: `1px solid ${relatorioDisponivel ? "var(--atlas-blue)" : "var(--atlas-border)"}`,
+                color: relatorioDisponivel ? "var(--atlas-blue)" : "var(--atlas-text-secondary)",
+                fontFamily: "monospace",
+                fontSize: 9,
+                borderRadius: 2,
+                cursor: relatorioDisponivel ? "pointer" : "default",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                opacity: relatorioDisponivel ? 1 : 0.45,
+                marginBottom: 8,
+              }}
+              onMouseEnter={relatorioDisponivel ? (e) => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; } : undefined}
+              onMouseLeave={relatorioDisponivel ? (e) => { e.currentTarget.style.background = "transparent"; } : undefined}
+            >
+              ↓ Exportar relatório .md
+            </button>
+          );
+        })()}
 
       </div>
       <style>{PULSE_ANIMATION}</style>

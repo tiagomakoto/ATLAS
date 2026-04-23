@@ -21,8 +21,49 @@ from atlas_backend.core.runtime_mode import get_mode
 _started_at = datetime.utcnow()
 
 # ── lifespan ──────────────────────────────────────────────────────
+def _sanitize_stale_calibracoes():
+    """
+    Ao iniciar o servidor, marca como 'paused' qualquer step de calibração
+    que ficou com status 'running' de uma execução anterior (processo morto).
+    Evita que o drawer reabra mostrando estado 'EXECUTANDO' fantasma.
+    """
+    import json, os
+    from atlas_backend.core.paths import get_paths
+    try:
+        paths = get_paths()
+        config_dir = paths.get("config_dir", "")
+        if not os.path.isdir(config_dir):
+            return
+        for fname in os.listdir(config_dir):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(config_dir, fname)
+            try:
+                with open(fpath, encoding="utf-8") as f:
+                    dados = json.load(f)
+                calibracao = dados.get("calibracao")
+                if not calibracao:
+                    continue
+                steps = calibracao.get("steps", {})
+                alterado = False
+                for step_info in steps.values():
+                    if isinstance(step_info, dict) and step_info.get("status") == "running":
+                        step_info["status"] = "paused"
+                        alterado = True
+                if alterado:
+                    dados["calibracao"] = calibracao
+                    tmp = fpath + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        json.dump(dados, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp, fpath)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _sanitize_stale_calibracoes()
     set_main_loop(asyncio.get_running_loop())
     asyncio.create_task(event_dispatcher())
     yield

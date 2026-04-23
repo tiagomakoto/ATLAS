@@ -1,11 +1,11 @@
 ---
-uid: mod-atlas-025
-version: 1.0.1
+uid: mod-atlas-028
+version: 1.0
 status: draft
 owner: Chan | Lilian | Board
 
 function: [BOARD_REVIEW_REQUIRED]
-file: atlas_backend/core/fire_helper.py
+file: atlas_backend/main.py
 role: [BOARD_REVIEW_REQUIRED]
 
 input:
@@ -30,6 +30,5 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
-  - 2026-04-22: código modificado — fire_helper.py
-  - 2026-04-17 — módulo criado automaticamente a partir de atlas_backend/core/fire_helper.py
+  - 2026-04-22 — módulo criado automaticamente a partir de atlas_backend/main.py
   - <edge cases ou riscos>

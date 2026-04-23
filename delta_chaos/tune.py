@@ -402,7 +402,7 @@ level="info"
             return {"ir_valido": 0.0, "pnl_valido": 0.0, "trades_valido": 0,
                     "ir_total": 0.0, "trades_total": 0, "acerto_valido": 0.0,
                     "n_stops": 0, "tp": tp, "stop": stop, "janela_anos": janela_anos,
-                    "ano_teste_ini": ano_teste_ini}
+                    "ano_teste_ini": ano_teste_ini, "trades": []}
 
         df_tr   = pd.DataFrame(trades)
         valido  = df_tr[pd.to_datetime(df_tr["data_entrada"]).dt.year >= ano_teste_ini]
@@ -427,6 +427,7 @@ level="info"
             "stop":          stop,
             "janela_anos":   janela_anos,
             "ano_teste_ini": ano_teste_ini,
+            "trades":        trades,
         }
 
     # ── Função objetivo Optuna ────────────────────────────────────────
@@ -563,6 +564,14 @@ level="info"
     if "historico_config" not in dados:
         dados["historico_config"] = []
 
+    # Re-executa _simular() uma vez com parâmetros vencedores para coletar trades individuais.
+    # melhor_attrs não expõe trades (user_attrs do Optuna armazenam apenas métricas agregadas).
+    _res_winner = _simular(melhor_attrs["tp"], melhor_attrs["stop"], melhor_attrs["janela_anos"])
+    _pnls_validos = [
+        t["pnl"] for t in _res_winner["trades"]
+        if pd.to_datetime(t["data_entrada"]).year >= ano_teste_ini
+    ]
+
     dados["historico_config"].append({
         "data":          str(datetime.now())[:10],
         "modulo":        "TUNE v2.0",
@@ -580,6 +589,10 @@ level="info"
         "confianca_n":   confianca,
         "reflect_mask":  n_mask,
         "metodo":        "optuna_v2",
+        "pnl_medio":     round(float(np.mean(_pnls_validos)), 4) if _pnls_validos else None,
+        "pnl_mediana":   round(float(np.median(_pnls_validos)), 4) if _pnls_validos else None,
+        "pnl_pior":      round(float(min(_pnls_validos)), 4) if _pnls_validos else None,
+        "n_stops":       melhor_attrs["n_stops"],
     })
     dados["atualizado_em"] = str(datetime.now())[:19]
 

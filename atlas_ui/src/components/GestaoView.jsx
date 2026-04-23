@@ -36,9 +36,9 @@ export default function GestaoView() {
         const horasDecorridas = ultimoEvento ? (Date.now() - ultimoEvento.getTime()) / 3600000 : Infinity;
         if (horasDecorridas > 24) continue;
 
-        // Só reabrir se há processo realmente em execução
-        const algumAtivo = Object.values(steps).some(s => s?.status === "running");
-        if (algumAtivo) {
+        // Reabrir apenas se há processo realmente em execução
+        const algumRunning = Object.values(steps).some(s => s?.status === "running");
+        if (algumRunning) {
           setDrawerCalibracao(ticker);
           break;
         }

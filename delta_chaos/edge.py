@@ -783,15 +783,10 @@ def rodar_tune(ticker: str):
 
 def rodar_backtest_gate(ticker: str):
     from delta_chaos.gate import gate_executar
-    emit_dc_event("dc_module_start", "GATE", "running", ticker=ticker)
-    try:
-        resultado = gate_executar(ticker)
-        emit_log(f"[GATE] {ticker}: {resultado}", "info")
-        emit_dc_event("dc_module_complete", "GATE", "ok", ticker=ticker)
-        return {"status": "OK", "output": str(resultado)}
-    except Exception as e:
-        emit_dc_event("dc_module_complete", "GATE", "error", ticker=ticker, erro=str(e))
-        raise e
+    resultado = gate_executar(ticker)
+    decisao = resultado.get("decisao", "BLOQUEADO") if isinstance(resultado, dict) else str(resultado)
+    emit_log(f"[GATE] {ticker}: {decisao}", "info")
+    return {"status": "OK", "output": decisao, "gate_data": resultado if isinstance(resultado, dict) else {}}
 
 def rodar_reflect_daily(ticker: str, xlsx_path: str):
     emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)

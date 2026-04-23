@@ -455,8 +455,14 @@ async def calibracao_status(ticker: str):
                             dados["calibracao"] = calibracao
 
         guard = normalize_guard_payload(get_cotahist_recente_info(ticker), ticker)
-        gate = normalize_gate_resultado(get_gate_resultado(ticker), ticker)
-        fire = normalize_fire_diagnostico(get_fire_diagnostico(ticker), ticker)
+        # Usa exclusivamente o dado persistido em calibracao.gate_resultado —
+        # nunca recomputa via gate_helper/book_backtest.parquet, pois uma nova
+        # calibração em andamento reseta esse campo para null e não deve mostrar
+        # resultados de runs anteriores.
+        gate_stored = calibracao.get("gate_resultado")
+        gate = normalize_gate_resultado(gate_stored, ticker)
+        fire_stored = calibracao.get("fire_diagnostico")
+        fire = normalize_fire_diagnostico(fire_stored, ticker)
 
         return build_calibracao_payload(
             ticker=ticker,
@@ -514,19 +520,15 @@ async def calibracao_progresso_tune(ticker: str):
 @router.post("/calibracao/{ticker}/exportar-relatorio")
 async def calibracao_exportar_relatorio(ticker: str):
     """
-    Gera e exporta relatório .md da calibração do ticker.
-    Detecta automaticamente o cenário:
-    - GATE bloqueado: gera relatório de bloqueio com critérios que falharam
-    - Calibração completa (GATE + FIRE): gera relatório de sucesso
+    Retorna dados atuais de calibração do ticker para o frontend gerar o .md client-side.
+    Não grava nenhum arquivo em disco.
 
     Retorna:
     {
         "status": "ok",
-        "tipo": "CALIB_GATE_BLOQUEADO" | "CALIB_COMPLETA",
-        "arquivo": "CALIB_XXX_TICKER_DATA.md",
-        "caminho": "/caminho/para/arquivo.md",
         "gate_resultado": {...},
-        "fire_diagnostico": {...} (só se completo),
+        "fire_diagnostico": {...},
+        "steps": {...},
         "data": "2026-04-17"
     }
     """
@@ -542,10 +544,6 @@ async def calibracao_exportar_relatorio(ticker: str):
 
         return {
             "status": "ok",
-            "tipo": result.get("gate_resultado", {}).get("resultado") == "OPERAR"
-                and "CALIB_COMPLETA" or "CALIB_GATE_BLOQUEADO",
-            "arquivo": result.get("arquivo"),
-            "caminho": result.get("caminho"),
             "gate_resultado": result.get("gate_resultado"),
             "fire_diagnostico": result.get("fire_diagnostico"),
             "steps": result.get("steps"),

@@ -408,7 +408,7 @@ class BOOK:
 
         print(f"\n  ── REFLECT (metamodelo) ─────────────────")
         for ativo, info in reflect_info.items():
-            bloq  = "🚫 BLOQUEADO" if info["blocked"] else ""
+            bloq  = "🚫 BLOQUEADO" if info.get("blocked") else ""
             score = f"{info['score']:+.3f}" if info["score"] != 0.0 else "  n/a"
             print(f"  {ativo:8} Edge {info['state']}  "
               f"Score={score:>8}  "

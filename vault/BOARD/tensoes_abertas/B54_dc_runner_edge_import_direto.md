@@ -33,4 +33,14 @@ notes:
   - Polling SQLite para TUNE (_poll_sqlite) preservado intacto
   - Estrutura de dc_calibracao_iniciar/_executar_calibracao_step1 preservada — apenas chamadas internas mudam
   - edge.py não é mais executado standalone fora do ATLAS (confirmado pelo CEO em sessão)
+  - REGRA ARQUITETURAL: dc_runner.py é a única autoridade para eventos de ciclo de vida
+    (dc_module_start, dc_module_complete, dc_module_error). Nenhum módulo em delta_chaos/
+    deve emitir esses eventos. emit_log permanece permitido em edge.py — é log de terminal,
+    sem impacto no frontend.
+  - Exceção única à regra: tune.py pode emitir dc_tune_progress (progresso intermediário
+    do Optuna) porque dc_runner não tem visibilidade interna do andamento trial a trial.
+    Não se trata de evento de ciclo de vida — é telemetria interna do processo.
+  - Ação concreta derivada: remover de edge.py todos os emit_dc_event de ciclo de vida
+    para TAPE, ORBIT, REFLECT, TUNE (linhas 673–781 aproximadamente). Dupla emissão
+    com dc_runner é bug silencioso — frontend recebe eventos duplicados sem erro aparente.
 ---

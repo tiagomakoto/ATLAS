@@ -481,52 +481,35 @@ async def dc_gate_backtest(ticker: str) -> dict:
     emit_dc_event("dc_module_start", "GATE", "running", **action_payload)
     try:
         res = await asyncio.to_thread(edge.rodar_backtest_gate, ticker)
-        output = res.get("output", "")
-        gate_resultado = _parse_gate_output(output, ticker)
+        gate_resultado = _build_gate_resultado(res.get("gate_data", {}), ticker)
         emit_dc_event("dc_module_complete", "GATE", "ok", gate_resultado=gate_resultado, **action_payload)
         log_action("dc_backtest_gate", action_payload, {"status": "OK"})
-        return {"status": "OK", "returncode": 0, "output": output, "gate_resultado": gate_resultado}
+        return {"status": "OK", "returncode": 0, "output": res.get("output", ""), "gate_resultado": gate_resultado}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "GATE", "error", **action_payload)
+        emit_dc_event("dc_module_complete", "GATE", "error", erro=str(e), **action_payload)
         emit_log(f"[GATE] {ticker}: erro — {e}", level="error")
         log_action("dc_backtest_gate", action_payload, {"status": "ERRO", "error": repr(e)})
         return {"status": "ERRO", "output": repr(e)}
 
-def _parse_gate_output(output: str, ticker: str) -> dict:
+def _build_gate_resultado(gate_data: dict, ticker: str) -> dict:
+    gates = gate_data.get("gates", {})
+    gate_valores = gate_data.get("gate_valores", {})
+    decisao = gate_data.get("decisao", "BLOQUEADO")
     criterios = []
-    pattern = re.compile(r"^\s*([✓✗])\s+(E\d+\s+[^\n\r]+)$", re.MULTILINE)
-    for marker, title in pattern.findall(output or ""):
-        match_id = re.match(r"^(E\d+)\s*[—-]?\s*(.+)$", title.strip())
-        if not match_id:
-            continue
-        criterios.append(
-            {
-                "id": match_id.group(1),
-                "nome": match_id.group(2).strip(),
-                "passou": marker == "✓",
-                "valor": "N/D",
-            }
-        )
-
-    if not criterios:
-        criterios = [
-            {"id": "E1", "nome": "Taxa de acerto", "passou": False, "valor": "N/D"},
-            {"id": "E2", "nome": "IR mínimo", "passou": False, "valor": "N/D"},
-            {"id": "E3", "nome": "N mínimo de trades", "passou": False, "valor": "N/D"},
-            {"id": "E4", "nome": "Consistência anual", "passou": False, "valor": "N/D"},
-            {"id": "E5", "nome": "IR por regime", "passou": False, "valor": "N/D"},
-            {"id": "E6", "nome": "Drawdown máximo", "passou": False, "valor": "N/D"},
-            {"id": "E7", "nome": "Consecutivos negativos", "passou": False, "valor": "N/D"},
-            {"id": "E8", "nome": "Cobertura de regimes", "passou": False, "valor": "N/D"},
-        ]
-
-    resultado = "OPERAR" if "OPERAR" in (output or "").upper() else "BLOQUEADO"
+    for nome_completo, passou in gates.items():
+        partes = nome_completo.split(" — ", 1)
+        criterios.append({
+            "id": partes[0].strip(),
+            "nome": partes[1].strip() if len(partes) > 1 else partes[0].strip(),
+            "passou": bool(passou),
+            "valor": gate_valores.get(nome_completo, "N/D"),
+        })
     falhas = [c["id"] for c in criterios if not c["passou"]]
     return {
         "ticker": ticker,
         "criterios": criterios,
-        "resultado": resultado,
-        "falhas": falhas if resultado != "OPERAR" else [],
+        "resultado": decisao,
+        "falhas": falhas if decisao != "OPERAR" else [],
     }
 
 
