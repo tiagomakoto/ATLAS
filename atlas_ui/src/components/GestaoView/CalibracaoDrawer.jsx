@@ -278,6 +278,76 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     return () => { mounted = false; };
   }, [ticker]);
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Polling defensivo: reconcilia estado via API a cada 3s enquanto houver
+  // step em "running". Protege contra eventos WS perdidos quando o drawer
+  // desmonta/remonta (navegação) durante execução do GATE.
+  //
+  // Regras de merge:
+  //   • Nunca regride status (done/error são terminais no frontend).
+  //   • Só substitui gate_resultado se o backend tiver critérios ≥ ao local.
+  //   • fire_diagnostico só é populado se ainda for null localmente.
+  // Auto-desliga: o dep array inclui `steps`, então quando nenhum step está
+  // running o effect re-executa e o cleanup limpa o interval.
+  // ──────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const anyRunning = Object.values(steps).some((s) => s?.status === "running");
+    if (!anyRunning || !ticker) return undefined;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Reconciliar steps (preserva running → done/error quando WS falhou).
+        const serverSteps = data?.steps || {};
+        setSteps((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          for (const key of Object.keys(next)) {
+            const sv = serverSteps[key];
+            if (!sv) continue;
+            // Não regride estados terminais já observados no frontend.
+            if (prev[key]?.status === "done" || prev[key]?.status === "error") continue;
+            // Só avança se backend tem info diferente.
+            if (
+              sv.status !== prev[key]?.status ||
+              sv.concluido_em !== prev[key]?.concluido_em ||
+              sv.iniciado_em !== prev[key]?.iniciado_em
+            ) {
+              next[key] = { ...prev[key], ...sv };
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+
+        // Reconciliar gate_resultado (prefere backend se tiver lista maior).
+        const gateApi = data?.step_3?.gate_resultado;
+        if (gateApi?.criterios?.length > 0) {
+          setGateResult((prev) => {
+            const prevLen = prev?.criterios?.length || 0;
+            return gateApi.criterios.length > prevLen ? gateApi : prev;
+          });
+          setGateCriteriosProgresso((prev) =>
+            gateApi.criterios.length > prev.length ? gateApi.criterios : prev
+          );
+        }
+
+        // Reconciliar fire_diagnostico (só popula se ainda não temos).
+        const fireApi = data?.step_3?.fire_diagnostico;
+        if (fireApi?.regimes?.length > 0) {
+          setFireDiag((prev) => prev || fireApi);
+        }
+      } catch (_) {
+        // ignora — próximo tick tenta de novo
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [steps, ticker]);
+
   useEffect(() => {
     if (!ultimoEventoEm || !step2IniciadoEm) return undefined;
     const interval = setInterval(() => {
@@ -398,13 +468,17 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       if (modulo === "GATE") {
         const ok = evento?.data?.status === "ok";
         const payloadGate = evento?.data?.gate_resultado || null;
+        const temCriterios = Array.isArray(payloadGate?.criterios) && payloadGate.criterios.length > 0;
 
-        if (payloadGate) {
+        if (payloadGate && temCriterios) {
           // Dados do evento são autoritativos — não chamar refreshGateResult()
           // que pode chegar antes do JSON ser gravado e sobrescrever com N/D
           setGateResult(payloadGate);
+          // Espelho: se criterios vieram no payload final, atualiza o progressivo também.
+          // Defende contra eventos dc_gate_criterion perdidos por WS reconectando.
+          setGateCriteriosProgresso(payloadGate.criterios);
         } else if (ok) {
-          // Evento veio sem gate_resultado — fallback para API
+          // Payload ausente ou vazio — fallback para API (backend persiste em calibracao.gate_resultado)
           refreshGateResult();
         }
 
@@ -679,8 +753,12 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     return `${s}s`;
   }
 
-  const gateBlocked = gateResult && gateResult.resultado !== "OPERAR";
-  const concluidoComFire = gateResult?.resultado === "OPERAR" && steps["3_gate_fire"]?.status === "done" && fireDiag;
+  const step3Done = steps["3_gate_fire"]?.status === "done";
+  // Mostra o bloco "GATE BLOQUEADO" (botão Fechar) sempre que o step 3 terminou
+  // e não estamos no fluxo OPERAR — cobre o edge case onde gateResult ficou
+  // órfão (evento dc_module_complete perdido por WS reconectando).
+  const gateBlocked = step3Done && gateResult?.resultado !== "OPERAR";
+  const concluidoComFire = gateResult?.resultado === "OPERAR" && step3Done && fireDiag;
 
   // Renderiza card de um step
   function renderStepCard(stepId) {
@@ -743,7 +821,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               </div>
             );
           })()}
-          {stepId === "2_tune" && (bestTp != null || bestStop != null) && (
+          {stepId === "2_tune" && status === "done" && (bestTp != null || bestStop != null) && (
             <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
               {`TP ${bestTp != null ? Number(bestTp).toFixed(2) : "--"} | STOP ${bestStop != null ? Number(bestStop).toFixed(2) : "--"}`}
             </div>
@@ -864,7 +942,13 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
 
               {/* GATE critérios — progressivos durante execução, definitivos após */}
               {(gateResult || gateError || gateCriteriosProgresso.length > 0) && (() => {
-                const criterios = (gateResult?.criterios?.length > 0) ? gateResult.criterios : gateCriteriosProgresso;
+                // Render resiliente: prefere sempre a lista maior. Cobre o caso
+                // onde gateResult veio com criterios parciais ou gateCriteriosProgresso
+                // tem mais itens por ter acumulado eventos ao vivo.
+                const criteriosEvent = gateResult?.criterios || [];
+                const criterios = criteriosEvent.length >= gateCriteriosProgresso.length
+                  ? criteriosEvent
+                  : gateCriteriosProgresso;
                 const emExecucao = !gateResult && !gateError && gateCriteriosProgresso.length > 0;
                 const borderColor = gateResult
                   ? (gateResult.resultado === "OPERAR" ? "var(--atlas-green)" : "var(--atlas-red)")

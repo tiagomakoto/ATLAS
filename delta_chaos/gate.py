@@ -33,6 +33,10 @@ except ImportError:
 
 def _emit_criterio(ticker: str, idx: int, eid: str, nome: str, passou: bool, valor: str) -> None:
     """Emite evento de critério individual do GATE para o frontend."""
+    # Print diagnóstico (temporário): confirma no terminal que todos os 8 critérios
+    # saem do processo Python. Remover após o bug de "apenas E0 visível" ser
+    # confirmado como resolvido.
+    print(f"[DC-EVENT] type=dc_gate_criterion | ticker={ticker} | {eid}={nome} | passou={passou} | valor={valor}", flush=True)
     _emit_event({
         "type": "dc_gate_criterion",
         "data": {

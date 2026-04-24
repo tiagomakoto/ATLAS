@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-002
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - DC_EVENT_TYPES define 5 tipos: dc_module_start, dc_module_complete, dc_module_progress, dc_module_error, dc_workflow_complete.
 
 notes:
+  - 2026-04-23: código modificado — event_bus.py
   - `health_monitor` roda autonomamente `await asyncio.sleep(10)` publicando via WebSocket sem invocar request explícito.
   - emit_dc_event aceita **metadata kwargs arbitrários (ticker, anos, trial, total, ir, etc.)
 ---

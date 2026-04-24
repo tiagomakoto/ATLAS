@@ -23,6 +23,7 @@ from atlas_backend.core.paths import get_paths
 from atlas_backend.core.terminal_stream import emit_log, emit_error
 from atlas_backend.core.audit_logger import log_action
 from atlas_backend.core.event_bus import emit_dc_event
+from atlas_backend.core.timeutils import iso_utc
 
 # Controle de concorrência global
 _dc_running: bool = False
@@ -716,8 +717,8 @@ async def _executar_calibracao_step1(ticker: str):
         # 1. Atualizar status para \"running\"
         dados = get_ativo(ticker)
         dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "running"
-        dados["calibracao"]["steps"]["1_backtest_dados"]["iniciado_em"] = datetime.now().isoformat()
-        dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+        dados["calibracao"]["steps"]["1_backtest_dados"]["iniciado_em"] = iso_utc()
+        dados["calibracao"]["ultimo_evento_em"] = iso_utc()
         _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
         # 2. Executar backtest
@@ -737,8 +738,8 @@ async def _executar_calibracao_step1(ticker: str):
             dados["calibracao"]["steps"]["1_backtest_dados"]["status"] = "error"
             dados["calibracao"]["steps"]["1_backtest_dados"]["erro"] = result.get("output", "Erro desconhecido")
 
-        dados["calibracao"]["steps"]["1_backtest_dados"]["concluido_em"] = datetime.now().isoformat()
-        dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+        dados["calibracao"]["steps"]["1_backtest_dados"]["concluido_em"] = iso_utc()
+        dados["calibracao"]["ultimo_evento_em"] = iso_utc()
         _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
         try:
@@ -747,8 +748,8 @@ async def _executar_calibracao_step1(ticker: str):
                 # Atualizar step_atual para 2
                 dados["calibracao"]["step_atual"] = 2
                 dados["calibracao"]["steps"]["2_tune"]["status"] = "running"
-                dados["calibracao"]["steps"]["2_tune"]["iniciado_em"] = datetime.now().isoformat()
-                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["2_tune"]["iniciado_em"] = iso_utc()
+                dados["calibracao"]["ultimo_evento_em"] = iso_utc()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
                 # Executar step 2 (TUNE)
@@ -766,8 +767,8 @@ async def _executar_calibracao_step1(ticker: str):
                     dados["calibracao"]["steps"]["2_tune"]["status"] = "error"
                     dados["calibracao"]["steps"]["2_tune"]["erro"] = result_tune.get("output", "Erro desconhecido")
 
-                dados["calibracao"]["steps"]["2_tune"]["concluido_em"] = datetime.now().isoformat()
-                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["2_tune"]["concluido_em"] = iso_utc()
+                dados["calibracao"]["ultimo_evento_em"] = iso_utc()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
             # 5. Se step 2 concluído com sucesso, iniciar step 3 automaticamente
@@ -775,8 +776,8 @@ async def _executar_calibracao_step1(ticker: str):
                 # Atualizar step_atual para 3
                 dados["calibracao"]["step_atual"] = 3
                 dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "running"
-                dados["calibracao"]["steps"]["3_gate_fire"]["iniciado_em"] = datetime.now().isoformat()
-                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["3_gate_fire"]["iniciado_em"] = iso_utc()
+                dados["calibracao"]["ultimo_evento_em"] = iso_utc()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
                 # Executar step 3 fase A (GATE)
@@ -804,8 +805,8 @@ async def _executar_calibracao_step1(ticker: str):
                     dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "error"
                     dados["calibracao"]["steps"]["3_gate_fire"]["erro"] = result_gate.get("output", "Erro desconhecido")
 
-                dados["calibracao"]["steps"]["3_gate_fire"]["concluido_em"] = datetime.now().isoformat()
-                dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"]["3_gate_fire"]["concluido_em"] = iso_utc()
+                dados["calibracao"]["ultimo_evento_em"] = iso_utc()
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
         except Exception as e:
@@ -820,7 +821,7 @@ async def _executar_calibracao_step1(ticker: str):
                 step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'gate_fire'}"
                 dados["calibracao"]["steps"][step_key]["status"] = "error"
                 dados["calibracao"]["steps"][step_key]["erro"] = str(e)
-                dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
+                dados["calibracao"]["steps"][step_key]["concluido_em"] = iso_utc()
 
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
             except:
@@ -838,7 +839,7 @@ async def _executar_calibracao_step1(ticker: str):
             step_key = f"{step_atual}_{'backtest_dados' if step_atual == 1 else 'tune' if step_atual == 2 else 'gate_fire'}"
             dados["calibracao"]["steps"][step_key]["status"] = "error"
             dados["calibracao"]["steps"][step_key]["erro"] = str(e)
-            dados["calibracao"]["steps"][step_key]["concluido_em"] = datetime.now().isoformat()
+            dados["calibracao"]["steps"][step_key]["concluido_em"] = iso_utc()
 
             _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
         except:
@@ -875,7 +876,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
 
         # Atualizar estado
         dados["calibracao"]["steps"][step_key]["status"] = "running"
-        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = iso_utc()
 
     elif step_atual == 2:
         # Retomar tune
@@ -884,7 +885,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
 
         # Atualizar estado
         dados["calibracao"]["steps"][step_key]["status"] = "running"
-        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = iso_utc()
 
     elif step_atual == 3:
         # Retomar gate + fire
@@ -898,10 +899,10 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
 
         # Atualizar estado
         dados["calibracao"]["steps"][step_key]["status"] = "running"
-        dados["calibracao"]["steps"][step_key]["iniciado_em"] = datetime.now().isoformat()
+        dados["calibracao"]["steps"][step_key]["iniciado_em"] = iso_utc()
 
     # Atualizar ultimo_evento_em
-    dados["calibracao"]["ultimo_evento_em"] = datetime.now().isoformat()
+    dados["calibracao"]["ultimo_evento_em"] = iso_utc()
 
     # Atualizar no arquivo com escrita atômica
     path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"

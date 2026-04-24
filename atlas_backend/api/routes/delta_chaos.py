@@ -424,12 +424,13 @@ async def calibracao_status(ticker: str):
     _validar_ticker(ticker)
     
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
+        from atlas_backend.core.timeutils import iso_utc
 
         dados = get_ativo(ticker)
         dados_raw = get_ativo_raw(ticker)
         calibracao = (dados_raw.get("calibracao") or {}).copy()
-        
+
         # Reconciliação watchdog: se running e ultimo_evento_em > 10min → paused
         if calibracao.get("step_atual") and calibracao.get("steps"):
             for step_key, step_info in calibracao["steps"].items():
@@ -437,10 +438,14 @@ async def calibracao_status(ticker: str):
                     ultimo_evento = calibracao.get("ultimo_evento_em")
                     if ultimo_evento:
                         ultimo_dt = datetime.fromisoformat(ultimo_evento)
-                        if datetime.now() - ultimo_dt > timedelta(minutes=10):
+                        # Garantir comparação entre aware datetimes (timestamps
+                        # podem ser naive-local legados ou UTC+00:00 novos).
+                        if ultimo_dt.tzinfo is None:
+                            ultimo_dt = ultimo_dt.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) - ultimo_dt > timedelta(minutes=10):
                             # Atualizar para paused
                             step_info["status"] = "paused"
-                            calibracao["ultimo_evento_em"] = datetime.now().isoformat()
+                            calibracao["ultimo_evento_em"] = iso_utc()
                             
                             # Atualizar no arquivo com escrita atômica
                             path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"

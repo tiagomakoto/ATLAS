@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Optional
 import os
 
+from atlas_backend.core.timeutils import iso_utc
+
 event_queue: Queue = Queue()
 
 # Referência ao loop principal do uvicorn — setada no lifespan
@@ -75,7 +77,7 @@ def emit_dc_event(event_type: str, modulo: str, status: Optional[str] = None, **
         "modulo": modulo,
         "status": status,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": iso_utc(),
         **metadata
     }
 

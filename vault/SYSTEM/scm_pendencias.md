@@ -44,3 +44,17 @@ status: pendente
   campos pendentes: function, role, intent, constraints
 
 status: pendente
+
+---
+## 05cbe9a — 2026-04-22 22:29
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/main.md
+  arquivo de código: atlas_backend/main.py
+  campos pendentes: function, role, intent, constraints
+
+### Módulos existentes com campos pendentes (Categoria C)
+- SYSTEMS/atlas/modules/fire_helper.md
+  campos pendentes: intent, constraints, role, function
+
+status: pendente
