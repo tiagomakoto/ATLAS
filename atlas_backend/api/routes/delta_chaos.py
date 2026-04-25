@@ -553,6 +553,8 @@ async def calibracao_exportar_relatorio(ticker: str):
             "fire_diagnostico": result.get("fire_diagnostico"),
             "steps": result.get("steps"),
             "data": result.get("data"),
+            "tune_stats": result.get("tune_stats"),
+            "gate_stats": result.get("gate_stats"),
         }
     except HTTPException:
         raise

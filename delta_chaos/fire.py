@@ -191,12 +191,6 @@ class FIRE:
         if cfg is None:
             cfg = tape_ativo_carregar(ativo)
 
-        regimes_sizing = cfg.get(
-            "regimes_sizing", REGIMES_SIZING_PADRAO)
-        
-        sizing_config = float(
-            regimes_sizing.get(regime, 0.0))
-
         # ── TP e STOP — S4: recebe cfg_global cacheado ───────────
         _cfg_f = self._cfg_global["fire"]
         _tp    = float(cfg.get("take_profit")
@@ -223,9 +217,7 @@ class FIRE:
         if sizing_final <= 0.0:
             self.book.registrar_nao_entrada(
                 ativo, data,
-                "regime_bloqueado"
-                if sizing_config == 0.0
-                else "sizing_orbit_reflect_zero",
+                "sizing_zero",
                 regime, ciclo)
             return None
 

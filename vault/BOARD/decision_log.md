@@ -52,6 +52,8 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B52_tp_stop_ativos_table\|B52]] | TP/STOP visível na AtivosTable (Visão Geral) | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B53_onboarding_drawer_ux_melhorias\|B53]] | OnboardingDrawer — melhorias de UX/UI (6 itens) | implementação PLAN | 2026-04-14 |
 | [[BOARD/tensoes_abertas/B54_dc_runner_edge_import_direto\|B54]] | dc_runner — eliminar subprocess, importar edge.py como módulo direto | CEO entrega spec ao PLAN | 2026-04-14 |
+| [[BOARD/tensoes_abertas/B55_reflect_estados_ABCDX_redesign\|B55]] | REFLECT — redesign estados A/B/C/D/E → A/B/C/D/T (Tail/Taleb) | implementação Chan + rerrodar histórico | 2026-04-24 |
+| [[BOARD/tensoes_abertas/B56_reflect_sizing_por_estado\|B56]] | REFLECT — sizing por estado A/B/C/D/X + regimes_sizing redundante | B30 + B04 resolvidos | 2026-04-24 |
 
 ---
 
@@ -66,6 +68,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-13_regime_padronizacao\|2026-04-13]] | regime_estrategia → regime — padronização e migração | off-ata |
 | [[BOARD/atas/2026-04-14_atlas_websocket_onboarding_ux\|2026-04-14]] | ATLAS — WebSocket pipeline + OnboardingDrawer UX | board |
 | [[BOARD/atas/2026-04-14_dc_runner_edge_fusao\|2026-04-14]] | dc_runner — eliminação de subprocess, import direto de edge.py | board |
+| [[BOARD/atas/2026-04-24_reflect_estados_sizing\|2026-04-24]] | REFLECT — redesign estados A/B/C/D/X + sizing canônico por estado | board |
 
 ---
 

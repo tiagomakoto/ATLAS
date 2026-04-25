@@ -653,15 +653,12 @@ class ORBIT:
               math.sqrt(252/HORIZONTE_DIAS)
               if len(rs) > 5 else 0.0)
 
-        regimes_sizing = cfg.get(
-            "regimes_sizing",
-            carregar_config()["fire"]["regimes_sizing_padrao"])
-        sizing = float(regimes_sizing.get(regime, 0.0))
-
+        # B56 — ORBIT binário puro: 1.0 se IR ok, 0.0 se insuficiente
+        # regimes_sizing do JSON removido — sizing modulado pelo REFLECT no EDGE
         _ir_operar = cfg.get("ir_operar") or IR_OPERAR
-        if ir < _ir_operar:
-            sizing = 0.0
-        elif ir < IR_MONITORAR:
+        if ir >= _ir_operar:
+            sizing = 1.0
+        else:
             sizing = 0.0
 
         pesos_at = ph[-1]["pesos"]

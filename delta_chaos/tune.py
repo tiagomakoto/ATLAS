@@ -78,7 +78,7 @@ def executar_tune(ticker: str) -> dict:
     JANELA_MIN, JANELA_MAX        = 3, 10
 
     # Fase 3 — Máscara REFLECT (B3 resolvido)
-    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "E"}
+    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "E", "T"}
 
     # ═══════════════════════════════════════════════════════════════════
     # ETAPA 1 — carrega tudo uma vez
@@ -588,6 +588,9 @@ level="info"
         "trials":        trials_rodados,
         "confianca_n":   confianca,
         "reflect_mask":  n_mask,
+        "ir_valido":     round(float(melhor_attrs["ir_valido"]), 4),
+        "trades_valido": int(n_trades),
+        "acerto_valido": round(float(melhor_attrs["acerto_valido"]), 4),
         "metodo":        "optuna_v2",
         "pnl_medio":     round(float(np.mean(_pnls_validos)), 4) if _pnls_validos else None,
         "pnl_mediana":   round(float(np.median(_pnls_validos)), 4) if _pnls_validos else None,

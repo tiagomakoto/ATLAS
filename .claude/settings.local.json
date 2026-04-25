@@ -18,7 +18,11 @@
       "Bash(python -c \"import sys; sys.stdout.buffer.write\\(sys.stdin.buffer.read\\(\\)\\)\")",
       "Bash(del \"C:\\\\Users\\\\tiago\\\\OneDrive\\\\Documentos\\\\ATLAS\\\\atlas_backend\\\\core\\\\relatorios\\\\CALIB_GATE_BLOQUEADO_001_TEST11_2026-04-22.md\")",
       "Bash(python -c \"import json, pathlib; p = pathlib.Path\\('C:/Users/tiago/OneDrive/Documentos/ATLAS/atlas_backend/core/relatorios/index.json'\\); idx = json.loads\\(p.read_text\\(\\)\\); idx = [e for e in idx if e.get\\('ticker'\\) != 'TEST11']; p.write_text\\(json.dumps\\(idx, indent=2, ensure_ascii=False\\)\\); print\\('index limpo, entradas restantes:', len\\(idx\\)\\)\")",
-      "Bash(find /c/Users/tiago/OneDrive/Documentos/ATLAS/atlas_ui/src -name \"*.jsx\" -type f -exec grep -l \"CalibracaoDrawer\" {} \\\\;)"
+      "Bash(find /c/Users/tiago/OneDrive/Documentos/ATLAS/atlas_ui/src -name \"*.jsx\" -type f -exec grep -l \"CalibracaoDrawer\" {} \\\\;)",
+      "Bash(python -m pytest atlas_backend/tests/ -k relatorio -v)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('atlas_backend/core/relatorios.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('atlas_backend/api/routes/delta_chaos.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")",
+      "Bash(node --check atlas_ui/src/components/GestaoView/CalibracaoDrawer.jsx)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('delta_chaos/tune.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")"
     ]
   }
 }

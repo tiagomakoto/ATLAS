@@ -74,9 +74,27 @@ function statusVisual(status, isNext) {
   return { bg: "rgba(156,163,175,0.1)", border: "var(--atlas-border)", label: "PENDENTE", color: "var(--atlas-text-secondary)" };
 }
 
-function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag }) {
+function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag, tuneStats, gateStats }) {
   const now = new Date().toISOString().slice(0, 10);
   const header = `# Relatório de Calibração — ${ticker} — ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
+
+  // Placeholder "—" (U+2014) é deliberado para as tabelas novas abaixo, conforme
+  // SPEC do patch. As seções legadas continuam usando "–" (U+2013) — não unificar.
+  const fmt = (value, kind = "raw") => {
+    if (value == null) return "—";
+    switch (kind) {
+      case "currency":
+        return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      case "percent":
+        return `${Number(value).toFixed(2)}%`;
+      case "int":
+        return Number(value).toLocaleString("pt-BR");
+      case "float":
+        return Number(value).toFixed(4);
+      default:
+        return String(value);
+    }
+  };
 
   // Step 1 — ORBIT / TAPE / REFLECT
   const s1 = steps?.["1_backtest_dados"] || {};
@@ -93,8 +111,28 @@ function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, g
     : "";
   const step2Section = `\n## Step 2 — Parametrização (TUNE)\n**Status:** ${s2Status}${s2Dur ? ` · duração: ${s2Dur}` : ""}\n${tuneParams}`;
 
+  const tuneQualidadeSection = tuneStats ? `
+## Qualidade da otimização
+| Campo | Valor |
+|---|---|
+| IR válido (janela teste) | ${fmt(tuneStats.ir_valido, "float")} |
+| N trades na janela | ${fmt(tuneStats.n_trades, "int")} |
+| Confiança | ${fmt(tuneStats.confianca_n)} |
+| Janela de teste | ${fmt(tuneStats.janela_anos)} anos (${fmt(tuneStats.ano_teste_ini)}–hoje) |
+| Trials rodados | ${fmt(tuneStats.trials, "int")} |
+| Ciclos mascarados REFLECT | ${fmt(tuneStats.reflect_mask, "int")} |
+| Acerto % | ${fmt(tuneStats.acerto_pct, "percent")} |
+| P&L médio por trade | R$${fmt(tuneStats.pnl_medio, "currency")} |
+| P&L mediana por trade | R$${fmt(tuneStats.pnl_mediana, "currency")} |
+| Pior trade | R$${fmt(tuneStats.pnl_pior, "currency")} |
+| Stops totais | ${fmt(tuneStats.n_stops, "int")} |
+` : "";
+
   // Step 3 — GATE
-  const gateTableHeader = "\n## Step 3 — Validação (GATE + FIRE)\n### GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n";
+  const s3 = steps?.["3_gate_fire"] || {};
+  const s3Status = s3.status === "done" ? "✓ ok" : s3.status === "error" ? `✗ erro: ${s3.erro || "?"}` : "–";
+  const s3Dur = formatDuration(s3.iniciado_em, s3.concluido_em);
+  const gateTableHeader = `\n## Step 3 — Validação (GATE + FIRE)\n**Status:** ${s3Status}${s3Dur ? ` · duração: ${s3Dur}` : ""}\n### GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n`;
   let gateSection;
   if (!gateResult) {
     const errMsg = gateError ? `> GATE falhou com erro: \`${gateError}\`\n` : "> GATE não retornou dados.\n";
@@ -108,6 +146,28 @@ function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, g
     const resultadoLabel = gateResult.resultado === "OPERAR" ? "✓ OPERAR" : "✗ BLOQUEADO";
     gateSection = `${gateTableHeader}${gateRows}${criteriosVazios}\n\n**Resultado:** ${resultadoLabel}\n`;
   }
+
+  const gateDiagSection = gateStats ? `
+## Diagnóstico quantitativo
+| Campo | Valor |
+|---|---|
+| N trades válidos | ${fmt(gateStats.n_trades_valido, "int")} |
+| P&L total janela | R$${fmt(gateStats.pnl_total, "currency")} |
+| P&L médio por trade | R$${fmt(gateStats.pnl_medio, "currency")} |
+| P&L mediana | R$${fmt(gateStats.pnl_mediana, "currency")} |
+| Pior trade | R$${fmt(gateStats.pnl_pior, "currency")} |
+| Drawdown máximo | R$${fmt(gateStats.dd_max, "currency")} |
+| Stops consecutivos máx | ${fmt(gateStats.stops_seguidos, "int")} |
+` : "";
+
+  const estrategiaSection = gateStats?.estrategia_por_regime ? `
+## Estratégia por regime (janela válida)
+| Regime | Estratégia |
+|---|---|
+${Object.entries(gateStats.estrategia_por_regime)
+  .map(([regime, estrategia]) => `| ${regime} | ${fmt(estrategia)} |`)
+  .join("\n")}
+` : "";
 
   // Step 3 — FIRE (somente se GATE aprovou)
   let fireSection = "";
@@ -125,7 +185,7 @@ function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, g
     fireSection = `${fireHeader}${fireRows}\n\n**Estratégia dominante por regime:**\n${estrategias || "N/D"}\n\n**Cobertura:** ${cobertura.ciclos_com_operacao ?? 0}/${cobertura.total_ciclos ?? 0} ciclos históricos com operação\n**Distribuição de stops:** ${JSON.stringify(stops)}`;
   }
 
-  return `${header}${step1Section}${step2Section}${gateSection}${fireSection}`;
+  return `${header}${step1Section}${step2Section}${tuneQualidadeSection}${gateSection}${gateDiagSection}${estrategiaSection}${fireSection}`;
 }
 
 function downloadTextFile(filename, content) {
@@ -720,6 +780,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               gateResult: enrichedGate,
               gateError,
               fireDiag: data.fire_diagnostico || fireDiag,
+              tuneStats: data.tune_stats,
+              gateStats: data.gate_stats,
             })
           );
           return;

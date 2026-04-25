@@ -58,3 +58,13 @@ status: pendente
   campos pendentes: intent, constraints, role, function
 
 status: pendente
+
+---
+## 29e18f6 - 2026-04-23
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/timeutils.md
+  arquivo de código: atlas_backend/core/timeutils.py
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

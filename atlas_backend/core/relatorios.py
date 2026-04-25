@@ -375,11 +375,52 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
     fire_diagnostico = calibracao.get("fire_diagnostico") or {}
     data_hoje = datetime.now().strftime("%Y-%m-%d")
 
+    historico_config = dados_raw.get("historico_config") or []
+
+    tune_rec = next(
+        (r for r in reversed(historico_config) if r.get("modulo") == "TUNE v2.0"),
+        {},
+    )
+    gate_rec = next(
+        (r for r in reversed(historico_config) if r.get("modulo") == "GATE v1.0"),
+        {},
+    )
+
+    tune_stats = {
+        "tp_sugerido":   tune_rec.get("valor_novo"),
+        "ir_valido":     tune_rec.get("ir_valido"),
+        "n_trades":      tune_rec.get("trades_valido"),
+        "confianca_n":   tune_rec.get("confianca_n"),
+        "janela_anos":   tune_rec.get("janela_anos"),
+        "ano_teste_ini": tune_rec.get("ano_teste_ini"),
+        "trials":        tune_rec.get("trials"),
+        "reflect_mask":  tune_rec.get("reflect_mask"),
+        "pnl_medio":     tune_rec.get("pnl_medio"),
+        "pnl_mediana":   tune_rec.get("pnl_mediana"),
+        "pnl_pior":      tune_rec.get("pnl_pior"),
+        "n_stops":       tune_rec.get("n_stops"),
+        "acerto_pct":    tune_rec.get("acerto_valido"),
+    }
+
+    gate_stats = {
+        "n_trades_valido":       gate_rec.get("n_trades_valido"),
+        "pnl_total":             gate_rec.get("pnl_total"),
+        "pnl_medio":             gate_rec.get("pnl_medio"),
+        "pnl_mediana":           gate_rec.get("pnl_mediana"),
+        "pnl_pior":              gate_rec.get("pnl_pior"),
+        "dd_max":                gate_rec.get("dd_max"),
+        "stops_seguidos":        gate_rec.get("stops_seguidos"),
+        "estrategia_por_regime": gate_rec.get("estrategia_por_regime"),
+        "gate_valores":          gate_rec.get("gate_valores"),
+    }
+
     return {
         "gate_resultado": gate_resultado,
         "fire_diagnostico": fire_diagnostico,
         "steps": steps,
         "data": data_hoje,
+        "tune_stats": tune_stats,
+        "gate_stats": gate_stats,
     }
 
 

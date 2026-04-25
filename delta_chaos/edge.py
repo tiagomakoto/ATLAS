@@ -36,7 +36,7 @@ from datetime import datetime
 #
 # Regras de determinação (ver bloco "Determinar status" em get_ativo):
 #   1. Sem histórico (sem historico_config) → BLOQUEADO
-#   2. Quedas REFLECT consecutivas >= 2 (D ou E) → SUSPENSO
+#   2. Quedas REFLECT consecutivas >= 2 (D ou T) → SUSPENSO
 #   3. GATE 8/8 + IR > 0 + REFLECT em A/B → OPERAR
 #   4. GATE com resultado válido (não 8/8) → MONITORAR
 #   5. Sem IR capturável em nenhum regime → SEM_EDGE
@@ -252,8 +252,8 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
         delta_ir * w["delta_ir"]
     )
 
-    # Deriva reflect_state a partir do score e dos thresholds do config
-    # B48-REFLECT: estado salvo junto ao score para lookup direto na Fase 3 do TUNE v2.0
+    # B55 — estados canônicos A/B/C/D/T (Tail)
+    # 'E' legado: ainda pode existir em JSONs antigos até rerrodar (B55)
     _thr = carregar_config()["reflect"]["thresholds"]
     if reflect_score >= _thr["A"]:
         reflect_state = "A"
@@ -264,7 +264,7 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
     elif reflect_score >= _thr["D"]:
         reflect_state = "D"
     else:
-        reflect_state = "E"
+        reflect_state = "T"  # Tail
 
     # Salvar no master JSON
     if "reflect_cycle_history" not in cfg:
@@ -285,22 +285,32 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
 
 def reflect_sizing_calcular(ativo: str) -> float:
     """
-    Calcula multiplicador REFLECT baseado no estado atual.
-    Retorna valor entre 0.5 e 1.5.
+    B56 — Multiplicador REFLECT por estado canônico A/B/C/D/T.
+    sizing_final = sizing_orbit × reflect_mult
+
+    A → 1.0  (alpha via B01/B29 — futuro)
+    B → 1.0  (edge normal)
+    C → 0.5  (edge enfraquecendo — PE-007 provisório)
+    D → 0.0  (edge deteriorado)
+    T → 0.0  (Tail — evento de cauda, protocolo B02)
     """
     cfg = tape_ativo_carregar(ativo)
     reflect_hist = cfg.get("reflect_cycle_history", {})
     if not reflect_hist:
         return 1.0  # default se não há histórico
 
-    # Pegar último ciclo
     ultimo_ciclo = max(reflect_hist.keys())
-    dados = reflect_hist[ultimo_ciclo]
-    score = dados.get("score_reflect", 0.0)
+    estado = reflect_hist[ultimo_ciclo].get("reflect_state", "B")
 
-    # Mapear score para sizing (exemplo: score entre -2 e +2 → 0.5 a 1.5)
-    sizing = 1.0 + (score * 0.25)  # fator simples
-    return max(0.5, min(1.5, sizing))  # clamp
+    _lookup = {
+        "A": 1.0,   # alpha pendente B01/B29
+        "B": 1.0,
+        "C": 0.5,   # PE-007 — provisório
+        "D": 0.0,
+        "T": 0.0,   # Tail — protocolo B02
+        "E": 0.0,   # legado — tratar como T até rerrodar histórico (B55)
+    }
+    return _lookup.get(estado, 1.0)
 
 # Funções auxiliares copiadas de tape.py (precisam ser definidas ou importadas)
 def _calculate_divergence_components(df_eod, ativo, data):
