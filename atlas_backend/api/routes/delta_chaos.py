@@ -21,12 +21,14 @@ from atlas_backend.core.calibracao_contract import (
     normalize_gate_resultado,
     normalize_fire_diagnostico,
     normalize_guard_payload,
+    normalize_tune_ranking,
 )
 from atlas_backend.core.delta_chaos_reader import (
     get_ativo_raw,
     get_cotahist_recente_info,
     get_gate_resultado,
     get_fire_diagnostico,
+    sanitize_record,
 )
 
 router = APIRouter(prefix="/delta-chaos", tags=["delta-chaos"])
@@ -281,97 +283,205 @@ async def daily_run(payload: dict):
     # ═══ FIM NOVO ═══
 
 
-@router.post("/tune/aplicar")
-async def tune_aplicar(payload: dict):
+@router.post("/tune/confirmar-regime")
+async def tune_confirmar_regime(payload: dict):
     """
-    Aplica parâmetros TUNE aprovados pelo CEO.
-    
-    Recebe:
-        ticker: str
-        tp: float (take_profit)
-        stop: float (stop_loss)
-    
-    Retorna:
-        status: "ok"
+    Confirma estratégia eleita para um regime específico (TUNE v3.0).
+
+    Recebe: { ticker, regime, run_id }
+    Grava estrategias[regime] + marca confirmado=true no ranking.
+    Rejeita se run_id inválido ou regime já confirmado.
     """
-    ticker = payload.get("ticker", "").strip().upper()
-    tp = float(payload.get("tp"))
-    stop = float(payload.get("stop"))
-    
+    ticker = str(payload.get("ticker") or "").strip().upper()
+    regime = str(payload.get("regime") or "").strip()
+    _run_id_raw = payload.get("run_id")
+    run_id = str(_run_id_raw).strip() if _run_id_raw is not None else ""
+
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise HTTPException(status_code=400, detail=f"Ticker inválido: {ticker}")
-    
-    if tp <= 0 or stop <= 0:
-        raise HTTPException(status_code=400, detail="TP e STOP devem ser positivos")
-    
+    if not regime:
+        raise HTTPException(status_code=400, detail="regime obrigatório")
+    if not run_id:
+        raise HTTPException(status_code=400, detail="run_id obrigatório")
+
     try:
-        from atlas_backend.core.terminal_stream import emit_log
-        from atlas_backend.core.delta_chaos_reader import get_ativo
-        from atlas_backend.core.relatorios import marcar_aplicado
         import tempfile
-        import json
-        import os
-        
-        # 1. Ler valor anterior do master JSON
-        dados = get_ativo(ticker)
-        tp_atual = dados.get("take_profit", 0.0)
-        stop_atual = dados.get("stop_loss", 0.0)
-        valor_anterior = f"TP={tp_atual} STOP={stop_atual}"
-        
-        # 2. Gravar novos valores com escrita atômica
+        from atlas_backend.core.terminal_stream import emit_log
+
         path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
-        path_tmp = path_ativo.with_suffix(".tmp")
-        
-        dados["take_profit"] = tp
-        dados["stop_loss"] = stop
-        dados["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        with open(path_tmp, "w", encoding="utf-8") as f:
-            json.dump(dados, f, indent=2, ensure_ascii=False)
-        os.replace(path_tmp, path_ativo)
-        
-        # 3. Registrar em historico_config[]
-        valor_novo = f"TP={tp} STOP={stop}"
-        registro = {
-            "data": datetime.now().strftime("%Y-%m-%d"),
-            "modulo": "TUNE v1.0",
-            "parametro": "tune_aplicado",
-            "valor_anterior": valor_anterior,
-            "valor_novo": valor_novo,
-            "motivo": f"TUNE aprovado pelo CEO — TP={tp*100:.1f}% STOP={stop*100:.1f}%"
-        }
-        
-        # Atualizar historico_config no master JSON
         with open(path_ativo, "r", encoding="utf-8") as f:
             dados = json.load(f)
-        
+
+        ranking_root = dados.get("tune_ranking_estrategia") or {}
+        meta = ranking_root.get("_meta") or {}
+
+        if meta.get("run_id") != run_id:
+            raise HTTPException(status_code=409, detail="run_id não corresponde ao ranking atual")
+
+        regime_dados = ranking_root.get(regime)
+        if regime_dados is None:
+            raise HTTPException(status_code=404, detail=f"Regime {regime} não encontrado no ranking")
+
+        if regime_dados.get("confirmado"):
+            raise HTTPException(status_code=409, detail=f"Regime {regime} já confirmado")
+
+        eleicao_status = regime_dados.get("eleicao_status")
+        if eleicao_status not in {"competitiva", "estrutural_fixo"}:
+            raise HTTPException(status_code=400, detail=f"Regime {regime} está bloqueado — sem estratégia a confirmar")
+
+        # Determinar estratégia a gravar
+        if eleicao_status == "estrutural_fixo":
+            estrategia = regime_dados.get("estrategia_eleita")
+        else:
+            ranking_list = regime_dados.get("ranking") or []
+            if not ranking_list:
+                raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia classificada — confirmação indisponível")
+            estrategia = ranking_list[0]["estrategia"]
+
+        if not estrategia:
+            raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia associada — confirmação indisponível")
+
+        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Gravar estrategia no campo estrategias[regime]
+        if "estrategias" not in dados:
+            dados["estrategias"] = {}
+        estrategia_anterior = dados["estrategias"].get(regime)
+        dados["estrategias"][regime] = estrategia
+
+        # Marcar confirmado no ranking
+        regime_dados["confirmado"] = True
+        regime_dados["estrategia_eleita"] = estrategia
+        ranking_root[regime] = regime_dados
+        dados["tune_ranking_estrategia"] = ranking_root
+
+        # Registrar em historico_config
         if "historico_config" not in dados:
             dados["historico_config"] = []
-        
-        dados["historico_config"].append(registro)
-        dados["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        with open(path_tmp, "w", encoding="utf-8") as f:
-            json.dump(dados, f, indent=2, ensure_ascii=False)
-        os.replace(path_tmp, path_ativo)
-        
-        # 4. Marcar relatório como aplicado (se houver)
-        # O ID do relatório é extraído do último registro de TUNE no historico_config
-        tunes = [c for c in dados.get("historico_config", []) if "TUNE" in c.get("modulo", "")]
-        if tunes:
-            # Busca o último relatório não aplicado no index.json
-            from atlas_backend.core.relatorios import obter_todos_relatorios
-            index = obter_todos_relatorios()
-            for rel in reversed(index):
-                if (rel.get("ticker") == ticker and 
-                    rel.get("tipo") == "TUNE" and 
-                    not rel.get("aplicado", False)):
-                    marcar_aplicado(rel["id"])
-                    break
-        
-        emit_log(f"[TUNE] {ticker}: parâmetros aplicados — TP={tp*100:.1f}% STOP={stop*100:.1f}%", level="info")
-        return {"status": "ok", "ticker": ticker, "tp": tp, "stop": stop}
+        dados["historico_config"].append({
+            "data": agora[:10],
+            "modulo": "TUNE v3.0",
+            "parametro": f"estrategia.{regime}",
+            "valor_anterior": estrategia_anterior,
+            "valor_novo": estrategia,
+            "motivo": f"Confirmação CEO — eleicao_status={eleicao_status} run_id={run_id}",
+        })
+        dados["atualizado_em"] = agora
 
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=path_ativo.parent, suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                json.dump(dados, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path_ativo)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        emit_log(f"[TUNE v3.0] {ticker} {regime}: confirmado → {estrategia}", level="info")
+        return {"status": "ok", "ticker": ticker, "regime": regime, "estrategia": estrategia}
+
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/tune/confirmar-todos")
+async def tune_confirmar_todos(payload: dict):
+    """
+    Bulk approve: confirma top do ranking para todos os regimes elegíveis (TUNE v3.0).
+
+    Recebe: { ticker, run_id }
+    Elegíveis = eleicao_status in {competitiva, estrutural_fixo} AND not confirmado.
+    Registra um único bloco em historico_config com bulk=true.
+    """
+    ticker = str(payload.get("ticker") or "").strip().upper()
+    _run_id_raw = payload.get("run_id")
+    run_id = str(_run_id_raw).strip() if _run_id_raw is not None else ""
+
+    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
+        raise HTTPException(status_code=400, detail=f"Ticker inválido: {ticker}")
+    if not run_id:
+        raise HTTPException(status_code=400, detail="run_id obrigatório")
+
+    try:
+        import tempfile
+        from atlas_backend.core.terminal_stream import emit_log
+
+        path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+        with open(path_ativo, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+
+        ranking_root = dados.get("tune_ranking_estrategia") or {}
+        meta = ranking_root.get("_meta") or {}
+
+        if meta.get("run_id") != run_id:
+            raise HTTPException(status_code=409, detail="run_id não corresponde ao ranking atual")
+
+        if "estrategias" not in dados:
+            dados["estrategias"] = {}
+
+        confirmados = []
+        for regime, regime_dados in ranking_root.items():
+            if regime == "_meta":
+                continue
+            if not isinstance(regime_dados, dict):
+                continue
+            if regime_dados.get("confirmado"):
+                continue
+            eleicao_status = regime_dados.get("eleicao_status")
+        if eleicao_status not in {"competitiva", "estrutural_fixo"}:
+            raise HTTPException(status_code=400, detail=f"Regime {regime} está bloqueado — sem estratégia a confirmar")
+
+        # Determinar estratégia a gravar
+        if eleicao_status == "estrutural_fixo":
+            estrategia = regime_dados.get("estrategia_eleita")
+        else:
+            ranking_list = regime_dados.get("ranking") or []
+            if not ranking_list:
+                raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia classificada — confirmação indisponível")
+            estrategia = ranking_list[0]["estrategia"]
+
+        if not estrategia:
+            raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia associada — confirmação indisponível")
+
+        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        dados["tune_ranking_estrategia"] = ranking_root
+        if "historico_config" not in dados:
+            dados["historico_config"] = []
+        dados["historico_config"].append({
+            "data": agora[:10],
+            "modulo": "TUNE v3.0",
+            "parametro": "estrategia.bulk",
+            "valor_anterior": None,
+            "valor_novo": {c["regime"]: c["estrategia"] for c in confirmados},
+            "motivo": f"Bulk approve CEO — {len(confirmados)} regimes — run_id={run_id}",
+            "bulk": True,
+        })
+        dados["atualizado_em"] = agora
+
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=path_ativo.parent, suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                json.dump(dados, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path_ativo)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        emit_log(f"[TUNE v3.0] {ticker}: bulk approve — {len(confirmados)} regimes confirmados", level="info")
+        return {"status": "ok", "ticker": ticker, "confirmados": confirmados}
+
+    except HTTPException:
+        raise
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
@@ -404,7 +514,7 @@ async def calibracao_iniciar(payload: CalibracaoPayload):
             "step_atual": int(result.get("step", 1)),
             "steps": {
                 "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
-                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
+                "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 150},
                 "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
             },
         }
@@ -468,6 +578,7 @@ async def calibracao_status(ticker: str):
         gate = normalize_gate_resultado(gate_stored, ticker)
         fire_stored = calibracao.get("fire_diagnostico")
         fire = normalize_fire_diagnostico(fire_stored, ticker)
+        tune_ranking = dados_raw.get("tune_ranking_estrategia")
 
         return build_calibracao_payload(
             ticker=ticker,
@@ -475,6 +586,7 @@ async def calibracao_status(ticker: str):
             guard=guard,
             gate_resultado=gate,
             fire_diagnostico=fire,
+            tune_ranking_estrategia=tune_ranking,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -507,7 +619,7 @@ async def calibracao_retomar(ticker: str):
 async def calibracao_progresso_tune(ticker: str):
     """
     Lê tune_{TICKER}.db via conexão read-only
-    Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
+    Retorna: { "trials_completos": N, "trials_total": <config.tune.trials_por_candidato>, "best_ir": X }
     Conexão deve ser read-only explícita para evitar conflito com processo de escrita
     """
     _validar_ticker(ticker)
@@ -555,6 +667,7 @@ async def calibracao_exportar_relatorio(ticker: str):
             "data": result.get("data"),
             "tune_stats": result.get("tune_stats"),
             "gate_stats": result.get("gate_stats"),
+            "tune_ranking_estrategia": result.get("tune_ranking_estrategia"),
         }
     except HTTPException:
         raise
@@ -562,3 +675,26 @@ async def calibracao_exportar_relatorio(ticker: str):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ativos/{ticker}/historico-config")
+async def get_historico_config(ticker: str):
+    """
+    Retorna o array completo de historico_config do master JSON do ativo,
+    ordenado por data decrescente (mais recente primeiro).
+    """
+    _validar_ticker(ticker)
+    try:
+        raw = get_ativo_raw(ticker)
+        entries = raw.get("historico_config", [])
+        if not isinstance(entries, list):
+            entries = []
+        sanitized = [sanitize_record(e) for e in entries if isinstance(e, dict)]
+        sanitized.sort(key=lambda e: str(e.get("data") or ""), reverse=True)
+        return {"ticker": ticker, "historico_config": sanitized}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

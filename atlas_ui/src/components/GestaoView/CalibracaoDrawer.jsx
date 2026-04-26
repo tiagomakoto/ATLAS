@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import useWebSocket from "../../hooks/useWebSocket";
+import TuneRankingPanel from "./TuneRankingPanel";
 
 const API_BASE = "http://localhost:8000";
 
@@ -18,7 +19,7 @@ const STEPS = [
 
 const DEFAULT_STEPS = {
   "1_backtest_dados": { status: "idle", iniciado_em: null, concluido_em: null, erro: null },
-  "2_tune": { status: "idle", iniciado_em: null, concluido_em: null, erro: null, trials_completos: 0, trials_total: 200 },
+  "2_tune": { status: "idle", iniciado_em: null, concluido_em: null, erro: null, trials_completos: 0, trials_total: 150 },
   "3_gate_fire": { status: "idle", iniciado_em: null, concluido_em: null, erro: null },
 };
 
@@ -74,7 +75,7 @@ function statusVisual(status, isNext) {
   return { bg: "rgba(156,163,175,0.1)", border: "var(--atlas-border)", label: "PENDENTE", color: "var(--atlas-text-secondary)" };
 }
 
-function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag, tuneStats, gateStats }) {
+function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag, tuneStats, gateStats, tuneRanking }) {
   const now = new Date().toISOString().slice(0, 10);
   const header = `# Relatório de Calibração — ${ticker} — ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
 
@@ -185,7 +186,32 @@ ${Object.entries(gateStats.estrategia_por_regime)
     fireSection = `${fireHeader}${fireRows}\n\n**Estratégia dominante por regime:**\n${estrategias || "N/D"}\n\n**Cobertura:** ${cobertura.ciclos_com_operacao ?? 0}/${cobertura.total_ciclos ?? 0} ciclos históricos com operação\n**Distribuição de stops:** ${JSON.stringify(stops)}`;
   }
 
-  return `${header}${step1Section}${step2Section}${tuneQualidadeSection}${gateSection}${gateDiagSection}${estrategiaSection}${fireSection}`;
+  // Step 2b — Ranking por regime (TUNE v3.0)
+  // Aceita tanto a estrutura crua do ativo {regime: {eleicao_status, ranking, ...}}
+  // quanto a estrutura normalizada do step_2 {regimes: {...}, _meta, ...}
+  let tuneRankingSection = "";
+  if (tuneRanking && typeof tuneRanking === "object") {
+    // Detecta estrutura normalizada (step_2.tune_ranking) vs crua (tune_ranking_estrategia)
+    const regimesObj = tuneRanking.regimes
+      ? tuneRanking.regimes
+      : Object.fromEntries(Object.entries(tuneRanking).filter(([k]) => k !== "_meta"));
+    const regimes = Object.entries(regimesObj);
+    if (regimes.length > 0) {
+      const rows = regimes.map(([regime, dados]) => {
+        const status = fmt(dados.eleicao_status);
+        const eleita = fmt(dados.estrategia_eleita);
+        const n = fmt(dados.n_trades, "int");
+        const ranking = (dados.ranking || []);
+        const rankingStr = ranking
+          .map((r) => `${fmt(r.estrategia)} IR=${fmt(r.ir, "float")} TP=${fmt(r.tp)} STOP=${fmt(r.stop)} (${fmt(r.trials, "int")} trials)`)
+          .join(" / ");
+        return `| ${regime} | ${status} | ${eleita} | ${n} | ${rankingStr || "—"} |`;
+      }).join("\n");
+      tuneRankingSection = `\n## Step 2b — Ranking por Regime (TUNE v3.0)\n| Regime | Status Eleição | Estratégia Eleita | N Trades | Candidatos (IR / TP / STOP) |\n|--------|---------------|-------------------|----------|------------------------------|\n${rows}\n`;
+    }
+  }
+
+  return `${header}${step1Section}${step2Section}${tuneQualidadeSection}${tuneRankingSection}${gateSection}${gateDiagSection}${estrategiaSection}${fireSection}`;
 }
 
 function downloadTextFile(filename, content) {
@@ -196,6 +222,64 @@ function downloadTextFile(filename, content) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function step1ModulesText(status, subModules) {
+  if (status === "idle") return null;
+  if (status === "done") return "TAPE ok | ORBIT ok | REFLECT ok";
+  const tape = subModules?.TAPE;
+  const orbit = subModules?.ORBIT;
+  const reflect = subModules?.REFLECT;
+
+  if (tape === "error") return "TAPE erro";
+  if (orbit === "error") return "TAPE ok | ORBIT erro";
+  if (reflect === "error") return "TAPE ok | ORBIT ok | REFLECT erro";
+  if (reflect === "ok") return "TAPE ok | ORBIT ok | REFLECT ok";
+  if (orbit === "ok") return "TAPE ok | ORBIT ok | REFLECT";
+  if (tape === "ok") return "TAPE ok | ORBIT";
+  return "TAPE";
+}
+
+function TuneRegimeProgressPanel({ progressByRegime }) {
+  const rows = Object.entries(progressByRegime || {});
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 8, border: "1px solid var(--atlas-border)", background: "var(--atlas-surface)", borderRadius: 4, padding: 8 }}>
+      <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-primary)", marginBottom: 6 }}>
+        Eleição por regime (TUNE)
+      </div>
+      {rows.map(([regime, dados]) => {
+        const status = dados?.eleicao_status || "in_progress";
+        const ranking = dados?.ranking || [];
+        const top = ranking[0] || null;
+        const statusLabel = status === "competitiva"
+          ? "competitiva"
+          : status === "estrutural_fixo"
+            ? "estrutural"
+            : status === "bloqueado"
+              ? "bloqueado"
+              : "em andamento";
+        return (
+          <div key={regime} style={{ marginBottom: 6, padding: "6px 8px", border: "1px solid var(--atlas-border)", borderRadius: 3 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace", fontSize: 9 }}>
+              <span style={{ color: "var(--atlas-text-primary)", fontWeight: "bold" }}>{regime}</span>
+              <span style={{ color: "var(--atlas-text-secondary)" }}>{statusLabel}</span>
+            </div>
+            {dados?.n_trades != null && (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
+                N={dados.n_trades}
+              </div>
+            )}
+            {top && (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+                {top.estrategia} | IR {Number(top.ir || 0).toFixed(3)} | TP {top.tp != null ? Number(top.tp).toFixed(2) : "--"} | STOP {top.stop != null ? Number(top.stop).toFixed(2) : "--"}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function CalibracaoDrawer({ ticker, onClose }) {
@@ -218,6 +302,10 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   const [cotahistInfo, setCotahistInfo] = useState(null);
   const [showStep1Guard, setShowStep1Guard] = useState(false);
   const [subModules, setSubModules] = useState({ TAPE: null, ORBIT: null, REFLECT: null });
+  const [tuneRanking, setTuneRanking] = useState(null);
+  const [tunePendente, setTunePendente] = useState(false);
+  const [tuneRankingConfirmado, setTuneRankingConfirmado] = useState(false);
+  const [tuneRegimeProgress, setTuneRegimeProgress] = useState({});
 
   const proximoStep = useMemo(() => {
     let ultimoDone = -1;
@@ -273,6 +361,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             "2_tune": { ...DEFAULT_STEPS["2_tune"], ...step2Data },
             "3_gate_fire": { ...DEFAULT_STEPS["3_gate_fire"], ...step3Data },
           });
+          if (step2Data?.trials_total != null) setTrialTotal(Number(step2Data.trials_total));
 
           const step3Payload = data?.step_3 || {};
           // Trata criterios=[] como ausente — normalize_gate_resultado retorna
@@ -295,6 +384,23 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           if (fireDiagInit) setFireDiag(fireDiagInit);
           if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
           if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
+
+          // TUNE v3.0 ranking e banner tune_versao_pendente
+          const step2Payload = data?.step_2 || {};
+          if (step2Payload.tune_ranking) {
+            setTuneRanking(step2Payload.tune_ranking);
+            const jaConfirmados = !step2Payload.aguardando_confirmacao_regimes;
+            setTuneRankingConfirmado(jaConfirmados);
+            setTuneRegimeProgress(step2Payload.tune_ranking?.regimes || {});
+          }
+          // Banner pendência: buscar do ativo raw se step2 não trouxer
+          try {
+            const ativoRawRes = await fetch(`${API_BASE}/ativos/${ticker}`);
+            if (ativoRawRes.ok) {
+              const ativoRaw = await ativoRawRes.json();
+              setTunePendente(Boolean(ativoRaw?.tune_versao_pendente));
+            }
+          } catch (_) { /* ignora */ }
 
       // Carregar TP/Stop persistido se step 2 já concluiu
       if (step2Data?.status === "done") {
@@ -472,11 +578,12 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         setIndexProgress({ current: 0, total: 0 });
         setIndexComplete(false);
         setTrialAtual(0);
-        setTrialTotal(200);
+        setTrialTotal(Number(steps?.["2_tune"]?.trials_total || 150));
         setBestIr(0);
         setBestTp(null);
         setBestStop(null);
         setSubModules({ TAPE: null, ORBIT: null, REFLECT: null });
+        setTuneRegimeProgress({});
       }
       if (modulo === "GATE") {
         // Limpa dados de run anterior para evitar exibição fora de ordem
@@ -502,16 +609,21 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     if (evento?.type === "dc_module_complete") {
       if (modulo === "ORBIT" || modulo === "TAPE" || modulo === "REFLECT") {
         const ok = evento?.data?.status === "ok";
-        setSubModules((prev) => ({ ...prev, [modulo]: ok ? "ok" : "error" }));
-        setSteps((prev) => ({
-          ...prev,
-          "1_backtest_dados": {
-            ...prev["1_backtest_dados"],
-            status: ok ? "done" : "error",
-            concluido_em: evento?.data?.timestamp || new Date().toISOString(),
-            erro: ok ? null : evento?.data?.erro,
-          },
-        }));
+        setSubModules((prev) => {
+          const nextSub = { ...prev, [modulo]: ok ? "ok" : "error" };
+          const allOk = ["TAPE", "ORBIT", "REFLECT"].every((m) => nextSub[m] === "ok");
+          const anyError = ["TAPE", "ORBIT", "REFLECT"].some((m) => nextSub[m] === "error");
+          setSteps((prevSteps) => ({
+            ...prevSteps,
+            "1_backtest_dados": {
+              ...prevSteps["1_backtest_dados"],
+              status: anyError ? "error" : allOk ? "done" : "running",
+              concluido_em: allOk || anyError ? (evento?.data?.timestamp || new Date().toISOString()) : prevSteps["1_backtest_dados"]?.concluido_em,
+              erro: anyError ? (evento?.data?.erro || "Erro em submódulo do step 1") : null,
+            },
+          }));
+          return nextSub;
+        });
       }
       if (modulo === "TUNE") {
         const ok = evento?.data?.status === "ok";
@@ -524,6 +636,21 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             erro: ok ? null : evento?.data?.erro,
           },
         }));
+        // Re-fetch ranking após TUNE completar para garantir run_id atualizado
+        if (ok) {
+          fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((data) => {
+              if (!data) return;
+              const step2Payload = data?.step_2 || {};
+              if (step2Payload.tune_ranking) {
+                setTuneRanking(step2Payload.tune_ranking);
+                setTuneRankingConfirmado(!step2Payload.aguardando_confirmacao_regimes);
+                setTuneRegimeProgress(step2Payload.tune_ranking?.regimes || {});
+              }
+            })
+            .catch(() => {});
+        }
       }
       if (modulo === "GATE") {
         const ok = evento?.data?.status === "ok";
@@ -620,6 +747,52 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       if (d.best_stop != null) setBestStop(d.best_stop);
     }
 
+    if (evento?.type === "dc_tune_eleicao_start") {
+      const planejados = evento?.data?.regimes_planejados || [];
+      const inicial = {};
+      for (const regime of planejados) {
+        inicial[regime] = {
+          eleicao_status: "in_progress",
+          confirmado: false,
+          estrategia_eleita: null,
+          ranking: [],
+        };
+      }
+      setTuneRegimeProgress(inicial);
+    }
+
+    if (evento?.type === "dc_tune_eleicao_regime_start") {
+      const d = evento?.data || {};
+      if (!d.regime) return;
+      setTuneRegimeProgress((prev) => ({
+        ...prev,
+        [d.regime]: {
+          ...(prev[d.regime] || {}),
+          eleicao_status: "in_progress",
+          n_trades: d.n_trades,
+          ranking: prev[d.regime]?.ranking || [],
+          confirmado: prev[d.regime]?.confirmado || false,
+          estrategia_eleita: prev[d.regime]?.estrategia_eleita || null,
+        },
+      }));
+    }
+
+    if (evento?.type === "dc_tune_eleicao_regime_complete") {
+      const d = evento?.data || {};
+      if (!d.regime) return;
+      setTuneRegimeProgress((prev) => ({
+        ...prev,
+        [d.regime]: {
+          ...(prev[d.regime] || {}),
+          eleicao_status: d.eleicao_status || prev[d.regime]?.eleicao_status || "in_progress",
+          n_trades: d.n_trades ?? prev[d.regime]?.n_trades,
+          ranking: d.ranking || [],
+          estrategia_eleita: d.estrategia_eleita ?? prev[d.regime]?.estrategia_eleita ?? null,
+          confirmado: prev[d.regime]?.confirmado || false,
+        },
+      }));
+    }
+
     if (evento?.type === "dc_tune_index_start") {
       setIndexProgress({ current: evento?.data?.current || 0, total: evento?.data?.total || 0 });
       setIndexComplete(false);
@@ -659,7 +832,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     if (status === "done") return "Concluído";
     if (status === "error") return `Falhou: ${steps[key]?.erro || "erro desconhecido"}`;
     if (status === "paused") return "Pausado — clique em retomar";
-    if (key === "2_tune" && proximoStep === key) return "Optuna 200 trials · estimativa 4–8h";
+    if (key === "2_tune" && proximoStep === key) return `Optuna ${trialTotal} trials · estimativa 4–8h`;
     return "Aguardando início";
   }
 
@@ -746,6 +919,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       gateResult,
       gateError,
       fireDiag: blocked ? null : fireDiag,
+      tuneRanking,
     });
     downloadTextFile(filename, markdown);
   }
@@ -782,6 +956,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               fireDiag: data.fire_diagnostico || fireDiag,
               tuneStats: data.tune_stats,
               gateStats: data.gate_stats,
+              tuneRanking: data.tune_ranking_estrategia || tuneRanking,
             })
           );
           return;
@@ -861,25 +1036,11 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             {STEPS.find((s) => s.id === stepId)?.name || getStepLabel(stepId)}
           </div>
           {stepId === "1_backtest_dados" && (() => {
-            // Se step concluído, sempre mostrar todos ok; senão mostrar o que chegou via WS
-            if (status === "done") {
-              return (
-                <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
-                  TAPE ok | ORBIT ok | REFLECT ok
-                </div>
-              );
-            }
-            // Quando running: mostrar os 3 sempre (mesmo que evento tenha sido perdido)
-            // Quando idle: não mostrar nada
-            if (status !== "running") return null;
-            const parts = ["TAPE", "ORBIT", "REFLECT"].map((m) => {
-              if (subModules[m] === "ok") return `${m} ok`;
-              if (subModules[m] === "error") return `${m} erro`;
-              return m;
-            });
+            const parts = step1ModulesText(status, subModules);
+            if (!parts) return null;
             return (
               <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
-                {parts.join(" | ")}
+                {parts}
               </div>
             );
           })()}
@@ -958,6 +1119,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 4 }}>
                 Tempo decorrido {elapsedForStep2()} (est. restante {estimatedForStep2()})
               </div>
+              <TuneRegimeProgressPanel progressByRegime={tuneRegimeProgress} />
             </div>
           )}
 
@@ -969,6 +1131,33 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             >
               Retomar
             </button>
+          )}
+
+          {/* TUNE v3.0 — Ranking de eleição de estratégia (exibido após step 2 concluir) */}
+          {stepId === "2_tune" && status === "done" && tuneRanking && (
+            <TuneRankingPanel
+              ticker={ticker}
+              tuneRanking={tuneRanking}
+              onTodosConfirmados={() => setTuneRankingConfirmado(true)}
+            />
+          )}
+
+          {/* Step 3 aguardando confirmação de regimes (TUNE v3.0) */}
+          {stepId === "3_gate_fire" && status === "paused" && (
+            <div style={{ marginTop: 8 }}>
+              {!tuneRankingConfirmado ? (
+                <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-amber)" }}>
+                  ⚠ Confirme todos os regimes no ranking TUNE acima para liberar o step 3.
+                </div>
+              ) : (
+                <button
+                  onClick={handleRetomar}
+                  style={{ marginTop: 4, padding: "4px 10px", background: "var(--atlas-green)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
+                >
+                  Iniciar step 3 (GATE + FIRE)
+                </button>
+              )}
+            </div>
           )}
 
           {/* Step 3 GATE + FIRE */}
@@ -1122,6 +1311,13 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           </button>
         </div>
 
+        {/* Banner recalibração TUNE v3.0 obrigatória */}
+        {tunePendente && (
+          <div style={{ background: "rgba(245,158,11,0.15)", border: "1px solid var(--atlas-amber)", color: "var(--atlas-text-primary)", padding: "8px 12px", borderRadius: 4, marginBottom: 12, fontSize: 9, fontFamily: "monospace" }}>
+            ⚠ Este ativo requer recalibração TUNE v3.0 — o FIRE está bloqueado para novas posições até a conclusão.
+          </div>
+        )}
+
         {/* Watchdog alert */}
         {watchdogAlert && (
           <div style={{ background: "rgba(245,158,11,0.2)", color: "var(--atlas-text-primary)", padding: "8px 12px", borderRadius: 4, marginBottom: 16, fontSize: 10, fontFamily: "monospace" }}>
@@ -1214,3 +1410,5 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     </>
   );
 }
+
+

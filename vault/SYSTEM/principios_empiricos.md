@@ -263,6 +263,116 @@ Condição de revisão:
 
 ---
 
-*Dalio (Relojoeiro) — atualizado em 2026-04-13*
+### PE-008 — N mínimo para eleição competitiva de estratégia no TUNE e tabela de candidatos admissíveis
+Data: 2026-04-25
+Tensão relacionada: [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva]]
+
+Decisão adotada:
+  N mínimo para eleição competitiva: 15 trades por regime.
+  Abaixo de 15: candidato estrutural fixo (definido por lógica de vol — Eifert),
+  sem rodada de Optuna competitivo.
+
+  Tabela de candidatos admissíveis por regime:
+  ALTA:             [CSP, BULL_PUT_SPREAD]
+  BAIXA:            [BEAR_CALL_SPREAD]           — estrutural fixo (N irrelevante)
+  NEUTRO:           [BULL_PUT_SPREAD, CSP]
+  NEUTRO_BULL:      [BULL_PUT_SPREAD, CSP]
+  NEUTRO_BEAR:      [BEAR_CALL_SPREAD, BULL_PUT_SPREAD]
+  NEUTRO_TRANSICAO: [BEAR_CALL_SPREAD, BULL_PUT_SPREAD]
+  NEUTRO_LATERAL:   [BULL_PUT_SPREAD, BEAR_CALL_SPREAD]
+  NEUTRO_MORTO:     []                           — bloqueado
+  PANICO:           []                           — bloqueado
+  RECUPERACAO:      [BULL_PUT_SPREAD]            — estrutural fixo (N irrelevante)
+
+Justificativa formal:
+  Para comparar dois candidatos com poder discriminatório mínimo, o intervalo
+  de confiança do IR de cada candidato não deve englobar zero. Com variância
+  típica de sistemas de venda de vol (acerto ~85%, stop ocasional), o limiar
+  prático é N ≈ 15 trades. Abaixo disso, a eleição é aleatória disfarçada
+  de otimização.
+
+  Candidatos por regime derivam de lógica estrutural de volatilidade
+  (Eifert, sessão 2026-04-25):
+  - ALTA: vendedor de put OTM natural (CSP). BPS adiciona proteção se rally violento.
+  - BAIXA: BCS único — CSP em queda é posição estruturalmente incorreta.
+  - NEUTRO_BEAR: BCS natural por convexidade. BPS alternativa se skew pronunciado.
+  - NEUTRO_LATERAL: spread preferível a posição nua em vol comprimida.
+  - RECUPERACAO: BPS único — Livermore: momentum emergente com risco definido.
+  - NEUTRO_MORTO/PANICO: vol insuficiente ou fat tail ativo — bloqueados.
+
+Limitação conhecida:
+  N=15 está abaixo do N=100 formalmente adequado para distribuições assimétricas
+  com fat tail. Para venda de vol, N efetivo é menor que N observado por dois
+  motivos:
+  1. Clustering temporal: ciclos de ALTA de BBAS3, por exemplo, ocorrem em
+     blocos macroeconômicos — não são amostras independentes. N=22 trades em
+     3 blocos temporais tem informação equivalente a N ≈ 8-10 observações
+     independentes (Mandelbrot, sessão 2026-04-25).
+  2. Autocorrelação: trades consecutivos no mesmo regime têm correlação positiva
+     — o N efetivo é sistematicamente menor que o N contado.
+  A tabela de candidatos é provisória — derivada de lógica estrutural de vol
+  e não de evidência estatística por ativo.
+
+Compromisso operacional:
+  N=15 é o melhor threshold operável dado o histórico atual. N=30 bloquearia
+  a maioria dos regimes; sem threshold, overfitting garantido.
+  O CEO recebe ranking completo com N de trades por candidato — confiança
+  real explícita, não encoberta pelo threshold.
+
+Condição de revisão:
+  1. Threshold N: revisar após 3+ ciclos de paper trading por regime por ativo.
+     Se N efetivo superar 30 trades em algum ativo, elevar threshold para N=20.
+  2. Tabela de candidatos: revisão anual ou após mudança estrutural de regime
+     macroeconômico. Qualquer alteração requer deliberação do board.
+  3. Estratégias estruturais fixas (BAIXA, RECUPERACAO): revisão somente após
+     evidência empírica de paper trading — não por resultado de um ciclo adverso.
+
+---
+
+### PE-009 — Floor relativo de desvio padrão no cálculo de IR por regime no TUNE v3.0
+Data: 2026-04-25
+Tensão relacionada: [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva]]
+
+Decisão adotada:
+  `_std_floor = max(std, |mean| * 0.10, 1e-6)`
+  aplicado antes da divisão `IR = mean / _std_floor * sqrt(252/21)`.
+  Resulta em IR máximo teórico de ~34.6 (= 10 * sqrt(12)) para qualquer regime.
+
+Justificativa formal:
+  Com alta taxa de win e prêmios similares entre trades (ex: NEUTRO_BEAR
+  BEAR_CALL_SPREAD em VALE3), `np.std(pnls)` pode ser ordens de magnitude
+  menor que `np.mean(pnls)`. O IR calculado como `mean / (std + 1e-10)` gera
+  valores de 50–300 — matematicamente corretos mas operacionalmente sem sentido.
+  Nenhum sistema real de venda de vol sustenta IR > 5 em base anualizada com
+  N suficiente para ser confiável. IR=264 observado em VALE3 NEUTRO_BEAR é
+  artefato de dispersão baixa, não evidência de edge superior.
+
+Limitação conhecida:
+  O floor de 10% é arbitrário — não há teoria que justifique exatamente 10%
+  como limiar de dispersão mínima "aceitável". Um floor muito alto comprime
+  IR de regimes genuinamente estáveis; um floor muito baixo não resolve o
+  problema. 10% foi escolhido por produzir um IR máximo (~35) que é
+  plausível para sistemas reais de alta qualidade.
+  O floor altera a função objetivo do Optuna — dois candidatos com mesmo
+  P&L mas dispersões diferentes terão IRs distintos após o floor, o que
+  é o comportamento desejado mas implica que o ranking competitivo passa
+  a penalizar explicitamente estratégias com P&L muito concentrado
+  (baixa dispersão = suspeita de regime de amostra pequena).
+
+Compromisso operacional:
+  Solução cirúrgica para impedir que eleição competitiva seja distorcida
+  por artefato numérico. NEUTRO_BEAR de VALE3 pode continuar sendo
+  BEAR_CALL_SPREAD — mas por margem de IR plausível (ex: 5.0 vs 3.5),
+  não por margem de IR impossível (264 vs -0.56).
+
+Condição de revisão:
+  Após 24 ciclos de paper trading por regime. Se IR real observado em
+  paper trading sistematicamente divergir dos IRs reportados pelo TUNE v3.0,
+  recalibrar o floor. Candidato: substituir por Calmar ratio (PE-008 já
+  menciona como alternativa para séries curtas).
+
+---
+
+*Dalio (Relojoeiro) — atualizado em 2026-04-25*
 *Este documento deve ser atualizado sempre que o board tomar decisão empírica consciente.*
 *Convenção de uid: PE-XXX sequencial por data de registro.*

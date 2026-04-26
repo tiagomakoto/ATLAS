@@ -34,6 +34,16 @@ DEBUG_TICKER = None # None = roda todos
 ATLAS_ROOT = Path(__file__).resolve().parent.parent.parent
 TMP_DIR = ATLAS_ROOT / "tmp"
 
+def _get_tune_trials_total() -> int:
+    """Fonte única para total de trials do TUNE na calibração."""
+    try:
+        cfg_path = Path(get_paths().get("delta_chaos_base", "")) / "delta_chaos_config.json"
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return int((cfg.get("tune") or {}).get("trials_por_candidato", 150))
+    except Exception:
+        return 150
+
 def _get_dc_script() -> Path:
     paths = get_paths()
     dc_dir = paths.get("delta_chaos_dir")
@@ -467,10 +477,11 @@ async def dc_tune(ticker: str) -> dict:
     action_payload = {"ticker": ticker}
     emit_dc_event("dc_module_start", "TUNE", "running", **action_payload)
     try:
-        await asyncio.to_thread(edge.rodar_tune, ticker)
+        edge_result = await asyncio.to_thread(edge.rodar_tune, ticker)
         emit_dc_event("dc_module_complete", "TUNE", "ok", **action_payload)
         log_action("dc_tune", action_payload, {"status": "OK"})
-        return {"status": "OK", "returncode": 0, "output": ""}
+        tune_resultado = edge_result.get("resultado", {}) if isinstance(edge_result, dict) else {}
+        return {"status": "OK", "returncode": 0, "output": "", "tune_resultado": tune_resultado}
     except Exception as e:
         emit_dc_event("dc_module_complete", "TUNE", "error", **action_payload)
         emit_log(f"[TUNE] {ticker}: erro — {e}", level="error")
@@ -614,7 +625,7 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
                 "step_atual": 1,
                 "steps": {
                     "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
-                    "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+                    "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": _get_tune_trials_total()},
                     "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
                 },
                 "ultimo_evento_em": None,
@@ -638,7 +649,7 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
         "step_atual": 1,
         "steps": {
             "1_backtest_dados": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None},
-            "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": 200},
+            "2_tune": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None, "trials_completos": 0, "trials_total": _get_tune_trials_total()},
             "3_gate_fire": {"status": "idle", "iniciado_em": None, "concluido_em": None, "erro": None}
         },
         "ultimo_evento_em": None,
@@ -772,7 +783,30 @@ async def _executar_calibracao_step1(ticker: str):
                 _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
 
             # 5. Se step 2 concluído com sucesso, iniciar step 3 automaticamente
+            # D8 (TUNE v3.0): pausa antes do step 3 se ainda há regimes elegíveis pendentes de confirmação.
             if result_tune.get("status") == "OK":
+                dados = get_ativo(ticker)
+                ranking_root = dados.get("tune_ranking_estrategia") or {}
+                meta_ranking = ranking_root.get("_meta") or {}
+                regimes_pendentes = any(
+                    not v.get("confirmado", False)
+                    and v.get("eleicao_status") in {"competitiva", "estrutural_fixo"}
+                    for k, v in ranking_root.items()
+                    if k != "_meta" and isinstance(v, dict)
+                ) if meta_ranking.get("concluido_em") else False
+
+                if regimes_pendentes:
+                    # Pausar step 3 aguardando confirmação CEO
+                    dados["calibracao"]["step_atual"] = 3
+                    dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "paused"
+                    dados["calibracao"]["steps"]["3_gate_fire"]["iniciado_em"] = iso_utc()
+                    dados["calibracao"]["steps"]["3_gate_fire"]["erro"] = "aguardando_confirmacao_regimes"
+                    dados["calibracao"]["ultimo_evento_em"] = iso_utc()
+                    _update_ativo_simples(ticker, {"calibracao": dados["calibracao"]})
+                    emit_dc_event("dc_module_start", "GATE", "paused", ticker=ticker,
+                                  motivo="aguardando_confirmacao_regimes")
+                    return  # Interrompe — retomado via /retomar após CEO confirmar
+
                 # Atualizar step_atual para 3
                 dados["calibracao"]["step_atual"] = 3
                 dados["calibracao"]["steps"]["3_gate_fire"]["status"] = "running"
@@ -888,6 +922,19 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
         dados["calibracao"]["steps"][step_key]["iniciado_em"] = iso_utc()
 
     elif step_atual == 3:
+        # D8 (TUNE v3.0): rejeitar retomada do step 3 se ainda há regimes pendentes de confirmação
+        ranking_root = dados.get("tune_ranking_estrategia") or {}
+        meta_ranking = ranking_root.get("_meta") or {}
+        regimes_pendentes = any(
+            not v.get("confirmado", False)
+            and v.get("eleicao_status") in {"competitiva", "estrutural_fixo"}
+            for k, v in ranking_root.items()
+            if k != "_meta" and isinstance(v, dict)
+        ) if meta_ranking.get("concluido_em") else False
+
+        if regimes_pendentes:
+            raise ValueError("Confirme todos os regimes elegíveis no ranking TUNE v3.0 antes de iniciar o step 3")
+
         # Retomar gate + fire
         result = await dc_gate_backtest(ticker)
         if result.get("status") == "OK":
@@ -918,7 +965,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
 async def dc_calibracao_progresso_tune(ticker: str) -> dict:
     """
     Lê tune_{TICKER}.db via conexão read-only
-    Retorna: { "trials_completos": N, "trials_total": 200, "best_ir": X }
+    Retorna: { "trials_completos": N, "trials_total": <config.tune.trials_por_candidato>, "best_ir": X }
     Conexão deve ser read-only explícita para evitar conflito com processo de escrita
     """
     # Validação básica do ticker
@@ -934,7 +981,7 @@ async def dc_calibracao_progresso_tune(ticker: str) -> dict:
     db_path = tmp_dir / f"tune_{ticker}.db"
 
     if not db_path.exists():
-        return {"trials_completos": 0, "trials_total": 200, "best_ir": 0.0}
+        return {"trials_completos": 0, "trials_total": _get_tune_trials_total(), "best_ir": 0.0}
 
     # Conexão read-only
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -951,7 +998,7 @@ async def dc_calibracao_progresso_tune(ticker: str) -> dict:
 
         return {
             "trials_completos": trials_completos,
-            "trials_total": 200,
+            "trials_total": _get_tune_trials_total(),
             "best_ir": best_ir
         }
     finally:

@@ -1,7 +1,6 @@
 // atlas_ui/src/components/GestaoView.jsx
 
 import React, { useState, useEffect } from "react";
-import TuneApprovalCard from "./GestaoView/TuneApprovalCard";
 import CalibracaoDrawer from "./GestaoView/CalibracaoDrawer";
 
 const API_BASE = "http://localhost:8000";
@@ -125,29 +124,6 @@ export default function GestaoView() {
       alert(`Erro: ${e.message}`);
     } finally {
       setCarregando(false);
-    }
-  }
-
-  async function handleAplicarTune(ticker, tp, stop) {
-    try {
-      const res = await fetch(`${API_BASE}/delta-chaos/tune/aplicar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticker: ticker,
-          tp: tp,
-          stop: stop
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert(`Parâmetros aplicados para ${ticker}:\nTP: ${tp*100}%\nSTOP: ${stop*100}%`);
-        fetchAtivos();
-      } else {
-        alert(`Erro: ${data.detail || "Erro desconhecido"}`);
-      }
-    } catch (e) {
-      alert(`Erro: ${e.message}`);
     }
   }
 
@@ -393,20 +369,6 @@ export default function GestaoView() {
         </button>
       </div>
     </div>
-
-    {/* Cartões de aprovação TUNE */}
-    {ativos.some(a => a.tune_pendente) && (
-      <div style={{display: "flex", flexDirection: "column", gap: 8}}>
-        <span style={labelStyle}>Aprovação TUNE Pendente</span>
-        {ativos.filter(a => a.tune_pendente).map(ativo => (
-          <TuneApprovalCard
-            key={ativo.ticker}
-            ticker={ativo.ticker}
-            onAplicar={handleAplicarTune}
-          />
-        ))}
-      </div>
-    )}
 
 {/* Drawer de Calibração */}
         {drawerCalibracao && (

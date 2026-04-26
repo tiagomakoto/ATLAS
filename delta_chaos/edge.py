@@ -781,12 +781,12 @@ def rodar_orbit_update(ticker: str, anos: list = None):
         raise e
 
 def rodar_tune(ticker: str):
-    from delta_chaos.tune import executar_tune
+    from delta_chaos.tune import tune_eleicao_competitiva
     emit_dc_event("dc_module_start", "TUNE", "running", ticker=ticker)
     try:
-        executar_tune(ticker)
+        resultado = tune_eleicao_competitiva(ticker)
         emit_dc_event("dc_module_complete", "TUNE", "ok", ticker=ticker)
-        return {"status": "OK"}
+        return {"status": "OK", "resultado": resultado}
     except Exception as e:
         emit_dc_event("dc_module_complete", "TUNE", "error", ticker=ticker, erro=str(e))
         raise e
@@ -1051,8 +1051,8 @@ if __name__ == "__main__":
         # Fluxo: recalibra parâmetros do FIRE
         # ──────────────────────────────────────────────────────────────
         elif args.modo == "tune":
-            from delta_chaos.tune import executar_tune
-            executar_tune(args.ticker)
+            from delta_chaos.tune import tune_eleicao_competitiva
+            tune_eleicao_competitiva(args.ticker)
 
         # ──────────────────────────────────────────────────────────────
         # Modo: gate_backtest

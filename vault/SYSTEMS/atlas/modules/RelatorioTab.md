@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-020
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan
 
@@ -31,5 +31,6 @@ constraints:
   - Relatórios aplicados ficam marcados como "aplicado" no index.json
 
 notes:
+  - 2026-04-26: código modificado — RelatorioTab.jsx
   - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/RelatorioTab.jsx
 ---

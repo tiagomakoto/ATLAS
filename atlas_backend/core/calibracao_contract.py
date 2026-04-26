@@ -125,6 +125,73 @@ def normalize_guard_payload(payload: Dict[str, Any] | None, ticker: str) -> Dict
     }
 
 
+def normalize_tune_ranking(
+    tune_ranking_estrategia: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Normaliza tune_ranking_estrategia para payload do frontend."""
+    ranking = tune_ranking_estrategia or {}
+    meta = ranking.get("_meta") or {}
+
+    regimes_out: Dict[str, Any] = {}
+    for regime, dados in ranking.items():
+        if regime == "_meta":
+            continue
+        if not isinstance(dados, dict):
+            continue
+        eleicao_status = dados.get("eleicao_status", "in_progress")
+        ranking_list = dados.get("ranking") or []
+        estrategia_eleita = dados.get("estrategia_eleita")
+        confirmavel = False
+        motivo_bloqueio = None
+
+        if eleicao_status == "bloqueado":
+            motivo_bloqueio = "Regime bloqueado - sem estrategia associada"
+        elif eleicao_status == "in_progress":
+            motivo_bloqueio = "Eleicao em andamento"
+        elif eleicao_status == "estrutural_fixo":
+            confirmavel = bool(estrategia_eleita)
+            if not confirmavel:
+                motivo_bloqueio = "Sem estrategia estrutural definida"
+        elif eleicao_status == "competitiva":
+            confirmavel = bool(ranking_list and ranking_list[0].get("estrategia"))
+            if not confirmavel:
+                motivo_bloqueio = "Sem estrategia classificada no ranking"
+        else:
+            motivo_bloqueio = f"Status de eleicao invalido: {eleicao_status}"
+
+        regimes_out[regime] = {
+            "eleicao_status": eleicao_status,
+            "n_trades": dados.get("n_trades"),
+            "data_eleicao": dados.get("data_eleicao"),
+            "confirmado": bool(dados.get("confirmado", False)),
+            "estrategia_eleita": estrategia_eleita,
+            "ranking": ranking_list,
+            "confirmavel": confirmavel,
+            "motivo_bloqueio_confirmacao": motivo_bloqueio,
+        }
+
+    # Sub-status: aguardando_confirmacao_regimes se algum regime elegível está pendente
+    elegivel_pendente = any(
+        not v.get("confirmado", False) and v.get("confirmavel", False)
+        for v in regimes_out.values()
+    )
+
+    return {
+        "_meta": {
+            "run_id": meta.get("run_id"),
+            "versao": meta.get("versao"),
+            "iniciado_em": meta.get("iniciado_em"),
+            "concluido_em": meta.get("concluido_em"),
+            "trials_por_candidato": meta.get("trials_por_candidato"),
+            "early_stop_patience": meta.get("early_stop_patience"),
+            "startup_trials": meta.get("startup_trials"),
+        },
+        "regimes": regimes_out,
+        "aguardando_confirmacao_regimes": elegivel_pendente,
+        "concluido": meta.get("concluido_em") is not None,
+    }
+
+
 def build_calibracao_payload(
     *,
     ticker: str,
@@ -132,6 +199,7 @@ def build_calibracao_payload(
     guard: Dict[str, Any] | None,
     gate_resultado: Dict[str, Any] | None,
     fire_diagnostico: Dict[str, Any] | None,
+    tune_ranking_estrategia: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     calibracao = calibracao or {}
     steps_raw = calibracao.get("steps") or {}
@@ -162,6 +230,7 @@ def build_calibracao_payload(
     gate = normalize_gate_resultado(gate_resultado, ticker)
     fire = normalize_fire_diagnostico(fire_diagnostico, ticker)
     guard_payload = normalize_guard_payload(guard, ticker)
+    tune_ranking_payload = normalize_tune_ranking(tune_ranking_estrategia)
 
     return {
         "ticker": ticker,
@@ -169,6 +238,12 @@ def build_calibracao_payload(
         "step_atual": step_atual,
         "steps": steps,
         "step_1_guard": guard_payload,
+        "step_2": {
+            "id": "2_tune",
+            "status": steps["2_tune"]["status"],
+            "tune_ranking": tune_ranking_payload,
+            "aguardando_confirmacao_regimes": tune_ranking_payload["aguardando_confirmacao_regimes"],
+        },
         "step_3": {
             "id": "3_gate_fire",
             "status": steps["3_gate_fire"]["status"],

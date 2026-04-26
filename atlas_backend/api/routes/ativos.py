@@ -342,4 +342,52 @@ def obter_relatorio_tune(ticker: str, historico: bool = Query(False, description
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Fallback de compatibilidade: evita bloquear exportação .md
+        # quando houver formato inesperado em campos do histórico.
+        try:
+            from datetime import datetime
+            from atlas_backend.core.delta_chaos_reader import get_ativo_raw
+
+            raw = get_ativo_raw(ticker)
+            historico_config = raw.get("historico_config")
+            if not isinstance(historico_config, list):
+                historico_config = []
+
+            tune_records = [
+                rec for rec in historico_config
+                if isinstance(rec, dict) and "TUNE" in str(rec.get("modulo") or "").upper()
+            ]
+            if not tune_records:
+                raise HTTPException(status_code=500, detail=str(e))
+
+            tune_records.sort(key=lambda r: str(r.get("data") or ""), reverse=True)
+            rec = tune_records[0]
+            ciclo = str(rec.get("ciclo_id") or "")
+            data_exec = str(rec.get("data") or datetime.now().strftime("%Y-%m-%d"))
+
+            markdown_lines = [
+                f"# Relatório de TUNE — {ticker} — {ciclo}",
+                f"**Data de execução:** {data_exec}",
+                "",
+                "Relatório gerado em modo de compatibilidade devido a formato inesperado dos dados.",
+                f"Erro original: {str(e)}",
+                "",
+                "## Último registro TUNE",
+                f"- Módulo: {rec.get('modulo')}",
+                f"- Parâmetro: {rec.get('parametro')}",
+                f"- Valor novo: {rec.get('valor_novo')}",
+                f"- Motivo: {rec.get('motivo')}",
+            ]
+            markdown = "\n".join(markdown_lines)
+
+            return {
+                "ticker": ticker,
+                "ciclo": ciclo,
+                "data": data_exec,
+                "markdown": markdown,
+                "fallback_compat": True,
+            }
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))

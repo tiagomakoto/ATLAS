@@ -22,7 +22,9 @@
       "Bash(python -m pytest atlas_backend/tests/ -k relatorio -v)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('atlas_backend/core/relatorios.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('atlas_backend/api/routes/delta_chaos.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")",
       "Bash(node --check atlas_ui/src/components/GestaoView/CalibracaoDrawer.jsx)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('delta_chaos/tune.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('delta_chaos/tune.py', encoding='utf-8'\\).read\\(\\)\\); print\\('SYNTAX OK'\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'C:/Users/tiago/OneDrive/Documentos/ATLAS'\\); from delta_chaos.init import carregar_config; cfg = carregar_config\\(\\); print\\('tune block keys:', list\\(cfg.get\\('tune', {}\\).keys\\(\\)\\)\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\(r'G:/Meu Drive/Delta Chaos/ativos/VALE3.json',encoding='utf-8'\\)\\); v=d.get\\('historico_config'\\); print\\(type\\(v\\), repr\\(v\\)\\)\")"
     ]
   }
 }

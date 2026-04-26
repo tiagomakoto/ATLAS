@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-003
-version: 1.2.2
+version: 1.2.3
 status: validated
 owner: Chan
 
@@ -45,6 +45,7 @@ constraints:
   - Estrategias implementadas — CSP (ALTA), Bull Put Spread (NEUTRO_BULL), Bear Call Spread (NEUTRO_BEAR)
 
 notes:
+  - 2026-04-26: código modificado — fire.py
   - 2026-04-25: código modificado — fire.py
   - 2026-04-13: código modificado — fire.py
   - B8 aberto: Calendar Spread para NEUTRO_LATERAL aprovada, nao implementada

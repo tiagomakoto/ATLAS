@@ -191,6 +191,14 @@ class FIRE:
         if cfg is None:
             cfg = tape_ativo_carregar(ativo)
 
+        # D7 (TUNE v3.0): bloqueia abertura até CEO rodar recalibração obrigatória
+        if cfg.get("tune_versao_pendente"):
+            self.book.registrar_nao_entrada(
+                ativo, data,
+                "tune_versao_pendente_recalibracao_obrigatoria",
+                regime, ciclo)
+            return None
+
         # ── TP e STOP — S4: recebe cfg_global cacheado ───────────
         _cfg_f = self._cfg_global["fire"]
         _tp    = float(cfg.get("take_profit")

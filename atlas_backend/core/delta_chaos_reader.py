@@ -257,6 +257,8 @@ def _normalize_gate_stored(gate_stored: Dict[str, Any], ticker: str, raw: Dict[s
 def _get_gate_fallback(ticker: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     """Fallback quando nem computed nem stored data estão disponíveis."""
     historico_config = raw.get("historico_config", [])
+    if not isinstance(historico_config, list):
+        historico_config = []
     gate_entry = None
     for item in reversed(historico_config):
         modulo = str(item.get("modulo", "")).upper()
@@ -506,6 +508,8 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         status = "SUSPENSO"
     else:
         historico_config = raw_data.get("historico_config", [])
+        if not isinstance(historico_config, list):
+            historico_config = []
         reflect_state = raw_data.get("reflect_state", "B")
         reflect_history = raw_data.get("reflect_history", [])
 
@@ -568,7 +572,7 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         "status": status,
         "core": core,
         "historico": historico,
-        "historico_config": len(raw_data.get("historico_config", [])) > 0, # ← BOOLEANO: true se tem registros
+        "historico_config": len(raw_data.get("historico_config", []) if isinstance(raw_data.get("historico_config"), list) else []) > 0, # ← BOOLEANO: true se tem registros
         "reflect_historico": reflect_historico,
         "reflect_state": raw_data.get("reflect_state", "B"),
         "staleness_days": staleness_days,

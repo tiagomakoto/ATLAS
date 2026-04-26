@@ -27,7 +27,6 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B19_versionamento_modulos\|B19]] | Versionamento de código — delta_chaos_versions.json | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B21_anos_validos_dinamico\|B21]] | anos_validos dinâmico no GATE v2.0 | GATE v2.0 | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B22_gate_v2_duas_janelas\|B22]] | GATE v2.0 — duas janelas de validação | BOARD_REVIEW_REQUIRED | 2026-03-22 |
-| [[BOARD/tensoes_abertas/B26_divergencia_gate_tune_vale3\|B26]] | Divergência GATE vs TUNE em VALE3 | monitorar paper / TUNE v2.0 | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B27_BBAS3_edge_nao_testado\|B27]] | BBAS3 ALTA e NEUTRO_BEAR — edge não testado | REFLECT Edge B por 2-3 ciclos | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B28_bootstrap_ciclos_reflect\|B28]] | Bootstrap ciclos 1–3 REFLECT — exclusão backtest | antes de publicar backtest | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B29_condicao_taleb_alpha_edge_A\|B29]] | Condição Taleb — alpha Edge A após 1º trimestre | após 1º trimestre paper | 2026-03-23 |
@@ -54,6 +53,10 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B54_dc_runner_edge_import_direto\|B54]] | dc_runner — eliminar subprocess, importar edge.py como módulo direto | CEO entrega spec ao PLAN | 2026-04-14 |
 | [[BOARD/tensoes_abertas/B55_reflect_estados_ABCDX_redesign\|B55]] | REFLECT — redesign estados A/B/C/D/E → A/B/C/D/T (Tail/Taleb) | implementação Chan + rerrodar histórico | 2026-04-24 |
 | [[BOARD/tensoes_abertas/B56_reflect_sizing_por_estado\|B56]] | REFLECT — sizing por estado A/B/C/D/X + regimes_sizing redundante | B30 + B04 resolvidos | 2026-04-24 |
+| [[BOARD/tensoes_abertas/B57_relatorio_calibracao_lacunas\|B57]] | Relatório de calibração — lacunas de diagnóstico obrigatórias | implementação ATLAS backend + template | 2026-04-25 |
+| [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva\|B59]] | TUNE v3.0 — seleção competitiva de estratégia por regime via Optuna | implementação 6 fases + SCAN re-auditoria | 2026-04-25 |
+
+| [[BOARD/tensoes_abertas/B61_tune_v31_tp_stop_por_regime\|B61]] | TUNE v3.1 — TP/STOP por regime + migração FIRE/GATE/BOOK | TUNE v3.0 validado em paper trading | 2026-04-25 |
 
 ---
 
@@ -69,6 +72,9 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-14_atlas_websocket_onboarding_ux\|2026-04-14]] | ATLAS — WebSocket pipeline + OnboardingDrawer UX | board |
 | [[BOARD/atas/2026-04-14_dc_runner_edge_fusao\|2026-04-14]] | dc_runner — eliminação de subprocess, import direto de edge.py | board |
 | [[BOARD/atas/2026-04-24_reflect_estados_sizing\|2026-04-24]] | REFLECT — redesign estados A/B/C/D/X + sizing canônico por estado | board |
+| [[BOARD/atas/2026-04-25_prio3_bloqueio_relatorio\|2026-04-25]] | PRIO3 bloqueio GATE + auditoria formato relatório | board |
+| [[BOARD/atas/2026-04-25_tune_v3_eleicao_competitiva\|2026-04-25]] | TUNE v3.0 — eleição competitiva de estratégia por regime | board |
+| [[BOARD/atas/2026-04-25_hardreset_ativos\|2026-04-25]] | Hard reset completo dos ativos + fechamento B60 | off-ata |
 
 ---
 
@@ -80,6 +86,8 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/decisoes/C02-C66_tensoes_fechadas_consolidado\|C2–C66]] | Tensões fechadas sessões 2026-03-22 e 2026-03-23 | ver arquivo consolidado | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B48_entrada_close_d0_vs_open_d1\|B48]] | Entrada close d0 vs open d1 — campo premio_executado em Leg | fire.py + book.py corrigidos | 2026-04-12 |
 | [[BOARD/tensoes_abertas/B23_criterio_parada_tune\|B23]] | Critério de parada do TUNE — Optuna 200 trials TPE | steps 0.05/0.25/1, patience=50 | 2026-04-13 |
+| [[BOARD/decisoes/B60_neutro_consolidacao\|B60]] | NEUTRO legado — consolidação com subregimes NEUTRO_* | 0 ocorrências em todos os ativos — sem ação necessária | 2026-04-25 |
+| [[BOARD/decisoes/B26_divergencia_gate_tune_vale3\|B26]] | Divergência GATE vs TUNE — TP/STOP em VALE3 | obsolescência — hardreset descartou TUNE v1.1; divergência E5 é questão distinta | 2026-04-25 |
 | [[BOARD/decisoes/Q10_S6_VALE3_congelado\|Q10]] | regime_estrategia ausente em 518 ciclos históricos | migração retroativa + fix indentação orbit.py | 2026-04-12 |
 | [[BOARD/decisoes/Q11_TUNE_VALE3_afetado_Q10\|Q11]] | TUNE v1.1 VALE3 potencialmente afetado por Q10 | hipótese não materializada — TUNE lê regime, não regime_estrategia | 2026-04-12 |
 | [[BOARD/tensoes_abertas/B47_janela_teste_tune\|B47]] | Janela de teste TUNE — janela como hiperparâmetro Optuna | implementado em TUNE v2.0 Fase 2 | 2026-04-13 |

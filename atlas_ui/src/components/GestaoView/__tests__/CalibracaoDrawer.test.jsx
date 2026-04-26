@@ -182,7 +182,7 @@ describe('CalibracaoDrawer', () => {
       type: "dc_tune_progress",
       data: {
         trial: 50,
-        total: 200,
+        total: 150,
         ir: 1.2345
       }
     };
@@ -190,7 +190,7 @@ describe('CalibracaoDrawer', () => {
     
     // Verifica que a barra de trials foi exibida
     await waitFor(() => {
-      expect(screen.getByText(/50 / 200 trials/)).toBeInTheDocument();
+      expect(screen.getByText(/50 / 150 trials/)).toBeInTheDocument();
       expect(screen.getByText(/IR: 1.2345/)).toBeInTheDocument();
     });
     
@@ -574,7 +574,7 @@ it('deve atualizar estado para error quando fetch falhar', async () => {
       type: "dc_tune_progress",
       data: {
         trial: 50,
-        total: 200,
+        total: 150,
         ir: 1.2345
       }
     };
@@ -582,7 +582,7 @@ it('deve atualizar estado para error quando fetch falhar', async () => {
     
     // Verifica que a barra de trials foi exibida
     await waitFor(() => {
-      expect(screen.getByText(/50 / 200 trials/)).toBeInTheDocument();
+      expect(screen.getByText(/50 / 150 trials/)).toBeInTheDocument();
       expect(screen.getByText(/IR: 1.2345/)).toBeInTheDocument();
     });
   });

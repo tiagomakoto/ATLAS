@@ -2,258 +2,256 @@ import React, { useState, useEffect } from "react";
 
 const API_BASE = "http://localhost:8000";
 
-const RelatorioTab = ({ ticker, data }) => {
-  const [relatorioData, setRelatorioData] = useState(null);
+const PULSE_STYLE = `
+  @keyframes atlasRelPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+`;
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  try {
+    const [y, m, d] = iso.split("-");
+    if (y && m && d) return `${d}/${m}/${y}`;
+  } catch (_) {}
+  return iso;
+}
+
+function summarizeValor(valorNovo) {
+  if (valorNovo === null || valorNovo === undefined) return "—";
+  if (typeof valorNovo === "string") return valorNovo;
+  if (typeof valorNovo === "object") {
+    const keys = Object.keys(valorNovo);
+    const n = keys.length;
+    if (n <= 3) return `${n} regimes (${keys.join(", ")})`;
+    return `${n} regimes`;
+  }
+  return String(valorNovo);
+}
+
+function renderValor(valor) {
+  if (valor === null || valor === undefined) return <span style={{ color: "var(--atlas-text-secondary)" }}>—</span>;
+  if (typeof valor === "string") return <span>{valor}</span>;
+  if (typeof valor === "boolean") return <span>{valor ? "SIM" : "NÃO"}</span>;
+  if (typeof valor === "object") {
+    const keys = Object.keys(valor);
+    return (
+      <table style={{ borderCollapse: "collapse", fontSize: 10, marginTop: 2 }}>
+        <tbody>
+          {keys.map((k) => (
+            <tr key={k} style={{ borderBottom: "1px solid var(--atlas-border)" }}>
+              <td style={{ padding: "2px 8px 2px 0", color: "var(--atlas-text-secondary)", fontWeight: "bold" }}>{k}</td>
+              <td style={{ padding: "2px 0" }}>{String(valor[k])}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+  return <span>{String(valor)}</span>;
+}
+
+const DETAIL_FIELDS = [
+  { key: "data", label: "Data", render: (v) => <span>{formatDate(v)}</span> },
+  { key: "modulo", label: "Módulo" },
+  { key: "parametro", label: "Parâmetro" },
+  { key: "valor_anterior", label: "Valor anterior", renderFn: true },
+  { key: "valor_novo", label: "Valor novo", renderFn: true },
+  { key: "motivo", label: "Motivo" },
+  { key: "bulk", label: "Bulk", render: (v) => v ? <span style={{ background: "var(--atlas-blue)", color: "#fff", padding: "1px 6px", borderRadius: 2, fontSize: 10 }}>BULK</span> : null },
+];
+
+const RelatorioTab = ({ ticker }) => {
+  const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    const fetchRelatorio = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`${API_BASE}/ativos/${ticker}/relatorio-tune`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            setRelatorioData(null); // Sem TUNE
-            return;
-          }
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const json = await res.json();
-        setRelatorioData(json);
-      } catch (err) {
-        console.error("Erro ao carregar relatório TUNE:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!ticker) return;
+    setLoading(true);
+    setError(null);
+    setEntries([]);
+    setExpanded({});
 
-    if (ticker) {
-      fetchRelatorio();
-    }
+    fetch(`${API_BASE}/delta-chaos/ativos/${ticker}/historico-config`)
+      .then((res) => {
+        if (res.status === 404) return { historico_config: [] };
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        const list = json.historico_config || [];
+        setEntries(list);
+        if (list.length > 0) setExpanded({ 0: true });
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, [ticker]);
 
-  const exportarMarkdown = () => {
-    if (!relatorioData || !relatorioData.markdown) return;
+  const toggle = (i) => setExpanded((prev) => ({ ...prev, [i]: !prev[i] }));
 
-    const filename = `TUNE_${ticker}_${relatorioData.ciclo}_${relatorioData.data}.md`;
-    const blob = new Blob([relatorioData.markdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const exportarMarkdown = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/ativos/${ticker}/relatorio-tune`);
+      if (!res.ok) {
+        alert(
+          res.status === 404
+            ? "Relatório TUNE não disponível para este ciclo."
+            : `Erro ${res.status} ao gerar relatório.`
+        );
+        return;
+      }
+      const json = await res.json();
+      if (!json?.markdown) { alert("Relatório sem markdown."); return; }
+      const filename = `TUNE_${ticker}_${json.ciclo}_${json.data}.md`;
+      const blob = new Blob([json.markdown], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const baseCard = {
+    background: "var(--atlas-surface)",
+    border: "1px solid var(--atlas-border)",
+    borderRadius: 4,
+    fontFamily: "monospace",
+    fontSize: 11,
   };
 
   if (loading) {
     return (
-      <div style={{ padding: 20, color: "var(--atlas-text-secondary)", textAlign: "center" }}>
-        Carregando relatório...
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <style>{PULSE_STYLE}</style>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              ...baseCard,
+              height: 40,
+              animation: "atlasRelPulse 1.5s infinite",
+            }}
+          />
+        ))}
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ padding: 20, color: "var(--atlas-red)", textAlign: "center" }}>
+      <div style={{ padding: "12px 16px", color: "var(--atlas-red)", background: "rgba(239,68,68,0.08)", border: "1px solid var(--atlas-red)", borderRadius: 4, fontFamily: "monospace", fontSize: 11 }}>
         Erro: {error}
       </div>
     );
   }
 
-  if (!relatorioData) {
-    return (
-      <div style={{ padding: 20, color: "var(--atlas-text-secondary)", textAlign: "center" }}>
-        Nenhum TUNE executado para este ativo.
-      </div>
-    );
-  }
-
-  const {
-    ticker: t,
-    ciclo,
-    data: dataExecucao,
-    tp_atual,
-    stop_atual,
-    tp_novo,
-    stop_novo,
-    delta_tp,
-    delta_stop,
-    ir_valido,
-    n_trades,
-    confianca,
-    janela_anos,
-    ano_teste_ini,
-    trials_rodados,
-    trials_total,
-    early_stop,
-    retomado,
-    reflect_mask,
-    total_ciclos,
-    reflect_mask_pct,
-    ciclos_reais,
-    ciclos_fallback,
-    n_tp,
-    n_stop,
-    n_venc,
-    acerto_pct,
-    pior_data,
-    pior_motivo,
-    pior_pnl,
-    diagnostico_executivo,
-    historico_tunes
-  } = relatorioData;
-
   return (
-    <div style={{ fontFamily: "monospace", fontSize: 11, display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Cabeçalho */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--atlas-bg)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h2 style={{ margin: 0, color: "var(--atlas-text-primary)" }}>Relatório de TUNE — {t} — {ciclo}</h2>
-        <button
-          onClick={exportarMarkdown}
-          style={{
-            padding: "6px 12px",
-            background: "var(--atlas-blue)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 2,
-            fontSize: 10,
-            fontWeight: "bold",
-            cursor: "pointer",
-            fontFamily: "monospace"
-          }}
-        >
-          Exportar .md
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <style>{PULSE_STYLE}</style>
+
+      {/* Header */}
+      <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: "bold", color: "var(--atlas-text-primary)", paddingBottom: 4, borderBottom: "1px solid var(--atlas-border)" }}>
+        Histórico de configuração — {ticker}
       </div>
 
-      {/* Aviso sobre proxies intradiários */}
-      <div style={{
-        padding: "12px 16px",
-        background: "rgba(245, 158, 11, 0.1)",
-        border: "1px solid var(--atlas-amber)",
-        borderRadius: 4,
-        fontSize: 10,
-        color: "var(--atlas-amber)"
-      }}>
-        Os valores foram otimizados usando proxies intradiários: mínimo do dia como proxy de TP e máximo do dia como proxy de STOP. Em dias de alta volatilidade, esses proxies podem superestimar ganhos de TP e subestimar custos de STOP.
-      </div>
-
-      {/* Diagnóstico executivo */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Diagnóstico executivo</h3>
-        <p style={{ margin: 0, lineHeight: 1.5 }}>{diagnostico_executivo}</p>
-      </div>
-
-      {/* Parâmetros TUNE */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Parâmetros TUNE</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--atlas-border)" }}>
-              <th style={{ padding: "8px 4px", textAlign: "left" }}>Campo</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>Atual</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>Sugerido</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>Delta</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ padding: "8px 4px", fontWeight: "bold" }}>Take Profit</td>
-              <td style={{ padding: "8px 4px", textAlign: "center" }}>{tp_atual}</td>
-              <td style={{ padding: "8px 4px", textAlign: "center" }}>{tp_novo}</td>
-              <td style={{ padding: "8px 4px", textAlign: "center", color: delta_tp > 0 ? "var(--atlas-green)" : delta_tp < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)" }}>
-                {delta_tp > 0 ? "+" : ""}{delta_tp.toFixed(2)}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: "8px 4px", fontWeight: "bold" }}>Stop Loss</td>
-              <td style={{ padding: "8px 4px", textAlign: "center" }}>{stop_atual}</td>
-              <td style={{ padding: "8px 4px", textAlign: "center" }}>{stop_novo}</td>
-              <td style={{ padding: "8px 4px", textAlign: "center", color: delta_stop > 0 ? "var(--atlas-green)" : delta_stop < 0 ? "var(--atlas-red)" : "var(--atlas-text-secondary)" }}>
-                {delta_stop > 0 ? "+" : ""}{delta_stop.toFixed(2)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Qualidade da otimização */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Qualidade da otimização</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 10 }}>
-          <div><strong>IR válido (janela de teste):</strong> {ir_valido}</div>
-          <div><strong>N trades na janela:</strong> {n_trades}</div>
-          <div><strong>Confiança:</strong> {confianca}</div>
-          <div><strong>Janela de teste:</strong> {janela_anos} anos ({ano_teste_ini}–{new Date().getFullYear()})</div>
-          <div><strong>Trials rodados:</strong> {trials_rodados} / {trials_total}</div>
-          <div><strong>Early stop ativado:</strong> {early_stop ? "SIM" : "NÃO"}</div>
-          <div><strong>Study Optuna retomado:</strong> {retomado ? "SIM" : "NÃO"}</div>
+      {entries.length === 0 ? (
+        <div style={{ padding: 24, textAlign: "center", color: "var(--atlas-text-secondary)", fontFamily: "monospace", fontSize: 11, border: "1px dashed var(--atlas-border)", borderRadius: 4 }}>
+          Nenhuma calibração registrada para este ativo.
         </div>
-      </div>
+      ) : (
+        entries.map((entry, i) => {
+          const isOpen = !!expanded[i];
+          return (
+            <div key={i} style={baseCard}>
+              {/* Linha colapsada */}
+              <div
+                onClick={() => toggle(i)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  userSelect: "none",
+                  gap: 8,
+                }}
+              >
+                <span style={{ color: "var(--atlas-text-primary)", fontWeight: "bold" }}>
+                  {formatDate(entry.data)}
+                  <span style={{ color: "var(--atlas-text-secondary)", fontWeight: "normal", marginLeft: 8 }}>·</span>
+                  <span style={{ color: "var(--atlas-text-secondary)", fontWeight: "normal", marginLeft: 8 }}>{entry.parametro}</span>
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "var(--atlas-text-secondary)" }}>
+                    {summarizeValor(entry.valor_novo)}
+                  </span>
+                  <span style={{ color: "var(--atlas-text-secondary)", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", display: "inline-block" }}>▶</span>
+                </span>
+              </div>
 
-      {/* Máscara REFLECT */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Máscara REFLECT</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 10 }}>
-          <div><strong>Ciclos mascarados (Edge C/D/E):</strong> {reflect_mask} de {total_ciclos} ({reflect_mask_pct.toFixed(1)}%)</div>
-          <div><strong>Ciclos com REFLECT real:</strong> {ciclos_reais}</div>
-          <div><strong>Ciclos com fallback B:</strong> {ciclos_fallback}</div>
-        </div>
-      </div>
+              {/* Painel expandido */}
+              {isOpen && (
+                <div style={{ borderTop: "1px solid var(--atlas-border)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 10 }}>
+                    <tbody>
+                      {DETAIL_FIELDS.map(({ key, label, render, renderFn }) => {
+                        if (!(key in entry)) return null;
+                        const val = entry[key];
+                        if (key === "bulk" && !val) return null;
+                        const rendered = render
+                          ? render(val)
+                          : renderFn
+                          ? renderValor(val)
+                          : <span>{val === null || val === undefined ? "—" : String(val)}</span>;
+                        if (rendered === null) return null;
+                        return (
+                          <tr key={key} style={{ verticalAlign: "top" }}>
+                            <td style={{ padding: "4px 12px 4px 0", color: "var(--atlas-text-secondary)", fontWeight: "bold", whiteSpace: "nowrap", width: 130 }}>{label}</td>
+                            <td style={{ padding: "4px 0", color: "var(--atlas-text-primary)" }}>{rendered}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
 
-      {/* Distribuição de saídas */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Distribuição de saídas (janela de teste)</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 10 }}>
-          <div><strong>Take Profit:</strong> {n_tp} ({acerto_pct.toFixed(1)}%)</div>
-          <div><strong>Stop Loss:</strong> {n_stop} ({acerto_pct.toFixed(1)}%)</div>
-          <div><strong>Vencimento:</strong> {n_venc} ({acerto_pct.toFixed(1)}%)</div>
-          <div><strong>Acerto:</strong> {acerto_pct.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      {/* Pior trade */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Pior trade (janela de teste)</h3>
-        <div style={{ fontSize: 10 }}>
-          <div><strong>Data:</strong> {pior_data}</div>
-          <div><strong>Motivo:</strong> {pior_motivo}</div>
-          <div><strong>P&L:</strong> R${pior_pnl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        </div>
-      </div>
-
-      {/* Histórico de TUNEs aplicados */}
-      <div style={{ padding: "16px 12px", background: "var(--atlas-surface)", border: "1px solid var(--atlas-border)", borderRadius: 4 }}>
-        <h3 style={{ margin: "0 0 12px 0", color: "var(--atlas-text-primary)" }}>Histórico de TUNEs aplicados</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--atlas-border)" }}>
-              <th style={{ padding: "8px 4px", textAlign: "left" }}>Data</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>TP</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>STOP</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>IR válido</th>
-              <th style={{ padding: "8px 4px", textAlign: "center" }}>Confiança</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historico_tunes.map((tune, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--atlas-border)" }}>
-                <td style={{ padding: "8px 4px" }}>{tune.data}</td>
-                <td style={{ padding: "8px 4px", textAlign: "center" }}>{tune.tp}</td>
-                <td style={{ padding: "8px 4px", textAlign: "center" }}>{tune.stop}</td>
-                <td style={{ padding: "8px 4px", textAlign: "center" }}>{tune.ir}</td>
-                <td style={{ padding: "8px 4px", textAlign: "center" }}>{tune.confianca}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  {i === 0 && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                      <button
+                        onClick={exportarMarkdown}
+                        disabled={exporting}
+                        style={{
+                          padding: "5px 12px",
+                          background: exporting ? "var(--atlas-surface)" : "var(--atlas-blue)",
+                          color: exporting ? "var(--atlas-text-secondary)" : "#fff",
+                          border: "1px solid var(--atlas-border)",
+                          borderRadius: 2,
+                          fontSize: 10,
+                          fontWeight: "bold",
+                          cursor: exporting ? "not-allowed" : "pointer",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {exporting ? "Gerando..." : "Exportar .md"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 };

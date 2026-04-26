@@ -16,7 +16,6 @@ import Tooltip from "../components/Tooltip";
 import Header from "../components/Header";
 import OrchestratorLogDrawer from "../components/OrchestratorLogDrawer";
 import DigestPanel from "../components/DigestPanel";
-import TuneApprovalCard from "../components/GestaoView/TuneApprovalCard";
 import StatusTransitionCard from "../components/StatusTransitionCard";
 import GestaoView from "../components/GestaoView";
 import { useSystemStore } from "../store/systemStore";
@@ -146,25 +145,7 @@ const VisaoGeral = ({
     finally { setCarregando(false); }
   }
 
-  async function handleAplicarTune(ticker, tp, stop) {
-    await fetch(`${API_BASE}/ativos/${ticker}/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data: { take_profit: tp, stop_loss: stop },
-        description: `TUNE aplicado — TP=${tp} STOP=${stop}`,
-        confirm: true
-      })
-    });
-    await fetchData();
-  }
-
   const rodando = carregando || state.dailyAtivo;
-
-  const tunesPendentes = (Array.isArray(state.digestItems) ? state.digestItems : Object.values(state.digestItems || {}))
-    .filter(i => i.tipo === "aprovacao_pendente" && i.modulo === "TUNE")
-    .map(i => i.ticker)
-    .filter(Boolean);
 
   const sectionLabel = {
     fontFamily: "monospace", fontSize: 9,
@@ -234,15 +215,6 @@ const VisaoGeral = ({
           status_anterior={tr.status_anterior}
           status_novo={tr.status_novo}
           ciclo={tr.ciclo}
-        />
-      ))}
-
-      {/* BLOCO 4 — Cards de aprovação TUNE */}
-      {tunesPendentes.map(ticker => (
-        <TuneApprovalCard
-          key={ticker}
-          ticker={ticker}
-          onAplicar={handleAplicarTune}
         />
       ))}
 

@@ -6,6 +6,7 @@ Módulo para geração de relatórios de TUNE e ONBOARDING.
 
 import os
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 import re
@@ -414,6 +415,8 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
         "gate_valores":          gate_rec.get("gate_valores"),
     }
 
+    tune_ranking = dados_raw.get("tune_ranking_estrategia") or {}
+
     return {
         "gate_resultado": gate_resultado,
         "fire_diagnostico": fire_diagnostico,
@@ -421,6 +424,7 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
         "data": data_hoje,
         "tune_stats": tune_stats,
         "gate_stats": gate_stats,
+        "tune_ranking_estrategia": tune_ranking,
     }
 
 
@@ -519,54 +523,132 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     """
     
     from atlas_backend.core.delta_chaos_reader import get_ativo
+
+    def _json_safe(value):
+        """Converte estrutura arbitrária para algo serializável em JSON estrito."""
+        if value is None:
+            return None
+        if isinstance(value, (str, bool, int)):
+            return value
+        if isinstance(value, float):
+            if math.isnan(value) or math.isinf(value):
+                return None
+            return value
+        if isinstance(value, dict):
+            return {str(k): _json_safe(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [_json_safe(v) for v in value]
+        # fallback para objetos não serializáveis (datetime, numpy types, etc.)
+        try:
+            json.dumps(value, ensure_ascii=False)
+            return value
+        except Exception:
+            return str(value)
     
     # Obter dados do ativo
     dados_ativo = get_ativo(ticker)
-    
-    # Extrair historico_config
-    historico_config = dados_ativo.get("historico_config", [])
-    
-    # Filtrar apenas registros de TUNE v2.0
-    tune_records = [rec for rec in historico_config if rec.get("modulo") == "TUNE v2.0"]
+
+    # Extrair historico_config com tolerância a dados malformados
+    historico_config_raw = dados_ativo.get("historico_config")
+    if not isinstance(historico_config_raw, list):
+        historico_config_raw = []
+    historico_config = [rec for rec in historico_config_raw if isinstance(rec, dict)]
+
+    # Filtrar registros de TUNE (aceita variações de versão/nomenclatura)
+    tune_records = [
+        rec for rec in historico_config
+        if "TUNE" in str(rec.get("modulo") or "").upper()
+    ]
     
     # Se não houver TUNE, retornar erro
     if not tune_records:
         raise ValueError(f"Nenhum TUNE executado para o ativo {ticker}")
     
     # Ordenar por data (mais recente primeiro)
-    tune_records.sort(key=lambda x: x.get("data", ""), reverse=True)
+    tune_records.sort(key=lambda x: str((x or {}).get("data") or ""), reverse=True)
     
     # Pegar o mais recente
     tune_mais_recente = tune_records[0]
     
+    def _to_float(value, default=0.0):
+        try:
+            if value is None:
+                return float(default)
+            if isinstance(value, str):
+                v = value.strip().replace("%", "")
+                if "," in v and "." in v:
+                    v = v.replace(".", "").replace(",", ".")
+                elif "," in v and "." not in v:
+                    v = v.replace(",", ".")
+                parsed = float(v)
+            else:
+                parsed = float(value)
+            if math.isnan(parsed) or math.isinf(parsed):
+                return float(default)
+            return parsed
+        except Exception:
+            return float(default)
+
+    def _extract_tp_stop(*texts):
+        # Aceita formatos variados, ex: "TP=0.80 STOP=1.20", "TP=0.80 | STOP=1.20", etc.
+        normalized = []
+        for t in texts:
+            if t is None:
+                continue
+            if isinstance(t, str):
+                if t.strip():
+                    normalized.append(t)
+            else:
+                normalized.append(str(t))
+        combined = " ".join(normalized).strip()
+        if not combined:
+            return None, None
+        tp_match = re.search(r"TP\s*=\s*([+-]?\d+(?:[.,]\d+)?)", combined, flags=re.IGNORECASE)
+        stop_match = re.search(r"(?:STOP|STOPLOSS|SL)\s*=\s*([+-]?\d+(?:[.,]\d+)?)", combined, flags=re.IGNORECASE)
+        tp = _to_float(tp_match.group(1), default=0.0) if tp_match else None
+        stop = _to_float(stop_match.group(1), default=0.0) if stop_match else None
+        return tp, stop
+
     # Extrair dados do TUNE mais recente
-    tp_atual = dados_ativo.get("take_profit", 0)
-    stop_atual = dados_ativo.get("stop_loss", 0)
-    tp_novo = tune_mais_recente.get("combinacao", "").split("=")[1].split(" ")[0] if "=" in tune_mais_recente.get("combinacao", "") else 0
-    stop_novo = tune_mais_recente.get("combinacao", "").split("=")[2] if "=" in tune_mais_recente.get("combinacao", "") else 0
+    tp_atual = _to_float(dados_ativo.get("take_profit", 0), default=0.0)
+    stop_atual = _to_float(dados_ativo.get("stop_loss", 0), default=0.0)
+    tp_extraido, stop_extraido = _extract_tp_stop(
+        tune_mais_recente.get("combinacao", ""),
+        tune_mais_recente.get("valor_novo", ""),
+        tune_mais_recente.get("motivo", ""),
+    )
+    tp_novo = tp_extraido if tp_extraido is not None else tp_atual
+    stop_novo = stop_extraido if stop_extraido is not None else stop_atual
     
     # Extrair IR válido e confiança do motivo
-    motivo = tune_mais_recente.get("motivo", "")
-    ir_valido_match = re.search(r"IR=\+([\d.]+)", motivo)
-    ir_valido = float(ir_valido_match.group(1)) if ir_valido_match else 0
-    
-    confianca_match = re.search(r"(Alta|Baixa)", motivo)
-    confianca = confianca_match.group(1) if confianca_match else ""
+    motivo = str(tune_mais_recente.get("motivo") or "")
+    ir_valido_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo)
+    ir_valido = _to_float(ir_valido_match.group(1), default=0.0) if ir_valido_match else 0.0
+
+    confianca_match = re.search(r"(Alta|Baixa|amostra_insuficiente)", motivo, flags=re.IGNORECASE)
+    confianca = confianca_match.group(1).lower() if confianca_match else ""
     
     # Extrair janela de teste
-    periodo_teste = tune_mais_recente.get("periodo_teste", "")
+    periodo_teste = str(tune_mais_recente.get("periodo_teste") or "")
     if periodo_teste and "-" in periodo_teste:
-        ano_ini, ano_fim = periodo_teste.split("-")
-        janela_anos = int(ano_fim) - int(ano_ini)
-        ano_teste_ini = ano_ini
+        try:
+            ano_ini, ano_fim = periodo_teste.split("-")
+            janela_anos = int(ano_fim) - int(ano_ini)
+            ano_teste_ini = ano_ini
+        except Exception:
+            janela_anos = 0
+            ano_teste_ini = ""
     else:
         janela_anos = 0
         ano_teste_ini = ""
     
     # Extrair trials
-    trials_match = re.search(r"Trials: (\d+)/\d+", motivo)
+    trials_match = re.search(r"Trials:\s*(\d+)\s*/\s*(\d+)", motivo)
     trials_rodados = int(trials_match.group(1)) if trials_match else 0
-    trials_total = 200  # Valor fixo da SPEC
+    trials_total = int(trials_match.group(2)) if trials_match else 0
+    if trials_total <= 0:
+        meta = tune_mais_recente.get("_meta") or {}
+        trials_total = int(_to_float(meta.get("trials_por_candidato", 150), default=150))
     
     # Extrair early stop
     early_stop = "early stop" in motivo.lower()
@@ -597,8 +679,8 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     n_venc_match = re.search(r"VENC: (\d+)", motivo)
     n_venc = int(n_venc_match.group(1)) if n_venc_match else 0
     
-    acerto_match = re.search(r"Acerto: ([\d.]+)%", motivo)
-    acerto_pct = float(acerto_match.group(1)) if acerto_match else 0
+    acerto_match = re.search(r"Acerto:\s*([0-9\.,]+)%", motivo)
+    acerto_pct = _to_float(acerto_match.group(1), default=0.0) if acerto_match else 0.0
     
     # Extrair pior trade
     pior_data_match = re.search(r"Data: (\d{4}-\d{2}-\d{2})", motivo)
@@ -607,41 +689,48 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     pior_motivo_match = re.search(r"Motivo: ([^\d]+)", motivo)
     pior_motivo = pior_motivo_match.group(1).strip() if pior_motivo_match else ""
     
-    pior_pnl_match = re.search(r"P&L: -R\$(\d+,\d+)", motivo)
-    pior_pnl_str = pior_pnl_match.group(1) if pior_pnl_match else "0"
-    pior_pnl = float(pior_pnl_str.replace(",", ""))
+    pior_pnl_match = re.search(r"P&L:\s*(-?)R\$\s*([0-9\.,]+)", motivo)
+    if pior_pnl_match:
+        sinal = -1.0 if pior_pnl_match.group(1) == "-" else 1.0
+        pior_pnl = sinal * _to_float(pior_pnl_match.group(2), default=0.0)
+    else:
+        pior_pnl = 0.0
     
     # Extrair n_trades
     n_trades_match = re.search(r"N trades: (\d+)", motivo)
     n_trades = int(n_trades_match.group(1)) if n_trades_match else 0
     
     # Calcular deltas
-    delta_tp = float(tp_novo) - float(tp_atual)
-    delta_stop = float(stop_novo) - float(stop_atual)
+    delta_tp = _to_float(tp_novo, default=0.0) - _to_float(tp_atual, default=0.0)
+    delta_stop = _to_float(stop_novo, default=0.0) - _to_float(stop_atual, default=0.0)
     
     # Montar histórico de TUNEs
     historico_tunes = []
     for record in tune_records:
+        if not isinstance(record, dict):
+            continue
         # Extrair TP, STOP, IR, confiança do motivo
-        motivo_record = record.get("motivo", "")
+        motivo_record = str(record.get("motivo") or "")
         
-        tp_match = re.search(r"TP=([\d.]+)", motivo_record)
-        tp = tp_match.group(1) if tp_match else ""
-        
-        stop_match = re.search(r"STOP=([\d.]+)", motivo_record)
-        stop = stop_match.group(1) if stop_match else ""
-        
-        ir_match = re.search(r"IR=\+([\d.]+)", motivo_record)
+        tp_hist, stop_hist = _extract_tp_stop(
+            record.get("valor_novo", ""),
+            record.get("combinacao", ""),
+            motivo_record,
+        )
+        tp = f"{tp_hist:.2f}" if tp_hist is not None else ""
+        stop = f"{stop_hist:.2f}" if stop_hist is not None else ""
+
+        ir_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo_record)
         ir = ir_match.group(1) if ir_match else ""
-        
+
         confianca_record = ""
-        if "Alta" in motivo_record:
+        if re.search(r"\bAlta\b", motivo_record, flags=re.IGNORECASE):
             confianca_record = "Alta"
-        elif "Baixa" in motivo_record:
+        elif re.search(r"\bBaixa\b", motivo_record, flags=re.IGNORECASE):
             confianca_record = "Baixa"
         
         historico_tunes.append({
-            "data": record.get("data", ""),
+            "data": str(record.get("data") or ""),
             "tp": tp,
             "stop": stop,
             "ir": ir,
@@ -659,6 +748,8 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     })
     
     # Gerar markdown
+    json_completo = _json_safe(dados_ativo)
+
     markdown = formatar_relatorio_markdown({
         "ticker": ticker,
         "ciclo": tune_mais_recente.get("ciclo_id", ""),
@@ -691,14 +782,15 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         "pior_motivo": pior_motivo,
         "pior_pnl": pior_pnl,
         "diagnostico_executivo": diagnostico_executivo,
-        "historico_tunes": historico_tunes
+        "historico_tunes": historico_tunes,
+        "json_completo": json_completo,
     })
     
     # Montar payload completo
     payload = {
         "ticker": ticker,
-        "ciclo": tune_mais_recente.get("ciclo_id", ""),
-        "data": tune_mais_recente.get("data", ""),
+        "ciclo": str(tune_mais_recente.get("ciclo_id") or ""),
+        "data": str(tune_mais_recente.get("data") or ""),
         "tp_atual": tp_atual,
         "stop_atual": stop_atual,
         "tp_novo": tp_novo,
@@ -729,10 +821,10 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         "diagnostico_executivo": diagnostico_executivo,
         "historico_tunes": historico_tunes,
         "markdown": markdown,
-        "json_completo": dados_ativo
+        "json_completo": json_completo
     }
-    
-    return payload
+
+    return _json_safe(payload)
 
 def formatar_relatorio_markdown(dados: dict[str, any]) -> str:
     """
