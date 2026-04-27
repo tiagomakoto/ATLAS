@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-004
-version: 1.0.3
+version: 1.0.4
 status: validated
 owner: Chan
 
@@ -32,6 +32,7 @@ constraints:
   - Endpoints importam a lógica de runtime delegando a pesada IO / Threading por baixo de abstrações async.
 
 notes:
+  - 2026-04-26: código modificado — ativos.py
   - 2026-04-26: código modificado — ativos.py
   - 2026-04-17: código modificado — ativos.py
   - 2026-04-13: código modificado — ativos.py

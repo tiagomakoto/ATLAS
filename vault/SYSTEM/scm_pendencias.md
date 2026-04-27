@@ -68,3 +68,21 @@ arquivo de cÃ³digo: atlas_backend/core/timeutils.py
 campos pendentes: function, role, intent, constraints
 
 status: resolvido (v1.6 â€” 2026-04-24)
+
+---
+## 40ad47f — 2026-04-26 15:12
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/TuneRankingPanel.md
+  arquivo de código: atlas_ui/src/components/GestaoView/TuneRankingPanel.jsx
+  campos pendentes: function, role, intent, constraints
+
+- SYSTEMS/atlas/modules/MainScreen.md
+  arquivo de código: atlas_ui/src/layouts/MainScreen.jsx
+  campos pendentes: function, role, intent, constraints
+
+- SYSTEMS/delta_chaos/modules/v3_0_marcar_versao_pendente.md
+  arquivo de código: delta_chaos/migrations/v3_0_marcar_versao_pendente.py
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

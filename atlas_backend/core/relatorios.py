@@ -522,7 +522,7 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     }
     """
     
-    from atlas_backend.core.delta_chaos_reader import get_ativo
+    from atlas_backend.core.delta_chaos_reader import get_ativo_raw
 
     def _json_safe(value):
         """Converte estrutura arbitrária para algo serializável em JSON estrito."""
@@ -546,7 +546,7 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
             return str(value)
     
     # Obter dados do ativo
-    dados_ativo = get_ativo(ticker)
+    dados_ativo = get_ativo_raw(ticker)
 
     # Extrair historico_config com tolerância a dados malformados
     historico_config_raw = dados_ativo.get("historico_config")

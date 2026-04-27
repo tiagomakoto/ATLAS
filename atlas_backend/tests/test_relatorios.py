@@ -154,7 +154,7 @@ def test_gerar_relatorio_tune_com_dados():
 
 
 def test_gerar_relatorio_tune_sem_dados():
-    # Testa comportamento quando não há TUNE
-    with pytest.raises(ValueError) as excinfo:
+    # Testa comportamento quando o ativo não existe no filesystem
+    # Após migração para get_ativo_raw, ativo inexistente levanta FileNotFoundError
+    with pytest.raises(FileNotFoundError):
         gerar_relatorio_tune("TICKER_INEXISTENTE")
-    assert "Nenhum TUNE executado" in str(excinfo.value)

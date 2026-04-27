@@ -456,3 +456,10 @@
 {"timestamp": "2026-04-26T18:07:44.934945", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-26T18:07:44.998107", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBDC4"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-26T18:07:45.053090", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.182923", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PETR4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.286178", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "ITUB4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.397528", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BOVA11"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.493236", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.561537", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "BBDC4"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:16:11.623521", "user": "CEO", "action": "dc_gate_eod", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-27T00:20:51.331880", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}

@@ -333,14 +333,14 @@ def obter_relatorio_tune(ticker: str, historico: bool = Query(False, description
     Retorna relatório de TUNE do ativo.
     
     Se historico=true, retorna lista de todos os TUNEs executados.
-    """
+""" 
     try:
         from atlas_backend.core.relatorios import gerar_relatorio_tune
         return gerar_relatorio_tune(ticker, historico=historico)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         # Fallback de compatibilidade: evita bloquear exportação .md
         # quando houver formato inesperado em campos do histórico.

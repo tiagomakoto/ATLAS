@@ -97,14 +97,16 @@ const RelatorioTab = ({ ticker }) => {
     setExporting(true);
     try {
       const res = await fetch(`${API_BASE}/ativos/${ticker}/relatorio-tune`);
-      if (!res.ok) {
-        alert(
-          res.status === 404
-            ? "Relatório TUNE não disponível para este ciclo."
-            : `Erro ${res.status} ao gerar relatório.`
-        );
-        return;
-      }
+if (!res.ok) {
+      const msg =
+        res.status === 404
+          ? "Ativo não encontrado."
+          : res.status === 422
+          ? "Relatório TUNE não disponível para este ciclo."
+          : `Erro ${res.status} ao gerar relatório.`;
+      alert(msg);
+      return;
+    }
       const json = await res.json();
       if (!json?.markdown) { alert("Relatório sem markdown."); return; }
       const filename = `TUNE_${ticker}_${json.ciclo}_${json.data}.md`;
