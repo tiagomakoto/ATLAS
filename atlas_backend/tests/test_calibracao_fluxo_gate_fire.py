@@ -85,7 +85,7 @@ class TestGateFireFluxo:
         with patch("atlas_backend.core.dc_runner.dc_calibracao_iniciar", new=AsyncMock(return_value={"status": "started", "step": 1})):
             response = client.post(
                 "/delta-chaos/calibracao/iniciar",
-                json={"ticker": "PETR4", "confirm": True}
+                json={"ticker": "PETR4", "confirm": True, "description": "Teste de calibração"}
             )
             assert response.status_code == 200
             assert response.json()["status"] == "started"
@@ -186,7 +186,40 @@ class TestExportacaoRelatorio:
                 "resultado": "BLOQUEADO",
                 "falhas": ["E2", "E5"]
             },
-            "fire_diagnostico": None
+            "fire_diagnostico": None,
+            "diagnostico_executivo": "GATE BLOQUEADO — critérios E2 e E5 reprovados. Recomendação: não operar.",
+            "tp_atual": 0.75,
+            "stop_atual": 1.50,
+            "tp_novo": 0.80,
+            "stop_novo": 1.75,
+            "delta_tp": 0.05,
+            "delta_stop": 0.25,
+            "ir_valido": 1.234,
+            "n_trades": 47,
+            "confianca": "alta",
+            "janela_anos": 5,
+            "ano_teste_ini": "2021",
+            "trials_rodados": 187,
+            "trials_total": 200,
+            "early_stop": True,
+            "retomado": False,
+            "reflect_mask": 12,
+            "total_ciclos": 58,
+            "reflect_mask_pct": 20.7,
+            "ciclos_reais": 46,
+            "ciclos_fallback": 12,
+            "n_tp": 31,
+            "n_stop": 9,
+            "n_venc": 7,
+            "acerto_pct": 73.2,
+            "pior_data": "2023-03-15",
+            "pior_motivo": "STOP",
+            "pior_pnl": -412.0,
+            "historico_tunes": [
+                {"data": "2026-04-13", "tp": "0.75", "stop": "1.50", "ir": "1.123", "confianca": "Alta"},
+                {"data": "2026-01-08", "tp": "0.70", "stop": "1.50", "ir": "0.987", "confianca": "Baixa"}
+            ],
+            "json_completo": {}
         }
 
         # Verifica que o relatório contém GATE
@@ -215,7 +248,37 @@ class TestExportacaoRelatorio:
                 ],
                 "cobertura": {"ciclos_com_operacao": 60, "total_ciclos": 72, "total_trades": 120, "acerto_geral_pct": 87.5, "pnl_total": 15000.0},
                 "stops_por_regime": {"BAIXA": 3}
-            }
+            },
+            "diagnostico_executivo": "Edge forte confirmado. GATE aprovou todos os 8 critérios. FIRE sugere Bear Call Spread em ALTA.",
+            "tp_atual": 0.75,
+            "stop_atual": 1.50,
+            "tp_novo": 0.80,
+            "stop_novo": 1.75,
+            "delta_tp": 0.05,
+            "delta_stop": 0.25,
+            "ir_valido": 2.1,
+            "n_trades": 42,
+            "confianca": "alta",
+            "janela_anos": 5,
+            "ano_teste_ini": "2021",
+            "trials_rodados": 180,
+            "trials_total": 200,
+            "early_stop": True,
+            "retomado": False,
+            "reflect_mask": 5,
+            "total_ciclos": 50,
+            "reflect_mask_pct": 10.0,
+            "ciclos_reais": 45,
+            "ciclos_fallback": 5,
+            "n_tp": 30,
+            "n_stop": 8,
+            "n_venc": 4,
+            "acerto_pct": 78.9,
+            "pior_data": "2024-06-10",
+            "pior_motivo": "STOP",
+            "pior_pnl": -350.0,
+            "historico_tunes": [{"data": "2026-04-17", "tp": "0.75", "stop": "1.50", "ir": "2.1", "confianca": "Alta"}],
+            "json_completo": {}
         }
 
         markdown = formatar_relatorio_markdown(dados_completos)

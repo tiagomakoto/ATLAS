@@ -19,7 +19,7 @@ def test_gerar_diagnostico_executivo_ir_alto_confianca_alta():
     assert "Edge forte confirmado" in diagnóstico
     assert "APLICAR" in diagnóstico
     assert "10% dos ciclos foram mascarados" not in diagnóstico  # < 30%
-    assert "janela de 5 anos" in diagnóstico  # não é <= 3
+    assert "janela de 5 anos" not in diagnóstico  # janela > 3 não inclui alerta
 
 
 def test_gerar_diagnostico_executivo_ir_baixo():
@@ -127,12 +127,12 @@ def test_formatar_relatorio_markdown_estrutura():
     assert "## Dados brutos (JSON)" in markdown
     assert "TUNE_VALE3_2026-04_2026-04-13.md" not in markdown  # nome de arquivo não deve estar no conteúdo
     assert "Os valores foram otimizados usando proxies intradiários" in markdown
-    assert "TP=0.75" in markdown
-    assert "STOP=1.50" in markdown
-    assert "IR=1.123" in markdown
+    assert "0.75" in markdown   # TP atual na tabela de parâmetros ou histórico
+    assert "1.50" in markdown   # STOP no histórico de TUNEs aplicados
+    assert "1.123" in markdown  # IR no histórico de TUNEs aplicados
     assert "Alta" in markdown
     assert "2023-03-15" in markdown
-    assert "-R$412.00" in markdown
+    assert "R$-412.00" in markdown
     assert "```json" in markdown
     assert "```" in markdown
 

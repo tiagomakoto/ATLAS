@@ -322,7 +322,7 @@ def get_fire_diagnostico(ticker: str) -> Dict[str, Any]:
     fire_stored = calibracao.get("fire_diagnostico")
 
     # Fonte primária: helper que computa do parquet
-    if fire_stored and isinstance(fire_stored, dict) and fire_stored.get("regimes"):
+    if fire_stored and isinstance(fire_stored, dict) and fire_stored.get("regimes") is not None:
         return _normalize_fire_stored(fire_stored, ticker, raw)
 
     # Tenta computar a partir do book_backtest.parquet
