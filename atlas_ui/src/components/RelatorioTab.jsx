@@ -68,6 +68,7 @@ const RelatorioTab = ({ ticker }) => {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [exporting, setExporting] = useState(false);
+  const [exportMode, setExportMode] = useState("ultimo"); // "ultimo" | "completo"
 
   useEffect(() => {
     if (!ticker) return;
@@ -93,10 +94,11 @@ const RelatorioTab = ({ ticker }) => {
 
   const toggle = (i) => setExpanded((prev) => ({ ...prev, [i]: !prev[i] }));
 
-  const exportarMarkdown = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch(`${API_BASE}/ativos/${ticker}/relatorio-tune`);
+   const exportarMarkdown = async () => {
+     setExporting(true);
+     try {
+       const url = `${API_BASE}/ativos/${ticker}/relatorio-tune${exportMode === "completo" ? "?historico=true" : ""}`;
+       const res = await fetch(url);
 if (!res.ok) {
       const msg =
         res.status === 404
@@ -227,27 +229,48 @@ if (!res.ok) {
                     </tbody>
                   </table>
 
-                  {i === 0 && (
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-                      <button
-                        onClick={exportarMarkdown}
-                        disabled={exporting}
-                        style={{
-                          padding: "5px 12px",
-                          background: exporting ? "var(--atlas-surface)" : "var(--atlas-blue)",
-                          color: exporting ? "var(--atlas-text-secondary)" : "#fff",
-                          border: "1px solid var(--atlas-border)",
-                          borderRadius: 2,
-                          fontSize: 10,
-                          fontWeight: "bold",
-                          cursor: exporting ? "not-allowed" : "pointer",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {exporting ? "Gerando..." : "Exportar .md"}
-                      </button>
-                    </div>
-                  )}
+                   {i === 0 && (
+                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                       <div style={{ display: "flex", gap: 8 }}>
+                         <select
+                           value={exportMode}
+                           onChange={(e) => setExportMode(e.target.value)}
+                           disabled={exporting}
+                           style={{
+                             padding: "5px 12px",
+                             background: exporting ? "var(--atlas-surface)" : "var(--atlas-blue)",
+                             color: exporting ? "var(--atlas-text-secondary)" : "#fff",
+                             border: "1px solid var(--atlas-border)",
+                             borderRadius: 2,
+                             fontSize: 10,
+                             fontWeight: "bold",
+                             cursor: exporting ? "not-allowed" : "pointer",
+                             fontFamily: "monospace",
+                           }}
+                         >
+                           <option value="ultimo">Último TUNE</option>
+                           <option value="completo">Completo</option>
+                         </select>
+                         <button
+                           onClick={exportarMarkdown}
+                           disabled={exporting}
+                           style={{
+                             padding: "5px 12px",
+                             background: exporting ? "var(--atlas-surface)" : "var(--atlas-blue)",
+                             color: exporting ? "var(--atlas-text-secondary)" : "#fff",
+                             border: "1px solid var(--atlas-border)",
+                             borderRadius: 2,
+                             fontSize: 10,
+                             fontWeight: "bold",
+                             cursor: exporting ? "not-allowed" : "pointer",
+                             fontFamily: "monospace",
+                           }}
+                         >
+                           {exporting ? "Gerando..." : "Exportar .md"}
+                         </button>
+                       </div>
+                     </div>
+                   )}
                 </div>
               )}
             </div>

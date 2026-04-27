@@ -706,7 +706,7 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     
     # Montar histórico de TUNEs
     historico_tunes = []
-    for record in tune_records:
+    for record in (tune_records if historico else tune_records[:1]):
         if not isinstance(record, dict):
             continue
         # Extrair TP, STOP, IR, confiança do motivo
@@ -719,10 +719,10 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         )
         tp = f"{tp_hist:.2f}" if tp_hist is not None else ""
         stop = f"{stop_hist:.2f}" if stop_hist is not None else ""
-
+        
         ir_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo_record)
         ir = ir_match.group(1) if ir_match else ""
-
+        
         confianca_record = ""
         if re.search(r"\bAlta\b", motivo_record, flags=re.IGNORECASE):
             confianca_record = "Alta"
@@ -748,7 +748,12 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     })
     
     # Gerar markdown
-    json_completo = _json_safe(dados_ativo)
+    if historico:
+        json_completo = _json_safe(dados_ativo)
+    else:
+        # Remove the 'historico' array to reduce payload size (trades data not needed for board decision)
+        dados_reduzido = {k: v for k, v in dados_ativo.items() if k != "historico"}
+        json_completo = _json_safe(dados_reduzido)
 
     markdown = formatar_relatorio_markdown({
         "ticker": ticker,
