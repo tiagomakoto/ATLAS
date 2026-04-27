@@ -113,14 +113,14 @@ if (!res.ok) {
       if (!json?.markdown) { alert("Relatório sem markdown."); return; }
       const filename = `TUNE_${ticker}_${json.ciclo}_${json.data}.md`;
       const blob = new Blob([json.markdown], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
     } finally {
       setExporting(false);
     }
