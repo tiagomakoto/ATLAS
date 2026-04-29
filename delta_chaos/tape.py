@@ -1,6 +1,7 @@
 # ════════════════════════════════════════════════════════════════════
 import json
 import os
+import time
 # DELTA CHAOS — TAPE v2.0
 # Alterações em relação à v1.2:
 # MIGRADO (P2): imports explícitos de init — sem escopo global do notebook
@@ -330,49 +331,74 @@ def tape_ativo_carregar(ticker: str) -> dict:
     }
 
     if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-
-            # Migração — garante que todos os campos novos existam
-            for key, val in default_config.items():
-                if key not in dados:
-                    dados[key] = val
-
-            # Garante sub-regimes em regimes_sizing
-            for regime, sizing in REGIMES_SIZING_PADRAO.items():
-                if regime not in dados["regimes_sizing"]:
-                    dados["regimes_sizing"][regime] = sizing
-
-            # Garante sub-regimes em estrategias
-            if "estrategias" not in dados:
-                dados["estrategias"] = _estrategias_padrao.copy()
-            else:
-                for regime, estrategia in \
-                        _estrategias_padrao.items():
-                    if regime not in dados["estrategias"]:
-                        dados["estrategias"][regime] = estrategia
-
-            return dados
-
-        except Exception as e:
-            # S2 — backup antes de recriar JSON corrompido
-            import shutil
-            ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-            bak = os.path.join(
-                ATIVOS_DIR,
-                f"{ticker}_corrupto_{ts}.json")
+        # Tentativa de leitura com retry para evitar race condition durante escrita atômica
+        max_retries = 3
+        retry_delay = 0.1  # 100ms
+        
+        for attempt in range(max_retries):
             try:
-                shutil.copy2(path, bak)
-                print(f"  ⚠ S2: {ticker}.json corrompido — "
-                      f"backup: {os.path.basename(bak)}")
-            except Exception as e2:
-                print(f"  ⚠ S2: backup falhou: {e2}")
-            print(f"  ⚠ S2: recriando {ticker}.json — "
-                  f"erro: {e}")
-# Recria com defaults completos
-        tape_ativo_salvar(ticker, default_config)
-        return default_config
+                with open(path, "r", encoding="utf-8") as f:
+                    dados = json.load(f)
+
+                # Migração — garante que todos os campos novos existam
+                for key, val in default_config.items():
+                    if key not in dados:
+                        dados[key] = val
+
+                # Garante sub-regimes em regimes_sizing
+                for regime, sizing in REGIMES_SIZING_PADRAO.items():
+                    if regime not in dados["regimes_sizing"]:
+                        dados["regimes_sizing"][regime] = sizing
+
+                # Garante sub-regimes em estrategias
+                if "estrategias" not in dados:
+                    dados["estrategias"] = _estrategias_padrao.copy()
+                else:
+                    for regime, estrategia in \
+                            _estrategias_padrao.items():
+                        if regime not in dados["estrategias"]:
+                            dados["estrategias"][regime] = estrategia
+
+                return dados
+
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                # Erros de decodificação indicam possível corrupção ou leitura durante escrita
+                if attempt < max_retries - 1:
+                    # Tentativa falhou, aguardar e tentar novamente
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Última tentativa falhou - tratar como corrupção real
+                    import shutil
+                    ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    bak = os.path.join(
+                        ATIVOS_DIR,
+                        f"{ticker}_corrupto_{ts}.json")
+                    try:
+                        shutil.copy2(path, bak)
+                        print(f"  ⚠ S2: {ticker}.json corrompido — "
+                              f"backup: {os.path.basename(bak)}")
+                    except Exception as e2:
+                        print(f"  ⚠ S2: backup falhou: {e2}")
+                    print(f"  ⚠ S2: propagando erro de leitura após {max_retries} tentativas — "
+                          f"erro: {e}")
+                    raise  # Propaga a exceção para o chamador tratar
+            except Exception as e:
+                # Outros erros (permissão, etc.) - propagar imediatamente
+                import shutil
+                ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+                bak = os.path.join(
+                    ATIVOS_DIR,
+                    f"{ticker}_corrupto_{ts}.json")
+                try:
+                    shutil.copy2(path, bak)
+                    print(f"  ⚠ S2: {ticker}.json corrompido — "
+                          f"backup: {os.path.basename(bak)}")
+                except Exception as e2:
+                    print(f"  ⚠ S2: backup falhou: {e2}")
+                print(f"  ⚠ S2: propagando erro de leitura — "
+                      f"erro: {e}")
+                raise  # Propaga a exceção para o chamador tratar
     else:
         # Arquivo não existe — cria com defaults completos
         tape_ativo_salvar(ticker, default_config)

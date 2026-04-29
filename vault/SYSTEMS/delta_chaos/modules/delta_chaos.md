@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-010
-version: 1.0.9
+version: 1.0.10
 status: validated
 owner: Chan
 
@@ -42,6 +42,7 @@ constraints:
   - Validação de ticker: regex ^[A-Z0-9]{4,6}$
 
 notes:
+  - 2026-04-29: código modificado — delta_chaos.py
   - 2026-04-26: código modificado — delta_chaos.py
   - 2026-04-25: código modificado — delta_chaos.py
   - 2026-04-22: código modificado — delta_chaos.py

@@ -356,7 +356,7 @@ async def tune_confirmar_regime(payload: dict):
         dados["tune_ranking_estrategia"] = ranking_root
 
         # Registrar em historico_config
-        if "historico_config" not in dados:
+        if not isinstance(dados.get("historico_config"), list):
             dados["historico_config"] = []
         dados["historico_config"].append({
             "data": agora[:10],
@@ -435,24 +435,29 @@ async def tune_confirmar_todos(payload: dict):
             if regime_dados.get("confirmado"):
                 continue
             eleicao_status = regime_dados.get("eleicao_status")
-        if eleicao_status not in {"competitiva", "estrutural_fixo"}:
-            raise HTTPException(status_code=400, detail=f"Regime {regime} está bloqueado — sem estratégia a confirmar")
+            if eleicao_status not in {"competitiva", "estrutural_fixo"}:
+                continue
 
-        # Determinar estratégia a gravar
-        if eleicao_status == "estrutural_fixo":
-            estrategia = regime_dados.get("estrategia_eleita")
-        else:
-            ranking_list = regime_dados.get("ranking") or []
-            if not ranking_list:
-                raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia classificada — confirmação indisponível")
-            estrategia = ranking_list[0]["estrategia"]
+            # Determinar estratégia a gravar
+            if eleicao_status == "estrutural_fixo":
+                estrategia = regime_dados.get("estrategia_eleita")
+            else:
+                ranking_list = regime_dados.get("ranking") or []
+                if not ranking_list:
+                    continue
+                estrategia = ranking_list[0]["estrategia"]
 
-        if not estrategia:
-            raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia associada — confirmação indisponível")
+            if not estrategia:
+                continue
+
+            confirmados.append({"regime": regime, "estrategia": estrategia})
+
+        if not confirmados:
+            raise HTTPException(status_code=400, detail="Nenhum regime elegível para confirmação")
 
         agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         dados["tune_ranking_estrategia"] = ranking_root
-        if "historico_config" not in dados:
+        if not isinstance(dados.get("historico_config"), list):
             dados["historico_config"] = []
         dados["historico_config"].append({
             "data": agora[:10],
@@ -478,7 +483,7 @@ async def tune_confirmar_todos(payload: dict):
             raise
 
         emit_log(f"[TUNE v3.0] {ticker}: bulk approve — {len(confirmados)} regimes confirmados", level="info")
-        return {"status": "ok", "ticker": ticker, "confirmados": confirmados}
+        return {"status": "ok", "ticker": ticker, "confirmados": [c["regime"] for c in confirmados], "detalhes": confirmados}
 
     except HTTPException:
         raise

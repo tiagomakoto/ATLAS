@@ -57,6 +57,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva\|B59]] | TUNE v3.0 — seleção competitiva de estratégia por regime via Optuna | implementação 6 fases + SCAN re-auditoria | 2026-04-25 |
 
 | [[BOARD/tensoes_abertas/B61_tune_v31_tp_stop_por_regime\|B61]] | TUNE v3.1 — TP/STOP por regime + migração FIRE/GATE/BOOK | TUNE v3.0 validado em paper trading | 2026-04-25 |
+| [[BOARD/tensoes_abertas/B62_tune_grid_stop_range_revisao\|B62]] | Grid Etapa A — range Stop 1.5–2.5 amplo demais para vendedor de vol | 1 trimestre paper trading TUNE v3.1 | 2026-04-29 |
 
 ---
 

@@ -79,10 +79,13 @@ def gate_executar(ticker: str) -> str:
     sep  = "═" * 60
     sep2 = "─" * 60
 
-    tape_ativo_inicializar(TICKER)
+    # Verifica se o master JSON existe antes de ler
+    json_path = os.path.join(ATIVOS_DIR, f"{TICKER}.json")
+    if not os.path.exists(json_path):
+        raise FileNotFoundError(f"Master JSON de {TICKER} não encontrado — execute TAPE primeiro")
 
     # Lê apenas TP, STOP e estrategias antes do backtest
-    with open(os.path.join(ATIVOS_DIR, f"{TICKER}.json"), encoding="utf-8") as f:
+    with open(json_path, encoding="utf-8") as f:
         _cfg_ativo = json.load(f)
 
     # Lê do master JSON — específico por ativo

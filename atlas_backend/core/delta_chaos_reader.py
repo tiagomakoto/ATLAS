@@ -572,7 +572,7 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         "status": status,
         "core": core,
         "historico": historico,
-        "historico_config": len(raw_data.get("historico_config", []) if isinstance(raw_data.get("historico_config"), list) else []) > 0, # ← BOOLEANO: true se tem registros
+        "historico_config": raw_data.get("historico_config", []) if isinstance(raw_data.get("historico_config"), list) else [],
         "reflect_historico": reflect_historico,
         "reflect_state": raw_data.get("reflect_state", "B"),
         "staleness_days": staleness_days,

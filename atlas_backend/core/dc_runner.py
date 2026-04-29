@@ -189,6 +189,8 @@ def _tune_elegivel(ticker: str) -> bool:
         from atlas_backend.core.delta_chaos_reader import get_ativo
         dados_ativo = get_ativo(ticker)
         historico_config = dados_ativo.get("historico_config", [])
+        if not isinstance(historico_config, list):
+            historico_config = []
         tunes = [c["data"] for c in historico_config if "TUNE" in c.get("modulo", "")]
         if not tunes:
             return True # Sem histórico → elegível
@@ -247,7 +249,7 @@ async def dc_daily(tickers: list) -> dict:
         # ═══ NOVO: Verificar se ativo tem historico_config (calibração feita) ═══
         from atlas_backend.core.delta_chaos_reader import get_ativo
         dados = get_ativo(ticker)
-        gate_ok = dados.get("historico_config", False) # ← BOOLEANO: true se tem registros
+        gate_ok = len(dados.get("historico_config", [])) > 0
         if not gate_ok:
             emit_log(f"[DAILY] {ticker}: calibração incompleta — aguardando GATE", level="warning")
             # ═══ NOVO: Emitir evento para frontend mostrar GATE vermelho ═══

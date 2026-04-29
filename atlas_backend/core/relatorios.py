@@ -789,7 +789,7 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         "diagnostico_executivo": diagnostico_executivo,
         "historico_tunes": historico_tunes,
         "json_completo": json_completo,
-    })
+        }, incluir_json_bruto=historico)
     
     # Montar payload completo
     payload = {
@@ -831,10 +831,11 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
 
     return _json_safe(payload)
 
-def formatar_relatorio_markdown(dados: dict[str, any]) -> str:
+def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool = True) -> str:
     """
     Formata relatório completo em Markdown para exportação.
     """
+    import json
     
     # Cabeçalho
     markdown = f"# Relatório de TUNE — {dados['ticker']} — {dados['ciclo']}\n"
@@ -904,7 +905,7 @@ def formatar_relatorio_markdown(dados: dict[str, any]) -> str:
     markdown += f"- Acerto: {dados['acerto_pct']:.1f}%\n"
     markdown += "\n"
     markdown += "---\n\n"
-    
+     
     # Pior trade
     markdown += "## Pior trade (janela de teste)\n"
     markdown += f"- Data: {dados['pior_data']}\n"
@@ -923,10 +924,10 @@ def formatar_relatorio_markdown(dados: dict[str, any]) -> str:
     markdown += "---\n\n"
     
     # Dados brutos (JSON)
-    markdown += "## Dados brutos (JSON)\n"
-    markdown += "```json\n"
-    import json
-    markdown += json.dumps(dados['json_completo'], indent=2, ensure_ascii=False)
-    markdown += "\n```"
+    if incluir_json_bruto:
+        markdown += "## Dados brutos (JSON)\n"
+        markdown += "```json\n"
+        markdown += json.dumps(dados['json_completo'], indent=2, ensure_ascii=False)
+        markdown += "\n```\n"
     
     return markdown

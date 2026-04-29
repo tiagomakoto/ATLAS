@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-001
-version: 1.2.2
+version: 1.2.3
 status: validated
 owner: Chan
 
@@ -44,6 +44,7 @@ constraints:
   - Volume usa campo Lanc. como proxy quando Vol. Financeiro ausente
 
 notes:
+  - 2026-04-29: código modificado — tape.py
   - 2026-04-16: código modificado — tape.py
   - 2026-04-14: código modificado — tape.py
   - tape_reflect_daily — calcula componentes EOD, armazena no daily_history

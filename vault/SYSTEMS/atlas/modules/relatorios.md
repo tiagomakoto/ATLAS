@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-019
-version: 1.0.8
+version: 1.0.9
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - marcar_aplicado atualiza campo aplicado=True e data_aplicado no index.json
 
 notes:
+  - 2026-04-29: código modificado — relatorios.py
   - 2026-04-27: código modificado — relatorios.py
   - 2026-04-26: código modificado — relatorios.py
   - 2026-04-26: código modificado — relatorios.py
