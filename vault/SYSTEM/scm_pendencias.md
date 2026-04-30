@@ -86,3 +86,13 @@ status: resolvido (v1.6 â€” 2026-04-24)
   campos pendentes: function, role, intent, constraints
 
 status: pendente
+
+---
+## a4b3f55 — 2026-04-29 21:20
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/TuneRankingPanel.md
+  arquivo de código: atlas_ui/src/components/GestaoView/TuneRankingPanel.jsx
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

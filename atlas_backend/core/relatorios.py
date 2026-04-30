@@ -8,6 +8,7 @@ import os
 import json
 import math
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import re
 
@@ -73,7 +74,7 @@ def gerar_relatorio(ticker: str, ciclo: str, tipo: str, params: dict) -> dict:
     """
     id_rel = _gerar_id()
     id_str = f"{id_rel:03d}"
-    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    data_hoje = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d")
     arquivo = f"RELATORIO_{id_str}_{ticker}_{ciclo}.md"
     path_rel = RELATORIOS_DIR / arquivo
 
@@ -184,7 +185,7 @@ def marcar_aplicado(id_rel: str):
     for entry in index:
         if entry.get("id") == id_rel:
             entry["aplicado"] = True
-            entry["data_aplicado"] = datetime.now().strftime("%Y-%m-%d")
+            entry["data_aplicado"] = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d")
             break
     _salvar_index(index)
 
@@ -374,7 +375,7 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
 
     gate_resultado = calibracao.get("gate_resultado") or {}
     fire_diagnostico = calibracao.get("fire_diagnostico") or {}
-    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    data_hoje = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d")
 
     historico_config = dados_raw.get("historico_config") or []
 
@@ -633,36 +634,55 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     
     # Extrair IR válido e confiança do motivo
     motivo = str(tune_mais_recente.get("motivo") or "")
-    ir_valido_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo)
-    ir_valido = _to_float(ir_valido_match.group(1), default=0.0) if ir_valido_match else 0.0
+
+    # PADRÃO v3.1 — leitura estruturada (prioridade); FALLBACK regex para legado v2.0
+    _is_v31 = str(tune_mais_recente.get("versao_tune") or "") == "3.1"
+
+    if _is_v31 and tune_mais_recente.get("ir_calibrado") is not None:
+        ir_valido = _to_float(tune_mais_recente.get("ir_calibrado"), default=0.0)
+    else:
+        ir_valido_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo)
+        ir_valido = _to_float(ir_valido_match.group(1), default=0.0) if ir_valido_match else 0.0
 
     confianca_match = re.search(r"(Alta|Baixa|amostra_insuficiente)", motivo, flags=re.IGNORECASE)
     confianca = confianca_match.group(1).lower() if confianca_match else ""
-    
+
     # Extrair janela de teste
-    periodo_teste = str(tune_mais_recente.get("periodo_teste") or "")
-    if periodo_teste and "-" in periodo_teste:
-        try:
-            ano_ini, ano_fim = periodo_teste.split("-")
-            janela_anos = int(ano_fim) - int(ano_ini)
-            ano_teste_ini = ano_ini
-        except Exception:
+    if _is_v31 and tune_mais_recente.get("janela_anos_usada"):
+        janela_anos = int(tune_mais_recente.get("janela_anos_usada") or 0)
+        ano_teste_ini = str(datetime.now().year - janela_anos) if janela_anos else ""
+    else:
+        periodo_teste = str(tune_mais_recente.get("periodo_teste") or "")
+        if periodo_teste and "-" in periodo_teste:
+            try:
+                ano_ini, ano_fim = periodo_teste.split("-")
+                janela_anos = int(ano_fim) - int(ano_ini)
+                ano_teste_ini = ano_ini
+            except Exception:
+                janela_anos = 0
+                ano_teste_ini = ""
+        else:
             janela_anos = 0
             ano_teste_ini = ""
-    else:
-        janela_anos = 0
-        ano_teste_ini = ""
-    
+
     # Extrair trials
-    trials_match = re.search(r"Trials:\s*(\d+)\s*/\s*(\d+)", motivo)
-    trials_rodados = int(trials_match.group(1)) if trials_match else 0
-    trials_total = int(trials_match.group(2)) if trials_match else 0
-    if trials_total <= 0:
+    if _is_v31 and tune_mais_recente.get("trials_executados") is not None:
+        trials_rodados = int(tune_mais_recente.get("trials_executados") or 0)
         meta = tune_mais_recente.get("_meta") or {}
         trials_total = int(_to_float(meta.get("trials_por_candidato", 150), default=150))
-    
+    else:
+        trials_match = re.search(r"Trials:\s*(\d+)\s*/\s*(\d+)", motivo)
+        trials_rodados = int(trials_match.group(1)) if trials_match else 0
+        trials_total = int(trials_match.group(2)) if trials_match else 0
+        if trials_total <= 0:
+            meta = tune_mais_recente.get("_meta") or {}
+            trials_total = int(_to_float(meta.get("trials_por_candidato", 150), default=150))
+
     # Extrair early stop
-    early_stop = "early stop" in motivo.lower()
+    if _is_v31 and "early_stop_ativado" in tune_mais_recente:
+        early_stop = bool(tune_mais_recente.get("early_stop_ativado"))
+    else:
+        early_stop = "early stop" in motivo.lower()
     
     # Extrair retomado
     retomado = "Study retomado" in motivo
@@ -707,9 +727,12 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     else:
         pior_pnl = 0.0
     
-    # Extrair n_trades
-    n_trades_match = re.search(r"N trades: (\d+)", motivo)
-    n_trades = int(n_trades_match.group(1)) if n_trades_match else 0
+    # Extrair n_trades — PADRÃO v3.1 estruturado; FALLBACK regex legado
+    if _is_v31 and tune_mais_recente.get("n_trades_calibracao") is not None:
+        n_trades = int(tune_mais_recente.get("n_trades_calibracao") or 0)
+    else:
+        n_trades_match = re.search(r"N trades: (\d+)", motivo)
+        n_trades = int(n_trades_match.group(1)) if n_trades_match else 0
 
     # B57 — 6 campos diagnóstico
     historico_trades = dados_ativo.get("historico", [])
@@ -755,6 +778,10 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         _gate_records_b57[0].get("pnl_medio") if _gate_records_b57 else None,
         default=0.0
     )
+    _gate_rec_recente_b57 = _gate_records_b57[0] if _gate_records_b57 else {}
+    gate_valores_b57       = _gate_rec_recente_b57.get("gate_valores") or {}
+    anos_validos_usados_b57 = _gate_rec_recente_b57.get("anos_validos_usados")
+    ir_por_regime_janela_b57 = _gate_rec_recente_b57.get("ir_por_regime_janela") or {}
     diferenca_tune_gate = round(pnl_medio_tune - pnl_medio_gate, 4)
     nota_obrigatoria_b57 = (
         abs(diferenca_tune_gate) > 0.5 and
@@ -870,6 +897,9 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         "diferenca_tune_gate": diferenca_tune_gate,
         "nota_obrigatoria_b57": nota_obrigatoria_b57,
         "freq_regimes": freq_regimes,
+        "gate_valores": gate_valores_b57,
+        "anos_validos_usados": anos_validos_usados_b57,
+        "ir_por_regime_janela": ir_por_regime_janela_b57,
         }, incluir_json_bruto=historico)
     
     # Montar payload completo
@@ -1029,7 +1059,20 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
     markdown += f"- Study Optuna retomado: {'SIM' if dados['retomado'] else 'NÃO'}\n"
     markdown += "\n"
     markdown += "---\n\n"
-    
+
+    # GATE E5 — Estabilidade ORBIT
+    markdown += "## GATE E5 — Estabilidade ORBIT\n"
+    _gv = dados.get("gate_valores") or {}
+    _e5_str = _gv.get("E5 — ORBIT") or "—"
+    markdown += f"- Resultado: {_e5_str}\n"
+    markdown += f"- Anos válidos usados: {dados.get('anos_validos_usados', '—')}\n"
+    markdown += f"- IR por regime (janela válida):\n"
+    _ir_reg = dados.get("ir_por_regime_janela") or {}
+    for _r, _ir in sorted(_ir_reg.items(), key=lambda x: -x[1]):
+        _marker = " ← PASSOU" if _ir >= 0.10 else " ← bloqueado"
+        markdown += f"  - {_r}: {_ir:+.4f}{_marker}\n"
+    markdown += "\n---\n\n"
+
     # Máscara REFLECT
     markdown += "## Máscara REFLECT\n"
     markdown += f"- Ciclos mascarados (Edge C/D/E): {dados['reflect_mask']} de {dados['total_ciclos']} ({dados['reflect_mask_pct']:.1f}%)\n"
@@ -1040,9 +1083,10 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
     
     # Distribuição de saídas
     markdown += "## Distribuição de saídas (janela de teste)\n"
-    markdown += f"- Take Profit: {dados['n_tp']} ({dados['acerto_pct']:.1f}%)\n"
-    markdown += f"- Stop Loss: {dados['n_stop']} ({dados['acerto_pct']:.1f}%)\n"
-    markdown += f"- Vencimento: {dados['n_venc']} ({dados['acerto_pct']:.1f}%)\n"
+    _total_saidas = max((dados['n_tp'] or 0) + (dados['n_stop'] or 0) + (dados['n_venc'] or 0), 1)
+    markdown += f"- Take Profit: {dados['n_tp']} ({(dados['n_tp'] or 0) / _total_saidas * 100:.1f}%)\n"
+    markdown += f"- Stop Loss:   {dados['n_stop']} ({(dados['n_stop'] or 0) / _total_saidas * 100:.1f}%)\n"
+    markdown += f"- Vencimento:  {dados['n_venc']} ({(dados['n_venc'] or 0) / _total_saidas * 100:.1f}%)\n"
     markdown += f"- Acerto: {dados['acerto_pct']:.1f}%\n"
     markdown += "\n"
     markdown += "---\n\n"

@@ -174,14 +174,38 @@ def _aplicar_regime_no_ativo(
     tp_por_regime[regime]   = tp_val
     stop_por_regime[regime] = stop_val
 
-    dados["historico_config"].append({
+    _anomalia       = regime_dados.get("anomalia") or {}
+    _aplicacao_map  = {"automatica": "automatica", "anomalia_aprovada_ceo": "aprovada_ceo"}
+    _campos_estruturados = {
+        "versao_tune":              "3.1",
+        "regime":                   regime,
+        "n_trades_reais":           int(regime_dados.get("n_trades_reais") or 0),
+        "eleicao_status":           regime_dados.get("eleicao_status"),
+        "estrategia_eleita":        regime_dados.get("estrategia_eleita"),
+        "estrategia_anterior":      estrategia_anterior,
+        "status_calibracao":        regime_dados.get("status_calibracao"),
+        "tp_calibrado":             round(float(regime_dados["tp_calibrado"]), 4) if regime_dados.get("tp_calibrado") is not None else None,
+        "stop_calibrado":           round(float(regime_dados["stop_calibrado"]), 4) if regime_dados.get("stop_calibrado") is not None else None,
+        "ir_calibrado":             round(float(regime_dados["ir_calibrado"]), 4) if regime_dados.get("ir_calibrado") is not None else None,
+        "n_trades_calibracao":      int(regime_dados["n_trades_calibracao"]) if regime_dados.get("n_trades_calibracao") is not None else None,
+        "anomalia_detectada":       bool(_anomalia.get("detectada", False)),
+        "anomalia_motivos":         list(_anomalia.get("motivos") or []),
+        "aplicacao":                _aplicacao_map.get(modo, modo),
+        "janela_anos_usada":        int(regime_dados.get("janela_anos") or 0),
+        "trials_executados":        int(regime_dados["trials_rodados"]) if regime_dados.get("trials_rodados") is not None else None,
+        "early_stop_ativado":       bool(regime_dados.get("early_stop_ativado", False)),
+    }
+
+    _registro_estrategia = {
         "data":            agora[:10],
         "modulo":          versao_label,
         "parametro":       f"estrategia.{regime}",
         "valor_anterior":  estrategia_anterior,
         "valor_novo":      estrategia,
         "motivo":          motivo_base,
-    })
+    }
+    _registro_estrategia.update(_campos_estruturados)
+    dados["historico_config"].append(_registro_estrategia)
     dados["historico_config"].append({
         "data":            agora[:10],
         "modulo":          versao_label,
@@ -870,6 +894,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             regime_dados["ir_calibrado"]         = None
             regime_dados["n_trades_calibracao"]  = n_trades_calib
             regime_dados["trials_rodados"]       = 0
+            regime_dados["early_stop_ativado"]   = False
             regime_dados["data_calibracao"]      = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             _escrever_regime_atomico(path_ativo, regime, regime_dados)
             emit_log(f"TUNE v3.1 [{TICKER}] {regime}: FALLBACK_GLOBAL "
@@ -897,6 +922,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         regime_dados["ir_calibrado"]        = round(ir_b, 4) if ir_b is not None else None
         regime_dados["n_trades_calibracao"] = n_trades_calib
         regime_dados["trials_rodados"]      = trials_b
+        regime_dados["early_stop_ativado"]  = bool(trials_b is not None and trials_b < TRIALS_POR_CAND)
         regime_dados["data_calibracao"]     = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         _escrever_regime_atomico(path_ativo, regime, regime_dados)
         emit_log(f"TUNE v3.1 [{TICKER}] {regime}: CALIBRADO — "

@@ -373,6 +373,65 @@ Condição de revisão:
 
 ---
 
-*Dalio (Relojoeiro) — atualizado em 2026-04-25*
+### PE-010 — Budget Optuna do TUNE v3.1 (trials / patience / startup)
+Data: 2026-04-30
+Tensão relacionada: [[BOARD/decisoes/B23_criterio_parada_tune]] (fechada)
+
+Histórico de decisões:
+  B23 (2026-04-13, TUNE v2.0): 200 trials / patience=50 / startup=50
+  Implementação TUNE v3.1 atual: 100 trials / patience=30 / startup=30
+  Recomendação Simons (2026-04-30): 150 trials / patience=40 / startup=30
+
+Decisão adotada (pendente confirmação CEO):
+  Proposta Simons: trials_por_candidato=150, early_stop_patience=40, startup=30
+  Parâmetros em delta_chaos_config.json → tune.trials_por_candidato
+                                        → tune.early_stop_patience
+  startup_trials é parâmetro interno do TPESampler — não exposto no config atual.
+
+Justificativa formal (Simons, sessão 2026-04-30):
+  O TPE (Tree-structured Parzen Estimator) opera em duas fases:
+  1. Fase exploratória (startup): os primeiros N trials exploram o espaço
+     uniformemente — sem modelo interno de probabilidade. A qualidade das
+     estimativas do TPE só emerge após o startup.
+  2. Fase explotativa: TPE usa os resultados anteriores para guiar busca.
+     Em espaços de baixa dimensionalidade (2D: TP × Stop), convergência
+     tipicamente ocorre em 50–80 trials TPE efetivos.
+
+  Com startup=30:
+  - Budget 100 (atual):    70 trials TPE efetivos — margem estreita para platôs
+  - Budget 150 (proposto): 120 trials TPE efetivos — cobertura confortável 2D
+  - Budget 200 (B23):     150 trials TPE efetivos — conservador, ~2× o necessário
+
+  Risco principal não é não encontrar o ótimo global, mas não distinguir
+  o ótimo de um platô adjacente quando dois candidatos têm IRs próximos
+  após o floor PE-009.
+
+Limitação conhecida:
+  150 trials não deriva de análise de convergência específica para a distribuição
+  de P&L de VALE3/PETR4/BOVA11/BBAS3 — é compromisso qualitativo.
+  O espaço discreto TP × Stop tem 108 combinações — grid exaustivo seria
+  viável neste subconjunto, mas o Optuna cobre também variações contínuas.
+  Se janela_anos for adicionada como terceiro hiperparâmetro no TUNE v3.2,
+  o startup=30 pode ser insuficiente para o espaço 3D resultante.
+
+  Divergência entre B23 (200 trials) e implementação atual (100 trials)
+  não foi documentada como decisão consciente — foi redução silenciosa
+  durante implementação. Este PE registra a divergência formalmente.
+
+Compromisso operacional:
+  150/40/30 equilibra:
+  - Tempo de execução (~4min estimado vs ~2m42s com 100 trials)
+  - Cobertura do espaço de busca
+  - Risco de não discriminar platôs adjacentes com IRs próximos
+
+Condição de revisão:
+  Após 1 trimestre de paper trading. Critério de estabilidade: duas rodadas
+  consecutivas no mesmo ciclo produzindo TP/Stop dentro de ±0.05/±0.25
+  indicam budget suficiente → reduzir para 120. Divergência maior → elevar
+  para 200 (retornar ao B23 original).
+
+---
+
+*Dalio (Relojoeiro) — atualizado em 2026-04-30*
 *Este documento deve ser atualizado sempre que o board tomar decisão empírica consciente.*
 *Convenção de uid: PE-XXX sequencial por data de registro.*

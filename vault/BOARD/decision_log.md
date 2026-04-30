@@ -55,6 +55,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B62_tune_grid_stop_range_revisao\|B62]] | Grid Etapa A — range Stop 1.5–2.5 amplo demais para vendedor de vol | 1 trimestre paper trading TUNE v3.1 | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B63_regimes_renomeacao_lateral\|B63]] | Renomeação NEUTRO_* → LATERAL_* + colapso MORTO + elimina TRANSICAO | CEO confirmado — aguarda SPEC | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B64_petr4_historico_duplicado_orbit\|B64]] | PETR4 historico[] duplicado 26x — origem bug orbit.py | imediato | 2026-04-29 |
+| [[BOARD/tensoes_abertas/B65_timezone_utc_vs_gmt3_relatorios\|B65]] | Timezone UTC vs GMT-3 no gerador de relatórios | imediato | 2026-04-30 |
 
 ---
 
@@ -79,6 +80,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-29_scan_frontend_tune_v31\|2026-04-29]] | SCAN frontend TUNE v3.1 — 4 adendas aprovadas + ressalva router | board |
 | [[BOARD/atas/2026-04-29_auditoria_scan_b53_b54_b55_b56_b57\|2026-04-29]] | Auditoria SCAN estado real B53/B54/B55/B56/B57 | off-ata |
 | [[BOARD/atas/2026-04-29_fechamento_b53_b54_b55_b56_b57\|2026-04-29]] | Fechamento B53/B54/B55/B56/B57 — SCAN aprovado | off-ata |
+| [[BOARD/atas/2026-04-30_rastreabilidade_relatorio_calibracao\|2026-04-30]] | Rastreabilidade do relatório de calibração — SCAN + PE-010 + B65 | board |
 ---
 
 ## Tensões fechadas

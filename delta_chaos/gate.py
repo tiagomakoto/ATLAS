@@ -479,7 +479,10 @@ def gate_executar(ticker: str) -> str:
         "E2 — Acerto":      f"acerto={melhor_acerto*100:.1f}% (breakeven={breakeven*100:.1f}%)",
         "E3 — Estratégia":  f"P&L=R${valido['pnl'].sum():+,.2f}",
         "E4 — TP e STOP":   f"IR={melhor_e4['ir']:+.3f}",
-        "E5 — ORBIT":       f"IR({ano_anterior})={ir_ano_anterior:+.3f}, IR({ano_mais_recente})={ir_ano_atual:+.3f}",
+        "E5 — ORBIT":       (
+            f"IR({ano_anterior})={ir_ano_anterior:+.3f} P&L=R${pnl_ano_anterior:+,.2f} | "
+            f"IR({ano_mais_recente})={ir_ano_atual:+.3f} P&L=R${pnl_ano_mais_recente:+,.2f}"
+        ),
         "E6 — Externas":    f"usdbrl={'ativo' if externas.get('usdbrl') else 'inativo'}, minerio={'ativo' if externas.get('minerio') else 'inativo'}",
         "E7 — Stress":      f"DD_max=R${max_dd:,.2f}, stops_seguidos={max_seq}",
     }
@@ -526,6 +529,17 @@ def gate_executar(ticker: str) -> str:
         "pnl_pior":        round(float(valido["pnl"].min()), 4) if len(valido) > 0 else None,
         "dd_max":          round(float(max_dd), 4),
         "stops_seguidos":  max_seq,
+        "e5_ano_anterior":          ano_anterior,
+        "e5_ano_recente":           ano_mais_recente,
+        "e5_pnl_ano_anterior":      round(float(pnl_ano_anterior), 4),
+        "e5_pnl_ano_recente":       round(float(pnl_ano_mais_recente), 4),
+        "e5_ir_ano_anterior":       round(float(ir_ano_anterior), 4),
+        "e5_ir_ano_recente":        round(float(ir_ano_atual), 4),
+        "e5_estavel":               bool(estavel),
+        "anos_validos_usados":      ANOS_VALIDOS,
+        "ir_por_regime_janela":     {str(k): round(float(v), 4) for k, v in ir_por_regime.items()},
+        "pnl_e5_ano_anterior": round(float(pnl_ano_anterior), 4),
+        "pnl_e5_ano_recente":  round(float(pnl_ano_mais_recente), 4),
         "estrategia_por_regime": {
             r: (valido[valido["regime_entrada"] == r]["estrategia"]
                 .value_counts().index[0]
