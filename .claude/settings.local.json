@@ -39,7 +39,8 @@
       "Bash(python -m pytest atlas_backend/tests/ -k \"relatorio or tune or gate\" --tb=short -q)",
       "Bash(python -m pytest atlas_backend/tests/test_relatorio_tune.py -v)",
       "Bash(python -m pytest atlas_backend/tests/ -v --tb=short)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(git -C \"/c/Users/tiago/OneDrive/Documentos/ATLAS\" log --all --oneline --follow -- \"arquivos/VALE3*\")"
     ]
   }
 }

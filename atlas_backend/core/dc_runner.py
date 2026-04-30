@@ -790,13 +790,12 @@ async def _executar_calibracao_step1(ticker: str):
             if result_tune.get("status") == "OK":
                 dados = get_ativo(ticker)
                 ranking_root = dados.get("tune_ranking_estrategia") or {}
-                meta_ranking = ranking_root.get("_meta") or {}
                 regimes_pendentes = any(
-                    not v.get("confirmado", False)
-                    and v.get("eleicao_status") in {"competitiva", "estrutural_fixo"}
+                    v.get("anomalia", {}).get("detectada", False)
+                    and not v.get("confirmado", False)
                     for k, v in ranking_root.items()
                     if k != "_meta" and isinstance(v, dict)
-                ) if meta_ranking.get("concluido_em") else False
+                )
 
                 if regimes_pendentes:
                     # Pausar step 3 aguardando confirmação CEO
@@ -927,13 +926,12 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
     elif step_atual == 3:
         # D8 (TUNE v3.0): rejeitar retomada do step 3 se ainda há regimes pendentes de confirmação
         ranking_root = dados.get("tune_ranking_estrategia") or {}
-        meta_ranking = ranking_root.get("_meta") or {}
         regimes_pendentes = any(
-            not v.get("confirmado", False)
-            and v.get("eleicao_status") in {"competitiva", "estrutural_fixo"}
+            v.get("anomalia", {}).get("detectada", False)
+            and not v.get("confirmado", False)
             for k, v in ranking_root.items()
             if k != "_meta" and isinstance(v, dict)
-        ) if meta_ranking.get("concluido_em") else False
+        )
 
         if regimes_pendentes:
             raise ValueError("Confirme todos os regimes elegíveis no ranking TUNE v3.0 antes de iniciar o step 3")

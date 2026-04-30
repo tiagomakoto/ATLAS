@@ -986,8 +986,8 @@ def _baixar_cotahist(ano, forcar=False):
 
     # ── Anual em cache válido ─────────────────────────────────────
     if not forcar and _cache_ok(txt_anual, _min_mb):
-        print(f"  Cache COTAHIST {ano}: "
-              f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
+        _tqdm.write(f"  Cache COTAHIST {ano}: "
+                    f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
         return [txt_anual]
 
     # ── Tenta baixar o anual ──────────────────────────────────────
@@ -1016,8 +1016,8 @@ def _baixar_cotahist(ano, forcar=False):
                         os.remove(txt_anual)
                     os.rename(ext, txt_anual)
                 if _cache_ok(txt_anual, _min_mb):
-                    print(f"  ✓ COTAHIST {ano}: "
-                          f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
+                    _tqdm.write(f"  ✓ COTAHIST {ano}: "
+                                f"{os.path.getsize(txt_anual)/1e6:.0f} MB")
                     return [txt_anual]
 
     except Exception:
@@ -1028,12 +1028,12 @@ def _baixar_cotahist(ano, forcar=False):
     mes_atual = _date.today().month
 
     if ano != ano_atual:
-        print(f"  ✗ COTAHIST {ano}: anual indisponível "
-              f"e não é ano corrente — pulando")
+        _tqdm.write(f"  ✗ COTAHIST {ano}: anual indisponível "
+                    f"e não é ano corrente — pulando")
         return []
 
-    print(f"  COTAHIST {ano}: anual indisponível "
-          f"— baixando mensais 01 a {mes_atual:02d}...")
+    _tqdm.write(f"  COTAHIST {ano}: anual indisponível "
+                f"— baixando mensais 01 a {mes_atual:02d}...")
     txts_mensais = []
 
     for mes in range(1, mes_atual + 1):
@@ -1041,8 +1041,8 @@ def _baixar_cotahist(ano, forcar=False):
         txt_path = os.path.join(COTAHIST_DIR, f"{nome}.TXT")
 
         if not forcar and _cache_ok(txt_path, 1.0):
-            print(f"  Cache COTAHIST {ano}-{mes:02d}: "
-                  f"{os.path.getsize(txt_path)/1e6:.0f} MB")
+            _tqdm.write(f"  Cache COTAHIST {ano}-{mes:02d}: "
+                        f"{os.path.getsize(txt_path)/1e6:.0f} MB")
             txts_mensais.append(txt_path)
             continue
 
@@ -1073,8 +1073,8 @@ def _baixar_cotahist(ano, forcar=False):
                 txts = [n for n in z.namelist()
                         if n.upper().endswith(".TXT")]
                 if not txts:
-                    print(f"  ⚠ COTAHIST {ano}-{mes:02d}: "
-                          f"ZIP sem TXT — pulando")
+                    _tqdm.write(f"  ⚠ COTAHIST {ano}-{mes:02d}: "
+                                f"ZIP sem TXT — pulando")
                     continue
                 z.extract(txts[0], COTAHIST_DIR)
                 ext = os.path.join(COTAHIST_DIR, txts[0])
@@ -1084,11 +1084,11 @@ def _baixar_cotahist(ano, forcar=False):
                     os.rename(ext, txt_path)
 
             mb = os.path.getsize(txt_path) / 1e6
-            print(f"  ✓ COTAHIST {ano}-{mes:02d}: {mb:.0f} MB")
+            _tqdm.write(f"  ✓ COTAHIST {ano}-{mes:02d}: {mb:.0f} MB")
             txts_mensais.append(txt_path)
 
         except Exception as e:
-            print(f"  ✗ COTAHIST {ano}-{mes:02d}: {e} — pulando")
+            _tqdm.write(f"  ✗ COTAHIST {ano}-{mes:02d}: {e} — pulando")
 
     return txts_mensais
 
@@ -1467,15 +1467,15 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                     if not forcar and _cache_ok(
                             cache, _min_gregas):
                         mb = os.path.getsize(cache) / 1e6
-                        print(f"\n  ✓ {ativo} {ano} "
-                              f"cache ({mb:.1f} MB)")
+                        pbar.write(f"  ✓ {ativo} {ano} "
+                                   f"cache ({mb:.1f} MB)")
                         try:
                             frames.append(
                                 pd.read_parquet(cache))
                         except Exception as e:
-                            print(f"\n  ⚠ {ativo} {ano} "
-                                  f"cache corrompido: {e} "
-                                  f"— reprocessando")
+                            pbar.write(f"  ⚠ {ativo} {ano} "
+                                       f"cache corrompido: {e} "
+                                       f"— reprocessando")
                             os.remove(cache)
                         else:
                             pbar.update(1)
@@ -1485,53 +1485,53 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                         df_raw = _ler_cotahist(
                             txt, [ativo], [ano])
                     except Exception as e:
-                        print(f"\n  ⚠ {ativo} {ano} "
-                              f"erro COTAHIST: {e} — pulando")
+                        pbar.write(f"  ⚠ {ativo} {ano} "
+                                   f"erro COTAHIST: {e} — pulando")
                         pbar.update(1)
                         continue
 
                     if df_raw.empty:
-                        print(f"\n  ~ {ativo} {ano}: "
-                              f"sem dados — pulando")
+                        pbar.write(f"  ~ {ativo} {ano}: "
+                                   f"sem dados — pulando")
                         pbar.update(1)
                         continue
 
                     n_op = (df_raw["tipo"].isin(
                         ["CALL","PUT"])).sum()
                     if n_op == 0:
-                        print(f"\n  ~ {ativo} {ano}: "
-                              f"sem opções — pulando")
+                        pbar.write(f"  ~ {ativo} {ano}: "
+                                   f"sem opções — pulando")
                         pbar.update(1)
                         continue
 
-                    print(f"\n  {ativo} {ano}: "
-                          f"{n_op:,} opções")
+                    pbar.write(f"  {ativo} {ano}: "
+                               f"{n_op:,} opções")
 
                     try:
                         df_enr = _enriquecer(
                             df_raw, df_selic)
                     except Exception as e:
-                        print(f"\n  ⚠ {ativo} {ano} "
-                              f"erro enriquecimento: {e} "
-                              f"— pulando")
+                        pbar.write(f"  ⚠ {ativo} {ano} "
+                                   f"erro enriquecimento: {e} "
+                                   f"— pulando")
                         pbar.update(1)
                         continue
 
                     if df_enr.empty:
-                        print(f"\n  ~ {ativo} {ano}: "
-                              f"enriquecimento vazio — pulando")
+                        pbar.write(f"  ~ {ativo} {ano}: "
+                                   f"enriquecimento vazio — pulando")
                         pbar.update(1)
                         continue
 
                     try:
                         df_enr.to_parquet(
                             cache, index=False)
-                        print(f"  ✓ Salvo: "
-                              f"{os.path.basename(cache)} "
-                              f"({os.path.getsize(cache)/1e6:.1f} MB)")
+                        pbar.write(f"  ✓ Salvo: "
+                                   f"{os.path.basename(cache)} "
+                                   f"({os.path.getsize(cache)/1e6:.1f} MB)")
                     except Exception as e:
-                        print(f"  ⚠ Falha cache {ativo} "
-                              f"{ano}: {e}")
+                        pbar.write(f"  ⚠ Falha cache {ativo} "
+                                   f"{ano}: {e}")
 
                     frames.append(df_enr)
                     pbar.update(1)

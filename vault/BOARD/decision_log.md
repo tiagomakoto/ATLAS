@@ -49,13 +49,12 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B50_drawer_onboarding_estado_persistido\|B50]] | Drawer onboarding — estado persistido no master JSON + watchdog | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B51_nav_relatorio_tune_exportavel\|B51]] | Nav "Relatório" na aba Ativo — relatório de TUNE exportável em .md | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B52_tp_stop_ativos_table\|B52]] | TP/STOP visível na AtivosTable (Visão Geral) | implementação PLAN | 2026-04-13 |
-
-
 | [[BOARD/tensoes_abertas/B61_tune_v31_tp_stop_por_regime\|B61]] | TUNE v3.1 — TP/STOP por regime + migração FIRE/GATE/BOOK | TUNE v3.0 validado em paper trading | 2026-04-25 |
 | [[BOARD/tensoes_abertas/B62_tune_grid_stop_range_revisao\|B62]] | Grid Etapa A — range Stop 1.5–2.5 amplo demais para vendedor de vol | 1 trimestre paper trading TUNE v3.1 | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B63_regimes_renomeacao_lateral\|B63]] | Renomeação NEUTRO_* → LATERAL_* + colapso MORTO + elimina TRANSICAO | CEO confirmado — aguarda SPEC | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B64_petr4_historico_duplicado_orbit\|B64]] | PETR4 historico[] duplicado 26x — origem bug orbit.py | imediato | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B65_timezone_utc_vs_gmt3_relatorios\|B65]] | Timezone UTC vs GMT-3 no gerador de relatórios | imediato | 2026-04-30 |
+| [[BOARD/tensoes_abertas/B66_n_minimo_grid_criterio_bidimensional\|B66]] | N_MINIMO grid competitivo — critério bidimensional (volume + dispersão temporal) | após 1º trimestre paper trading | 2026-04-30 |
 
 ---
 
@@ -81,6 +80,8 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-29_auditoria_scan_b53_b54_b55_b56_b57\|2026-04-29]] | Auditoria SCAN estado real B53/B54/B55/B56/B57 | off-ata |
 | [[BOARD/atas/2026-04-29_fechamento_b53_b54_b55_b56_b57\|2026-04-29]] | Fechamento B53/B54/B55/B56/B57 — SCAN aprovado | off-ata |
 | [[BOARD/atas/2026-04-30_rastreabilidade_relatorio_calibracao\|2026-04-30]] | Rastreabilidade do relatório de calibração — SCAN + PE-010 + B65 | board |
+| [[BOARD/atas/2026-04-30_tune_v31_estrutural_fixo_n_minimo\|2026-04-30]] | TUNE v3.1: estrutural_fixo por regime + N_MINIMO critério bidimensional | board |
+
 ---
 
 ## Tensões fechadas

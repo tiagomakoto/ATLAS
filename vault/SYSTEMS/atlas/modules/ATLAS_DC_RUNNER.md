@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-001
-version: 1.0.21
+version: 1.0.22
 status: validated
 owner: Chan
 
@@ -48,6 +48,7 @@ constraints:
   - _atualizar_ativo_store emite daily_ativo_updated para manter frontend sincronizado.
 
 notes:
+  - 2026-04-30: código modificado — dc_runner.py
   - 2026-04-30: código modificado — dc_runner.py
   - 2026-04-29: código modificado — dc_runner.py
   - 2026-04-26: código modificado — dc_runner.py

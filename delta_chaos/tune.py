@@ -710,14 +710,13 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         candidatos_raw = CANDIDATOS.get(regime, [])
         candidatos = [_normalizar_estrategia(c) for c in candidatos_raw]
 
-        emit_dc_event("dc_tune_eleicao_regime_start", "TUNE", "running",
-                      ticker=TICKER, regime=regime, candidatos=candidatos,
-                      n_trades=0)
-
         print(f"\n  {regime} — candidatos={candidatos or '[]'}")
 
         # Caso 1: regime bloqueado (sem candidatos)
         if not candidatos:
+            emit_dc_event("dc_tune_eleicao_regime_start", "TUNE", "running",
+                          ticker=TICKER, regime=regime, candidatos=candidatos,
+                          n_trades=0)
             entrada = {
                 "eleicao_status":    "bloqueado",
                 "n_trades_reais":    0,
@@ -745,6 +744,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
 
         # Simulação-piloto (Adenda 1): candidato=ESTRUTURAL_FIXO[regime], ponto central do grid
         # Determina N_trades_reais real antes de decidir estrutural_fixo vs competitiva.
+        # Rodada ANTES do emit start para popular N no painel imediatamente.
         piloto_raw  = ESTRUTURAL_FIXO.get(regime)
         piloto      = _normalizar_estrategia(piloto_raw) if piloto_raw else None
         n_trades_reais = 0
@@ -755,6 +755,10 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             n_trades_reais = res_piloto.get("trades_valido", 0)
 
         print(f"    Piloto={piloto} | N_trades_reais={n_trades_reais} (limiar={N_MINIMO})")
+
+        emit_dc_event("dc_tune_eleicao_regime_start", "TUNE", "running",
+                      ticker=TICKER, regime=regime, candidatos=candidatos,
+                      n_trades=n_trades_reais)
 
         # Caso 2: N < N_MINIMO → estrutural_fixo (PE-008)
         # PE-008 — N<N_MINIMO usa estrategia_estrutural_fixo do config.json.
