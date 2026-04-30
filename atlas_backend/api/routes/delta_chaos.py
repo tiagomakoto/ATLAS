@@ -286,16 +286,35 @@ async def daily_run(payload: dict):
 @router.post("/tune/confirmar-regime")
 async def tune_confirmar_regime(payload: dict):
     """
-    Confirma estratégia eleita para um regime específico (TUNE v3.0).
+    DEPRECADO (TUNE v3.1) — substituído por aplicação automática + confirmar-regime-anomalia.
+    Retorna 410 Gone.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Endpoint deprecado em TUNE v3.1. "
+            "Regimes sem anomalia são aplicados automaticamente pelo TUNE. "
+            "Para resolver anomalias use POST /delta-chaos/tune/confirmar-regime-anomalia."
+        ),
+    )
 
-    Recebe: { ticker, regime, run_id }
-    Grava estrategias[regime] + marca confirmado=true no ranking.
-    Rejeita se run_id inválido ou regime já confirmado.
+
+@router.post("/tune/confirmar-regime-anomalia")
+async def tune_confirmar_regime_anomalia(payload: dict):
+    """
+    Resolve anomalia detectada pelo TUNE v3.1 para um regime específico.
+
+    Recebe: { ticker, regime, run_id, acao: "aplicar" | "rejeitar" }
+    - aplicar: grava estrategias[regime] + tp_por_regime[regime] + stop_por_regime[regime].
+    - rejeitar: mantém parâmetros do ciclo anterior (não grava nada no ativo operacional).
+    Em ambos os casos marca confirmado=True e registra em historico_config.
+    Rejeita se regime não tem anomalia detectada, se run_id inválido ou se já confirmado.
     """
     ticker = str(payload.get("ticker") or "").strip().upper()
     regime = str(payload.get("regime") or "").strip()
     _run_id_raw = payload.get("run_id")
     run_id = str(_run_id_raw).strip() if _run_id_raw is not None else ""
+    acao   = str(payload.get("acao") or "").strip().lower()
 
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise HTTPException(status_code=400, detail=f"Ticker inválido: {ticker}")
@@ -303,10 +322,13 @@ async def tune_confirmar_regime(payload: dict):
         raise HTTPException(status_code=400, detail="regime obrigatório")
     if not run_id:
         raise HTTPException(status_code=400, detail="run_id obrigatório")
+    if acao not in {"aplicar", "rejeitar"}:
+        raise HTTPException(status_code=400, detail="acao deve ser 'aplicar' ou 'rejeitar'")
 
     try:
         import tempfile
         from atlas_backend.core.terminal_stream import emit_log
+        from delta_chaos.tune import _aplicar_regime_no_ativo
 
         path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
         with open(path_ativo, "r", encoding="utf-8") as f:
@@ -325,48 +347,44 @@ async def tune_confirmar_regime(payload: dict):
         if regime_dados.get("confirmado"):
             raise HTTPException(status_code=409, detail=f"Regime {regime} já confirmado")
 
-        eleicao_status = regime_dados.get("eleicao_status")
-        if eleicao_status not in {"competitiva", "estrutural_fixo"}:
-            raise HTTPException(status_code=400, detail=f"Regime {regime} está bloqueado — sem estratégia a confirmar")
-
-        # Determinar estratégia a gravar
-        if eleicao_status == "estrutural_fixo":
-            estrategia = regime_dados.get("estrategia_eleita")
-        else:
-            ranking_list = regime_dados.get("ranking") or []
-            if not ranking_list:
-                raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia classificada — confirmação indisponível")
-            estrategia = ranking_list[0]["estrategia"]
-
-        if not estrategia:
-            raise HTTPException(status_code=400, detail=f"Regime {regime} sem estratégia associada — confirmação indisponível")
+        anomalia = regime_dados.get("anomalia") or {}
+        if not anomalia.get("detectada"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regime {regime} não tem anomalia detectada — não requer confirmação CEO",
+            )
 
         agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        motivos = anomalia.get("motivos") or []
 
-        # Gravar estrategia no campo estrategias[regime]
-        if "estrategias" not in dados:
-            dados["estrategias"] = {}
-        estrategia_anterior = dados["estrategias"].get(regime)
-        dados["estrategias"][regime] = estrategia
-
-        # Marcar confirmado no ranking
-        regime_dados["confirmado"] = True
-        regime_dados["estrategia_eleita"] = estrategia
-        ranking_root[regime] = regime_dados
-        dados["tune_ranking_estrategia"] = ranking_root
-
-        # Registrar em historico_config
         if not isinstance(dados.get("historico_config"), list):
             dados["historico_config"] = []
-        dados["historico_config"].append({
-            "data": agora[:10],
-            "modulo": "TUNE v3.0",
-            "parametro": f"estrategia.{regime}",
-            "valor_anterior": estrategia_anterior,
-            "valor_novo": estrategia,
-            "motivo": f"Confirmação CEO — eleicao_status={eleicao_status} run_id={run_id}",
-        })
-        dados["atualizado_em"] = agora
+
+        if acao == "aplicar":
+            _aplicar_regime_no_ativo(dados, regime, regime_dados, run_id, "anomalia_aprovada_ceo")
+            regime_dados["aplicacao"] = "anomalia_aprovada_ceo"
+            regime_dados["confirmado"] = True
+            dados["historico_config"].append({
+                "data":     agora[:10],
+                "modulo":   "TUNE v3.1",
+                "parametro": f"anomalia.{regime}",
+                "valor_novo": "aprovada_ceo",
+                "motivo":   f"Anomalia aprovada CEO — motivos={motivos} run_id={run_id}",
+            })
+        else:
+            regime_dados["aplicacao"] = "anomalia_rejeitada_ceo"
+            regime_dados["confirmado"] = True
+            dados["historico_config"].append({
+                "data":     agora[:10],
+                "modulo":   "TUNE v3.1",
+                "parametro": f"anomalia.{regime}",
+                "valor_novo": "rejeitada_ceo",
+                "motivo":   f"Anomalia rejeitada CEO — parâmetros do ciclo anterior mantidos — motivos={motivos} run_id={run_id}",
+            })
+
+        ranking_root[regime]             = regime_dados
+        dados["tune_ranking_estrategia"] = ranking_root
+        dados["atualizado_em"]           = agora
 
         tmp_fd, tmp_path = tempfile.mkstemp(dir=path_ativo.parent, suffix=".tmp")
         try:
@@ -380,8 +398,25 @@ async def tune_confirmar_regime(payload: dict):
                 pass
             raise
 
-        emit_log(f"[TUNE v3.0] {ticker} {regime}: confirmado → {estrategia}", level="info")
-        return {"status": "ok", "ticker": ticker, "regime": regime, "estrategia": estrategia}
+        estrategia      = regime_dados.get("estrategia_eleita")
+        status_calibracao = regime_dados.get("status_calibracao")  # "calibrado" | "fallback_global" | None
+        emit_log(
+            f"[TUNE v3.1] {ticker} {regime}: anomalia {acao} → {estrategia}",
+            level="info",
+        )
+        from atlas_backend.core.event_bus import emit_dc_event
+        emit_dc_event(
+            "dc_tune_anomalia_resolvida", "TUNE", "ok",
+            ticker=ticker, regime=regime, acao=acao,
+        )
+        return {
+            "status":           "ok",
+            "ticker":           ticker,
+            "regime":           regime,
+            "acao":             acao,
+            "estrategia":       estrategia,
+            "status_calibracao": status_calibracao,
+        }
 
     except HTTPException:
         raise
@@ -394,103 +429,17 @@ async def tune_confirmar_regime(payload: dict):
 @router.post("/tune/confirmar-todos")
 async def tune_confirmar_todos(payload: dict):
     """
-    Bulk approve: confirma top do ranking para todos os regimes elegíveis (TUNE v3.0).
-
-    Recebe: { ticker, run_id }
-    Elegíveis = eleicao_status in {competitiva, estrutural_fixo} AND not confirmado.
-    Registra um único bloco em historico_config com bulk=true.
+    DEPRECADO (TUNE v3.1) — substituído por aplicação automática + confirmar-regime-anomalia.
+    Retorna 410 Gone.
     """
-    ticker = str(payload.get("ticker") or "").strip().upper()
-    _run_id_raw = payload.get("run_id")
-    run_id = str(_run_id_raw).strip() if _run_id_raw is not None else ""
-
-    if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
-        raise HTTPException(status_code=400, detail=f"Ticker inválido: {ticker}")
-    if not run_id:
-        raise HTTPException(status_code=400, detail="run_id obrigatório")
-
-    try:
-        import tempfile
-        from atlas_backend.core.terminal_stream import emit_log
-
-        path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
-        with open(path_ativo, "r", encoding="utf-8") as f:
-            dados = json.load(f)
-
-        ranking_root = dados.get("tune_ranking_estrategia") or {}
-        meta = ranking_root.get("_meta") or {}
-
-        if meta.get("run_id") != run_id:
-            raise HTTPException(status_code=409, detail="run_id não corresponde ao ranking atual")
-
-        if "estrategias" not in dados:
-            dados["estrategias"] = {}
-
-        confirmados = []
-        for regime, regime_dados in ranking_root.items():
-            if regime == "_meta":
-                continue
-            if not isinstance(regime_dados, dict):
-                continue
-            if regime_dados.get("confirmado"):
-                continue
-            eleicao_status = regime_dados.get("eleicao_status")
-            if eleicao_status not in {"competitiva", "estrutural_fixo"}:
-                continue
-
-            # Determinar estratégia a gravar
-            if eleicao_status == "estrutural_fixo":
-                estrategia = regime_dados.get("estrategia_eleita")
-            else:
-                ranking_list = regime_dados.get("ranking") or []
-                if not ranking_list:
-                    continue
-                estrategia = ranking_list[0]["estrategia"]
-
-            if not estrategia:
-                continue
-
-            confirmados.append({"regime": regime, "estrategia": estrategia})
-
-        if not confirmados:
-            raise HTTPException(status_code=400, detail="Nenhum regime elegível para confirmação")
-
-        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        dados["tune_ranking_estrategia"] = ranking_root
-        if not isinstance(dados.get("historico_config"), list):
-            dados["historico_config"] = []
-        dados["historico_config"].append({
-            "data": agora[:10],
-            "modulo": "TUNE v3.0",
-            "parametro": "estrategia.bulk",
-            "valor_anterior": None,
-            "valor_novo": {c["regime"]: c["estrategia"] for c in confirmados},
-            "motivo": f"Bulk approve CEO — {len(confirmados)} regimes — run_id={run_id}",
-            "bulk": True,
-        })
-        dados["atualizado_em"] = agora
-
-        tmp_fd, tmp_path = tempfile.mkstemp(dir=path_ativo.parent, suffix=".tmp")
-        try:
-            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
-                json.dump(dados, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_path, path_ativo)
-        except Exception:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-
-        emit_log(f"[TUNE v3.0] {ticker}: bulk approve — {len(confirmados)} regimes confirmados", level="info")
-        return {"status": "ok", "ticker": ticker, "confirmados": [c["regime"] for c in confirmados], "detalhes": confirmados}
-
-    except HTTPException:
-        raise
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Endpoint deprecado em TUNE v3.1. "
+            "Regimes sem anomalia são aplicados automaticamente pelo TUNE. "
+            "Para resolver anomalias use POST /delta-chaos/tune/confirmar-regime-anomalia."
+        ),
+    )
 
 
 @router.post("/calibracao/iniciar")

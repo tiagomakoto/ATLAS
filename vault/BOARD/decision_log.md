@@ -49,15 +49,12 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B50_drawer_onboarding_estado_persistido\|B50]] | Drawer onboarding — estado persistido no master JSON + watchdog | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B51_nav_relatorio_tune_exportavel\|B51]] | Nav "Relatório" na aba Ativo — relatório de TUNE exportável em .md | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B52_tp_stop_ativos_table\|B52]] | TP/STOP visível na AtivosTable (Visão Geral) | implementação PLAN | 2026-04-13 |
-| [[BOARD/tensoes_abertas/B53_onboarding_drawer_ux_melhorias\|B53]] | OnboardingDrawer — melhorias de UX/UI (6 itens) | implementação PLAN | 2026-04-14 |
-| [[BOARD/tensoes_abertas/B54_dc_runner_edge_import_direto\|B54]] | dc_runner — eliminar subprocess, importar edge.py como módulo direto | CEO entrega spec ao PLAN | 2026-04-14 |
-| [[BOARD/tensoes_abertas/B55_reflect_estados_ABCDX_redesign\|B55]] | REFLECT — redesign estados A/B/C/D/E → A/B/C/D/T (Tail/Taleb) | implementação Chan + rerrodar histórico | 2026-04-24 |
-| [[BOARD/tensoes_abertas/B56_reflect_sizing_por_estado\|B56]] | REFLECT — sizing por estado A/B/C/D/X + regimes_sizing redundante | B30 + B04 resolvidos | 2026-04-24 |
-| [[BOARD/tensoes_abertas/B57_relatorio_calibracao_lacunas\|B57]] | Relatório de calibração — lacunas de diagnóstico obrigatórias | implementação ATLAS backend + template | 2026-04-25 |
-| [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva\|B59]] | TUNE v3.0 — seleção competitiva de estratégia por regime via Optuna | implementação 6 fases + SCAN re-auditoria | 2026-04-25 |
+
 
 | [[BOARD/tensoes_abertas/B61_tune_v31_tp_stop_por_regime\|B61]] | TUNE v3.1 — TP/STOP por regime + migração FIRE/GATE/BOOK | TUNE v3.0 validado em paper trading | 2026-04-25 |
 | [[BOARD/tensoes_abertas/B62_tune_grid_stop_range_revisao\|B62]] | Grid Etapa A — range Stop 1.5–2.5 amplo demais para vendedor de vol | 1 trimestre paper trading TUNE v3.1 | 2026-04-29 |
+| [[BOARD/tensoes_abertas/B63_regimes_renomeacao_lateral\|B63]] | Renomeação NEUTRO_* → LATERAL_* + colapso MORTO + elimina TRANSICAO | CEO confirmado — aguarda SPEC | 2026-04-29 |
+| [[BOARD/tensoes_abertas/B64_petr4_historico_duplicado_orbit\|B64]] | PETR4 historico[] duplicado 26x — origem bug orbit.py | imediato | 2026-04-29 |
 
 ---
 
@@ -76,7 +73,12 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-25_prio3_bloqueio_relatorio\|2026-04-25]] | PRIO3 bloqueio GATE + auditoria formato relatório | board |
 | [[BOARD/atas/2026-04-25_tune_v3_eleicao_competitiva\|2026-04-25]] | TUNE v3.0 — eleição competitiva de estratégia por regime | board |
 | [[BOARD/atas/2026-04-25_hardreset_ativos\|2026-04-25]] | Hard reset completo dos ativos + fechamento B60 | off-ata |
-
+| [[BOARD/atas/2026-04-29_tune_v31_arquitetura\|2026-04-29]] | TUNE v3.1 — arquitetura duas etapas + gate anomalia | board |
+| [[BOARD/atas/2026-04-29_regimes_nomenclatura_lateral\|2026-04-29]] | Regimes: NEUTRO_* → LATERAL_* + colapso + bug PETR4 | board |
+| [[BOARD/atas/2026-04-29_tune_v31_implementacao_scan\|2026-04-29]] | TUNE v3.1 implementação + SCAN aprovado + SPEC frontend | board |
+| [[BOARD/atas/2026-04-29_scan_frontend_tune_v31\|2026-04-29]] | SCAN frontend TUNE v3.1 — 4 adendas aprovadas + ressalva router | board |
+| [[BOARD/atas/2026-04-29_auditoria_scan_b53_b54_b55_b56_b57\|2026-04-29]] | Auditoria SCAN estado real B53/B54/B55/B56/B57 | off-ata |
+| [[BOARD/atas/2026-04-29_fechamento_b53_b54_b55_b56_b57\|2026-04-29]] | Fechamento B53/B54/B55/B56/B57 — SCAN aprovado | off-ata |
 ---
 
 ## Tensões fechadas
@@ -95,3 +97,9 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B30_tune_v2_mascara_reflect\|B30]] | TUNE v2.0 máscara REFLECT + diagnóstico estratégia | Fases 3 e 4 implementadas e aprovadas por SCAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B42_TUNE_v2\|B42]] | TUNE v2.0 — 5 fases implementadas | Fases 1a/2/3/4/5 aprovadas por SCAN; Fase 1b aguarda B49 | 2026-04-13 |
 | [[BOARD/decisoes/Q12_regime_estrategia_padronizado_regime\|Q12]] | regime_estrategia renomeado para regime — padronização global | orbit.py corrigido + 2119 ciclos migrados | 2026-04-13 |
+| [[BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva\|B59]] | TUNE v3.0→3.1 — backend + frontend completos, SCAN aprovado | tune.py v3.1 + frontend adendas #1–#4 + fix body?.status_calibracao. Merge sem restrições. | 2026-04-29 |
+| [[BOARD/decisoes/B53_onboarding_drawer_ux_melhorias\|B53]] | CalibaçãoDrawer v3.0 — reformulação estrutural completa | Renomeação + steps + GATE granular + FIRE + badge N<5 + import corrigido. SCAN aprovado. | 2026-04-29 |
+| [[BOARD/decisoes/B54_dc_runner_edge_import_direto\|B54]] | dc_runner — subprocess eliminado, import direto implementado | 19 emit_dc_event removidos de edge.py. dc_runner único emissor. Suite 76/76. SCAN aprovado. | 2026-04-29 |
+| [[BOARD/decisoes/B55_reflect_estados_ABCDX_redesign\|B55]] | REFLECT estados E→T implementado (etapa 1) | reflect_cycle_calcular e sizing_calcular usam T. TODO etapa 2 em B04. SCAN aprovado. | 2026-04-29 |
+| [[BOARD/decisoes/B56_reflect_sizing_por_estado\|B56]] | REFLECT sizing por estado + regimes_sizing removido | Lookup A/B/C/D/T. TODOs no código. regimes_sizing zerado em tape.py. SCAN aprovado. | 2026-04-29 |
+| [[BOARD/decisoes/B57_relatorio_calibracao_lacunas\|B57]] | Relatório calibração — 6 campos implementados | 5 seções novas em formatar_relatorio_markdown. Threshold campo 5 como PE provisório. SCAN aprovado. | 2026-04-29 |

@@ -264,6 +264,8 @@ def reflect_cycle_calcular(ativo: str, ciclo_id: str) -> None:
     elif reflect_score >= _thr["D"]:
         reflect_state = "D"
     else:
+        # TODO B55-etapa2: critério discreto de evento de cauda pendente (aguarda B04).
+        # T é atribuído puramente por score < threshold_D até B04 ser resolvido.
         reflect_state = "T"  # Tail
 
     # Salvar no master JSON
@@ -305,7 +307,7 @@ def reflect_sizing_calcular(ativo: str) -> float:
     _lookup = {
         "A": 1.0,   # alpha pendente B01/B29
         "B": 1.0,
-        "C": 0.5,   # PE-007 — provisório
+        "C": 0.5,   # PE-007 — provisório. TODO B56: revisar após 50 ciclos C + B30 implementado.
         "D": 0.0,
         "T": 0.0,   # Tail — protocolo B02
         "E": 0.0,   # legado — tratar como T até rerrodar histórico (B55)
@@ -677,40 +679,30 @@ def rodar_backtest_dados(ticker: str, anos: list = None):
     try:
         from datetime import datetime
         import sys
-        
+
         anos_list = anos if anos else list(range(2002, datetime.now().year + 1))
-        
-        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
-        
+
         config = carregar_config() or {}
         capital = config.get("backtest", {}).get("capital", 10000.0)
         edge = EDGE(capital=capital, modo="backtest", universo=[ticker])
-        
+
         # TAPE
-        emit_dc_event("dc_module_start", "TAPE", "running", ticker=ticker)
         df_tape = tape_historico_carregar(ativos=[ticker], anos=anos_list, forcar=False)
         if df_tape.empty:
-            emit_dc_event("dc_module_complete", "TAPE", "error", ticker=ticker, erro="TAPE vazio")
             raise Exception("TAPE vazio")
         externas = tape_externas_carregar([ticker], anos_list)
-        emit_dc_event("dc_module_complete", "TAPE", "ok", ticker=ticker, registros=len(df_tape))
-        
+
         # ORBIT
-        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
         cfg_ativo = tape_ativo_carregar(ticker)
         if cfg_ativo is None:
-            emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro="cfg_ativo é None")
             raise Exception(f"Configuração ausente para {ticker}")
-            
+
         orbit = ORBIT(universo={ticker: cfg_ativo})
         df_regimes_result = orbit.orbit_rodar(df_tape, anos_list, modo="mensal", externas_dict=externas)
         if df_regimes_result is None or df_regimes_result.empty:
-            emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro="ORBIT vazio")
             raise Exception("ORBIT vazio")
-        emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker=ticker)
-        
+
         # REFLECT
-        emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)
         try:
             cfg_atual = tape_ativo_carregar(ticker)
             historico_ciclos = list(dict.fromkeys(
@@ -723,14 +715,11 @@ def rodar_backtest_dados(ticker: str, anos: list = None):
                     reflect_cycle_calcular(ticker, ciclo_id)
                 except Exception as e_ciclo:
                     emit_log(f"~ REFLECT {ciclo_id} ignorado: {e_ciclo}", "warning")
-            emit_dc_event("dc_module_complete", "REFLECT", "ok", ticker=ticker)
         except Exception as e:
-            emit_dc_event("dc_module_complete", "REFLECT", "error", ticker=ticker, erro=str(e))
             raise e
-            
+
         return {"status": "OK"}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro=str(e))
         import traceback
         traceback.print_exc()
         raise e
@@ -741,26 +730,20 @@ def rodar_orbit_update(ticker: str, anos: list = None):
         import sys
 
         anos_list = anos if anos else list(range(2002, datetime.now().year + 1))
-        
+
         # TAPE
-        emit_dc_event("dc_module_start", "TAPE", "running", ticker=ticker)
         cfg_ativo = tape_ativo_carregar(ticker)
         df_ohlcv = tape_ohlcv_carregar(ticker, anos_list)
         df_ibov = tape_ibov_carregar(anos_list)
         externas = tape_externas_carregar([ticker], anos_list)
         if df_ohlcv.empty:
-            emit_dc_event("dc_module_complete", "TAPE", "error", ticker=ticker, erro="OHLCV vazio")
             raise Exception(f"TAPE: dados OHLCV indisponíveis para {ticker}")
-        emit_dc_event("dc_module_complete", "TAPE", "ok", ticker=ticker, registros=len(df_ohlcv))
-        
+
         # ORBIT
-        emit_dc_event("dc_module_start", "ORBIT", "running", ticker=ticker)
         orbit = ORBIT(universo={ticker: cfg_ativo})
         orbit.orbit_rodar(df_ohlcv, anos=anos_list, modo="mensal", externas_dict=externas)
-        emit_dc_event("dc_module_complete", "ORBIT", "ok", ticker=ticker)
-        
+
         # REFLECT
-        emit_dc_event("dc_module_start", "REFLECT", "running", ticker=ticker)
         cfg_atual = tape_ativo_carregar(ticker)
         historico_ciclos = list(dict.fromkeys(
             c["ciclo_id"] for c in cfg_atual.get("historico", []) if "ciclo_id" in c
@@ -774,10 +757,8 @@ def rodar_orbit_update(ticker: str, anos: list = None):
                 reflect_cycle_calcular(ticker, ciclo_id)
             except Exception as e_ciclo:
                 emit_log(f"~ REFLECT {ciclo_id} ignorado: {e_ciclo}", "warning")
-        emit_dc_event("dc_module_complete", "REFLECT", "ok", ticker=ticker)
         return {"status": "OK"}
     except Exception as e:
-        emit_dc_event("dc_module_complete", "ORBIT", "error", ticker=ticker, erro=str(e))
         raise e
 
 def rodar_tune(ticker: str):

@@ -128,7 +128,11 @@ def normalize_guard_payload(payload: Dict[str, Any] | None, ticker: str) -> Dict
 def normalize_tune_ranking(
     tune_ranking_estrategia: Dict[str, Any] | None,
 ) -> Dict[str, Any]:
-    """Normaliza tune_ranking_estrategia para payload do frontend."""
+    """Normaliza tune_ranking_estrategia para payload do frontend.
+
+    v3.1: expõe anomalia e aplicacao por regime.
+    aguardando_confirmacao_regimes = True apenas se há anomalia pendente de resolução CEO.
+    """
     ranking = tune_ranking_estrategia or {}
     meta = ranking.get("_meta") or {}
 
@@ -141,54 +145,67 @@ def normalize_tune_ranking(
         eleicao_status = dados.get("eleicao_status", "in_progress")
         ranking_list = dados.get("ranking") or []
         estrategia_eleita = dados.get("estrategia_eleita")
-        confirmavel = False
+        aplicacao = dados.get("aplicacao")
+        anomalia = dados.get("anomalia") or {}
+        anomalia_detectada = bool(anomalia.get("detectada", False))
+        confirmado = bool(dados.get("confirmado", False))
+
+        # confirmavel = tem anomalia pendente de resolução CEO
+        confirmavel = anomalia_detectada and not confirmado
         motivo_bloqueio = None
 
         if eleicao_status == "bloqueado":
             motivo_bloqueio = "Regime bloqueado - sem estrategia associada"
         elif eleicao_status == "in_progress":
             motivo_bloqueio = "Eleicao em andamento"
-        elif eleicao_status == "estrutural_fixo":
-            confirmavel = bool(estrategia_eleita)
-            if not confirmavel:
-                motivo_bloqueio = "Sem estrategia estrutural definida"
-        elif eleicao_status == "competitiva":
-            confirmavel = bool(ranking_list and ranking_list[0].get("estrategia"))
-            if not confirmavel:
-                motivo_bloqueio = "Sem estrategia classificada no ranking"
-        else:
-            motivo_bloqueio = f"Status de eleicao invalido: {eleicao_status}"
+        elif not confirmavel and eleicao_status in ("competitiva", "estrutural_fixo"):
+            # Aplicado automaticamente ou anomalia já resolvida
+            motivo_bloqueio = None
+        elif eleicao_status == "estrutural_fixo" and not estrategia_eleita:
+            motivo_bloqueio = "Sem estrategia estrutural definida"
+        elif eleicao_status == "competitiva" and not (ranking_list and ranking_list[0].get("estrategia")):
+            motivo_bloqueio = "Sem estrategia classificada no ranking"
 
         regimes_out[regime] = {
-            "eleicao_status": eleicao_status,
-            "n_trades": dados.get("n_trades"),
-            "data_eleicao": dados.get("data_eleicao"),
-            "confirmado": bool(dados.get("confirmado", False)),
-            "estrategia_eleita": estrategia_eleita,
-            "ranking": ranking_list,
-            "confirmavel": confirmavel,
+            "eleicao_status":              eleicao_status,
+            "n_trades":                    dados.get("n_trades"),
+            "data_eleicao":                dados.get("data_eleicao"),
+            "confirmado":                  confirmado,
+            "estrategia_eleita":           estrategia_eleita,
+            "ranking":                     ranking_list,
+            "confirmavel":                 confirmavel,
             "motivo_bloqueio_confirmacao": motivo_bloqueio,
+            "aplicacao":                   aplicacao,
+            "anomalia":                    {
+                "detectada": anomalia_detectada,
+                "motivos":   anomalia.get("motivos") or [],
+            },
+            "status_calibracao":           dados.get("status_calibracao"),
+            "tp_calibrado":                dados.get("tp_calibrado"),
+            "stop_calibrado":              dados.get("stop_calibrado"),
+            "ir_calibrado":                dados.get("ir_calibrado"),
         }
 
-    # Sub-status: aguardando_confirmacao_regimes se algum regime elegível está pendente
-    elegivel_pendente = any(
-        not v.get("confirmado", False) and v.get("confirmavel", False)
+    # Sub-status: aguardando_confirmacao_regimes = há anomalia pendente de resolução CEO
+    anomalia_pendente = any(
+        v["anomalia"]["detectada"] and not v["confirmado"]
         for v in regimes_out.values()
     )
 
     return {
         "_meta": {
-            "run_id": meta.get("run_id"),
-            "versao": meta.get("versao"),
-            "iniciado_em": meta.get("iniciado_em"),
-            "concluido_em": meta.get("concluido_em"),
-            "trials_por_candidato": meta.get("trials_por_candidato"),
-            "early_stop_patience": meta.get("early_stop_patience"),
-            "startup_trials": meta.get("startup_trials"),
+            "run_id":                meta.get("run_id"),
+            "versao":                meta.get("versao"),
+            "iniciado_em":           meta.get("iniciado_em"),
+            "concluido_em":          meta.get("concluido_em"),
+            "trials_por_candidato":  meta.get("trials_por_candidato"),
+            "early_stop_patience":   meta.get("early_stop_patience"),
+            "startup_trials":        meta.get("startup_trials"),
+            "n_minimo_calibracao":   meta.get("n_minimo_calibracao"),
         },
-        "regimes": regimes_out,
-        "aguardando_confirmacao_regimes": elegivel_pendente,
-        "concluido": meta.get("concluido_em") is not None,
+        "regimes":                       regimes_out,
+        "aguardando_confirmacao_regimes": anomalia_pendente,
+        "concluido":                     meta.get("concluido_em") is not None,
     }
 
 

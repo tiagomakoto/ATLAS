@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-049
-version: 1.0
+version: 1.0.1
 status: draft
 owner: Chan | Lilian | Board
 
@@ -30,5 +30,6 @@ constraints: [BOARD_REVIEW_REQUIRED]
   - <regras / invariantes / thresholds literais>
 
 notes:
+  - 2026-04-29: código modificado — TuneRankingPanel.jsx
   - 2026-04-26 — módulo criado automaticamente a partir de atlas_ui/src/components/GestaoView/TuneRankingPanel.jsx
   - <edge cases ou riscos>

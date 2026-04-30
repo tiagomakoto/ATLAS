@@ -60,6 +60,15 @@ impacted_modules:
 resolution:
 
 notes:
+  - AUDITORIA SCAN 2026-04-29: nenhum dos 6 campos implementado. relatorios.py contém
+    exportar_relatorio_calibracao() e gerar_relatorio_tune() mas sem distribuição temporal
+    de stops, breakdown P&L por ano, estado REFLECT, sizing final, reconciliação TUNE×GATE
+    ou frequência de regimes. Spec Lilian ainda não emitida. Campo 3 (estado REFLECT) depende
+    de B55 estar totalmente implementado. Campos 4 (sizing final) depende de B56.
+    Campos 1, 2, 5, 6 são independentes e implementáveis agora. Threshold para nota
+    obrigatória no campo 5 (reconciliação TUNE×GATE) deve ir na spec de Lilian.
+
+notes_originais:
   - Originado na análise de PRIO3 bloqueado em 2026-04-25: acerto 96%,
     2 stops consecutivos reverteram P&L total. Sem distribuição temporal,
     board não pôde determinar se bloqueio reflete condição recente ou histórica.

@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-024
-version: 1.0.3
+version: 1.0.4
 status: validated
 owner: Chan | Lilian | Board
 
@@ -39,6 +39,7 @@ constraints:
 - Compatibilidade com chave legada 3_backtest_gate mantida
 
 notes:
+  - 2026-04-29: código modificado — calibracao_contract.py
   - 2026-04-26: código modificado — calibracao_contract.py
 - 2026-04-17: código modificado — calibracao_contract.py
 - 2026-04-17 — módulo criado automaticamente a partir de atlas_backend/core/calibracao_contract.py

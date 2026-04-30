@@ -1,0 +1,18 @@
+import json, os
+
+base = "G:/Meu Drive/Delta Chaos/ativos"
+ativos = ["VALE3", "PETR4", "BOVA11"]
+
+for ticker in ativos:
+    path = f"{base}/{ticker}.json"
+    if not os.path.exists(path): continue
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+    
+    historico = data.get("historico", [])
+    from collections import Counter
+    regimes = Counter(c.get("regime") for c in historico if c.get("regime"))
+    neutros = {k: v for k, v in regimes.items() if "NEUTRO" in k}
+    print(f"\n{ticker} — {len(historico)} ciclos total")
+    for r, n in sorted(neutros.items()):
+        print(f"  {r}: {n} ciclos")

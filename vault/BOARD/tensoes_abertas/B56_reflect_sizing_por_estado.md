@@ -68,6 +68,16 @@ impacted_modules:
 resolution:
 
 notes:
+  - AUDITORIA SCAN 2026-04-29: reflect_sizing_calcular() em edge.py usa lookup por estado
+    (A=1.0, B=1.0, C=0.5, D=0.0, T=0.0, E=0.0 legado) — implementado corretamente.
+    sizing_orbit × reflect_mult aplicado em _executar_backtest e _executar_paper.
+    PENDENTE: (1) TODO alpha A ausente no código (B01/B29). (2) TODO revisão C=0.5 ausente
+    no código (PE-007, condição: 50 ciclos + B30). (3) regimes_sizing ainda presente em
+    tape_ativo_carregar() e tape_ativo_inicializar() — REGIMES_SIZING_PADRAO ainda carregado
+    do config. Sequência de remoção (Thorp) não executada. Campo é letra morta operacionalmente
+    mas ainda ocupa código e JSONs.
+
+notes_originais:
   - PE-007: sizing C = 0.5 — provisório. Limitação: 20 ciclos observados em
     5 ativos. Condição de revisão: B30 implementado + mínimo 50 ciclos C
     observados com estratégia ativa.

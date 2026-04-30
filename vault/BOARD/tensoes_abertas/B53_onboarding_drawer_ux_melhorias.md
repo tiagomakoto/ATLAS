@@ -39,6 +39,15 @@ impacted_modules:
 resolution:
 
 notes:
+  - AUDITORIA SCAN 2026-04-29: componente renomeado CalibracaoDrawer.jsx (item 7 ok).
+    3 steps implementados com status visual, label PRÓXIMO, duração por card, descrição prévia TUNE.
+    Guard step 1 implementado. GATE granular 8 critérios implementado. FIRE diagnóstico por regime
+    implementado. Botão exportar .md presente. PENDENTE: (1) aviso N<5 por regime no FIRE ausente
+    (Hull) — regime com 1-2 trades exibe IR sem alerta. (2) import em GestaoView.jsx não verificado
+    por SCAN — confirmar que referencia CalibracaoDrawer e não OnboardingDrawer.
+    SPEC_CALIBRACAO_DRAWER_v3.0.md presente no diretório raíz do ATLAS.
+
+notes_originais:
   - Itens 1–6: melhorias visuais — lógica de WebSocket e watchdog preservados da v2.0
   - Item 7: renomeação de componente — GestaoView.jsx atualiza import
   - Item 8: guard de dados recentes — read-only no master JSON, sem escrita

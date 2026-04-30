@@ -480,3 +480,27 @@
 {"timestamp": "2026-04-28T19:15:43.289411", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-28T19:25:48.758387", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-28T19:26:44.093725", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:22:26.770518", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:24:04.076706", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:25:09.054126", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:33:15.595533", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "BBAS3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:34:59.264404", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:35:12.649737", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "BBAS3"}, "response": {"status": "ERRO", "error": "FileNotFoundError(2, 'No such file or directory')"}}
+{"timestamp": "2026-04-29T14:36:51.563363", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "BBAS3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:38:31.110173", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T14:39:04.898718", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T16:52:10.058427", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "BBAS3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T16:54:25.214133", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T16:55:10.160056", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "BBAS3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T17:57:52.198969", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:00:36.788981", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:01:32.018106", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:04:31.173964", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:06:33.059148", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:08:03.026502", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:14:17.170080", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:16:19.587431", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T18:17:53.199491", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T22:58:31.507683", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T23:01:56.100057", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-29T23:02:47.620756", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}

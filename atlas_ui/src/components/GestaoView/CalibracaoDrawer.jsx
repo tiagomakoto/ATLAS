@@ -270,7 +270,22 @@ function TuneRegimeProgressPanel({ progressByRegime }) {
                 N={dados.n_trades}
               </div>
             )}
-            {top && (
+            {status === "bloqueado" && (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
+                ⚫ sem candidatos
+              </div>
+            )}
+            {status === "estrutural_fixo" && dados?.estrategia_eleita && (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+                {dados.estrategia_eleita}
+              </div>
+            )}
+            {status === "competitiva" && dados?.estrategia_eleita && (
+              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
+                {dados.estrategia_eleita}
+              </div>
+            )}
+            {status === "in_progress" && top && (
               <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
                 {top.estrategia} | IR {Number(top.ir || 0).toFixed(3)} | TP {top.tp != null ? Number(top.tp).toFixed(2) : "--"} | STOP {top.stop != null ? Number(top.stop).toFixed(2) : "--"}
               </div>
@@ -306,6 +321,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   const [tunePendente, setTunePendente] = useState(false);
   const [tuneRankingConfirmado, setTuneRankingConfirmado] = useState(false);
   const [tuneRegimeProgress, setTuneRegimeProgress] = useState({});
+  const [tuneEtapaLabel, setTuneEtapaLabel] = useState(null);
 
   const proximoStep = useMemo(() => {
     let ultimoDone = -1;
@@ -584,6 +600,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         setBestStop(null);
         setSubModules({ TAPE: null, ORBIT: null, REFLECT: null });
         setTuneRegimeProgress({});
+        setTuneEtapaLabel(null);
       }
       if (modulo === "GATE") {
         // Limpa dados de run anterior para evitar exibição fora de ordem
@@ -745,6 +762,39 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       if (d.ir != null) setBestIr(d.ir);
       if (d.best_tp != null) setBestTp(d.best_tp);
       if (d.best_stop != null) setBestStop(d.best_stop);
+      if (d.etapa === "A" && d.regime) {
+        const cand = d.candidato || "?";
+        setTuneEtapaLabel(`Eleição ${d.regime}: ${cand} — ${d.trial ?? 0}/${d.total ?? 0}`);
+      } else if (d.etapa === "B" && d.regime) {
+        const strat = d.estrategia || d.candidato || "?";
+        setTuneEtapaLabel(`${d.regime} — ${strat}: ${d.trial ?? 0}/${d.total ?? 0} trials | IR ${Number(d.ir || 0).toFixed(3)}`);
+      }
+    }
+
+    if (evento?.type === "dc_tune_anomalia_detectada") {
+      const d = evento.data || {};
+      if (d.regime) {
+        setTuneRegimeProgress((prev) => ({
+          ...prev,
+          [d.regime]: { ...(prev[d.regime] || {}), anomalia_detectada: true },
+        }));
+      }
+    }
+
+    if (evento?.type === "dc_tune_aplicacao_automatica") {
+      const d = evento.data || {};
+      if (d.regime) {
+        setTuneRegimeProgress((prev) => ({
+          ...prev,
+          [d.regime]: { ...(prev[d.regime] || {}), aplicado_automaticamente: true },
+        }));
+      }
+    }
+
+    if (evento?.type === "dc_tune_anomalia_resolvida") {
+      // Anomalia resolvida via resposta HTTP 200 do POST /tune/confirmar-regime-anomalia.
+      // NÃO atualiza estado aqui — a fonte da verdade é a resposta do endpoint (handleAcao em RegimeRow).
+      console.debug("[TUNE] dc_tune_anomalia_resolvida (diagnóstico):", evento?.data);
     }
 
     if (evento?.type === "dc_tune_eleicao_start") {
@@ -764,6 +814,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     if (evento?.type === "dc_tune_eleicao_regime_start") {
       const d = evento?.data || {};
       if (!d.regime) return;
+      const candidatos = d.candidatos ?? "?";
+      setTuneEtapaLabel(`Eleição ${d.regime}: candidatos=${candidatos}`);
       setTuneRegimeProgress((prev) => ({
         ...prev,
         [d.regime]: {
@@ -788,6 +840,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           n_trades: d.n_trades ?? prev[d.regime]?.n_trades,
           ranking: d.ranking || [],
           estrategia_eleita: d.estrategia_eleita ?? prev[d.regime]?.estrategia_eleita ?? null,
+          ir_mediana: d.ir_mediana ?? null,
           confirmado: prev[d.regime]?.confirmado || false,
         },
       }));
@@ -1100,21 +1153,31 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
                   {indexProgress.total.toLocaleString("pt-BR")} dias indexados
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
-                  {trialAtual} / {trialTotal} trials
-                </span>
-                <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
-                  IR: {Number(bestIr || 0).toFixed(3)}
-                </span>
-              </div>
-              <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${trialTotal > 0 ? (trialAtual / trialTotal) * 100 : 0}%`, height: "100%", background: "var(--atlas-blue)" }} />
-              </div>
-              {(bestTp != null || bestStop != null) && (
-                <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-blue)", marginTop: 4 }}>
-                  TP {bestTp != null ? Number(bestTp).toFixed(2) : "--"} | STOP {bestStop != null ? Number(bestStop).toFixed(2) : "--"}
-                </div>
+              {indexComplete && (
+                <>
+                  {tuneEtapaLabel ? (
+                    <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-blue)", marginBottom: 4 }}>
+                      {tuneEtapaLabel}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                        {trialAtual} / {trialTotal} trials
+                      </span>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                        IR: {Number(bestIr || 0).toFixed(3)}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${trialTotal > 0 ? (trialAtual / trialTotal) * 100 : 0}%`, height: "100%", background: "var(--atlas-blue)" }} />
+                  </div>
+                  {(bestTp != null || bestStop != null) && (
+                    <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-blue)", marginTop: 4 }}>
+                      TP {bestTp != null ? Number(bestTp).toFixed(2) : "--"} | STOP {bestStop != null ? Number(bestStop).toFixed(2) : "--"}
+                    </div>
+                  )}
+                </>
               )}
               <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 4 }}>
                 Tempo decorrido {elapsedForStep2()} (est. restante {estimatedForStep2()})
@@ -1133,8 +1196,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             </button>
           )}
 
-          {/* TUNE v3.0 — Ranking de eleição de estratégia (exibido após step 2 concluir) */}
-          {stepId === "2_tune" && status === "done" && tuneRanking && (
+          {/* TUNE v3.1 — Ranking de eleição de estratégia (exibido após step 2 concluir; mostra placeholder se ranking ausente) */}
+          {stepId === "2_tune" && status === "done" && (
             <TuneRankingPanel
               ticker={ticker}
               tuneRanking={tuneRanking}
@@ -1147,7 +1210,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             <div style={{ marginTop: 8 }}>
               {!tuneRankingConfirmado ? (
                 <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-amber)" }}>
-                  ⚠ Confirme todos os regimes no ranking TUNE acima para liberar o step 3.
+                  ⚠ Resolva as anomalias TUNE acima para liberar o step 3.
                 </div>
               ) : (
                 <button
@@ -1247,7 +1310,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
                 <span>{r.regime}</span>
                 <span>{r.trades}t</span>
                 <span>{r.acerto_pct}%</span>
-                <span>IR {r.ir?.toFixed(2)}</span>
+                <span>IR {r.ir?.toFixed(2)}{r.trades < 5 && <span style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-amber)", marginLeft: 4 }}>⚠ N&lt;5</span>}</span>
                 <span style={{ color: r.worst_trade < 0 ? "var(--atlas-red)" : r.worst_trade > 0 ? "var(--atlas-green)" : "inherit" }}>{r.worst_trade != null ? `W: R$${Number(r.worst_trade).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
               </div>
             ))}

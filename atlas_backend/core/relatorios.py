@@ -548,6 +548,17 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     # Obter dados do ativo
     dados_ativo = get_ativo_raw(ticker)
 
+    # Extrair ranking v3.1 e estratégias atuais (para seções Etapa A/B)
+    _ranking_raw      = dados_ativo.get("tune_ranking_estrategia") or {}
+    _meta_ranking     = _ranking_raw.get("_meta") or {}
+    _versao_ranking   = str(_meta_ranking.get("versao", ""))
+    _estrategias_atu  = dados_ativo.get("estrategias") or {}
+    ranking_v31: dict = {}
+    if _versao_ranking == "3.1":
+        for _r, _rd in _ranking_raw.items():
+            if _r != "_meta" and isinstance(_rd, dict):
+                ranking_v31[_r] = _rd
+
     # Extrair historico_config com tolerância a dados malformados
     historico_config_raw = dados_ativo.get("historico_config")
     if not isinstance(historico_config_raw, list):
@@ -699,7 +710,64 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     # Extrair n_trades
     n_trades_match = re.search(r"N trades: (\d+)", motivo)
     n_trades = int(n_trades_match.group(1)) if n_trades_match else 0
-    
+
+    # B57 — 6 campos diagnóstico
+    historico_trades = dados_ativo.get("historico", [])
+
+    stops_por_ano: dict = {}
+    for _trade in historico_trades:
+        if _trade.get("motivo_saida") == "STOP":
+            _dt = str(_trade.get("data", "") or _trade.get("data_saida", "") or "")
+            if len(_dt) >= 4:
+                _ano = _dt[:4]
+                stops_por_ano[_ano] = stops_por_ano.get(_ano, 0) + 1
+
+    from collections import defaultdict as _defaultdict
+    _pnl_por_ano_raw: dict = _defaultdict(list)
+    for _trade in historico_trades:
+        _dt = str(_trade.get("data", "") or _trade.get("data_saida", "") or "")
+        _pnl = _trade.get("pnl")
+        if len(_dt) >= 4 and _pnl is not None:
+            try:
+                _pnl_por_ano_raw[_dt[:4]].append(float(_pnl))
+            except (ValueError, TypeError):
+                pass
+    pnl_por_ano = [
+        {"ano": _a, "pnl_medio": round(sum(_v) / len(_v), 2), "n_trades": len(_v)}
+        for _a, _v in sorted(_pnl_por_ano_raw.items())
+    ]
+
+    reflect_state_atual = dados_ativo.get("reflect_state", None)
+
+    _reflect_mult_map = {"A": 1.0, "B": 1.0, "C": 0.5, "D": 0.0, "T": 0.0}
+    reflect_mult = _reflect_mult_map.get(reflect_state_atual, 1.0)
+    _ultimo_ciclo_hist = historico_trades[-1] if historico_trades else {}
+    sizing_orbit = float(_ultimo_ciclo_hist.get("sizing", 0.0) or 0.0)
+    sizing_final = round(sizing_orbit * reflect_mult, 4)
+
+    pnl_medio_tune = _to_float(tune_mais_recente.get("pnl_medio"), default=0.0)
+    _gate_records_b57 = [
+        rec for rec in historico_config
+        if "GATE" in str(rec.get("modulo") or "").upper()
+    ]
+    _gate_records_b57.sort(key=lambda x: str((x or {}).get("data") or ""), reverse=True)
+    pnl_medio_gate = _to_float(
+        _gate_records_b57[0].get("pnl_medio") if _gate_records_b57 else None,
+        default=0.0
+    )
+    diferenca_tune_gate = round(pnl_medio_tune - pnl_medio_gate, 4)
+    nota_obrigatoria_b57 = (
+        abs(diferenca_tune_gate) > 0.5 and
+        bool(pnl_medio_tune) and bool(pnl_medio_gate) and
+        (pnl_medio_tune * pnl_medio_gate < 0)
+    )
+
+    freq_regimes: dict = {}
+    for _trade in historico_trades:
+        _r = _trade.get("regime")
+        if _r:
+            freq_regimes[_r] = freq_regimes.get(_r, 0) + 1
+
     # Calcular deltas
     delta_tp = _to_float(tp_novo, default=0.0) - _to_float(tp_atual, default=0.0)
     delta_stop = _to_float(stop_novo, default=0.0) - _to_float(stop_atual, default=0.0)
@@ -789,6 +857,19 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         "diagnostico_executivo": diagnostico_executivo,
         "historico_tunes": historico_tunes,
         "json_completo": json_completo,
+        "ranking_v31": ranking_v31,
+        "estrategias_atuais": _estrategias_atu,
+        "stops_por_ano": stops_por_ano,
+        "pnl_por_ano": pnl_por_ano,
+        "reflect_state_atual": reflect_state_atual,
+        "sizing_orbit": sizing_orbit,
+        "reflect_mult": reflect_mult,
+        "sizing_final": sizing_final,
+        "pnl_medio_tune": pnl_medio_tune,
+        "pnl_medio_gate": pnl_medio_gate,
+        "diferenca_tune_gate": diferenca_tune_gate,
+        "nota_obrigatoria_b57": nota_obrigatoria_b57,
+        "freq_regimes": freq_regimes,
         }, incluir_json_bruto=historico)
     
     # Montar payload completo
@@ -867,7 +948,67 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
     markdown += "## Diagnóstico executivo\n"
     markdown += f"{dados['diagnostico_executivo']}\n\n"
     markdown += "---\n\n"
-    
+
+    # Etapa A — Eleição de Estratégia por Regime (v3.1)
+    ranking_v31      = dados.get("ranking_v31") or {}
+    estrategias_atu  = dados.get("estrategias_atuais") or {}
+    if ranking_v31:
+        markdown += "## Eleição de Estratégia por Regime (Etapa A — IR ordinal)\n"
+        markdown += "> IR_eleicao é ordinal — serve apenas para comparar candidatos entre si.\n"
+        markdown += "> Não é comparável ao IR_calibrado da Etapa B.\n\n"
+        markdown += "| Regime | Status | Estratégia Eleita | IR_eleicao (ordinal) | N_trades_reais | Alerta |\n"
+        markdown += "|--------|--------|-------------------|----------------------|----------------|--------|\n"
+        for regime in sorted(ranking_v31.keys()):
+            rd            = ranking_v31[regime]
+            status        = rd.get("eleicao_status", "—")
+            eleita        = rd.get("estrategia_eleita") or "—"
+            ir_med        = rd.get("ir_eleicao_mediana")
+            n_tr          = rd.get("n_trades_reais", "—")
+            ir_str        = f"{ir_med:+.3f}" if isinstance(ir_med, (int, float)) else "—"
+            atual         = estrategias_atu.get(regime)
+            alerta        = ""
+            if eleita != "—" and atual and eleita != atual:
+                alerta = "**⚠️ MUDANÇA DE ESTRATÉGIA**"
+            markdown += f"| {regime} | {status} | {eleita} | {ir_str} | {n_tr} | {alerta} |\n"
+        markdown += "\n---\n\n"
+
+        # Etapa B — Calibração TP/Stop por Regime (v3.1)
+        markdown += "## Calibração TP/Stop por Regime (Etapa B — IR calibrado)\n"
+        markdown += "| Regime | Status Calib | TP Calibrado | Stop Calibrado | IR_calibrado | N_trades_calib | Aplicação |\n"
+        markdown += "|--------|-------------|-------------|----------------|-------------|----------------|----------|\n"
+        _APLICACAO_LABEL = {
+            "automatica":           "✓ aplicado automaticamente",
+            "pendente_anomalia":    "⚠️ ANOMALIA — aguardando CEO",
+            "anomalia_aprovada_ceo": "✓ anomalia aprovada por CEO",
+            "anomalia_rejeitada_ceo": "✗ anomalia rejeitada — ciclo anterior mantido",
+        }
+        for regime in sorted(ranking_v31.keys()):
+            rd          = ranking_v31[regime]
+            status      = rd.get("eleicao_status", "—")
+            if status not in ("competitiva", "estrutural_fixo"):
+                continue
+            if not rd.get("estrategia_eleita"):
+                continue
+            status_calib = rd.get("status_calibracao") or "—"
+            tp_c         = rd.get("tp_calibrado")
+            stop_c       = rd.get("stop_calibrado")
+            ir_c         = rd.get("ir_calibrado")
+            n_c          = rd.get("n_trades_calibracao", "—")
+            tp_str       = f"{tp_c:.2f}" if isinstance(tp_c, (int, float)) else "—"
+            stop_str     = f"{stop_c:.2f}" if isinstance(stop_c, (int, float)) else "—"
+            ir_str       = f"{ir_c:+.3f}" if isinstance(ir_c, (int, float)) else "—"
+            aplicacao_raw = rd.get("aplicacao") or ""
+            aplicacao_str = _APLICACAO_LABEL.get(aplicacao_raw, aplicacao_raw or "—")
+            # Anomalia: acrescenta motivos inline
+            anomalia = rd.get("anomalia") or {}
+            if anomalia.get("detectada") and anomalia.get("motivos"):
+                motivos_str = "; ".join(anomalia["motivos"])
+                aplicacao_str += f" ({motivos_str})"
+            markdown += f"| {regime} | {status_calib} | {tp_str} | {stop_str} | {ir_str} | {n_c} | {aplicacao_str} |\n"
+        markdown += "\n---\n\n"
+    elif dados.get("ranking_v31") is not None:
+        markdown += "> *Relatório v3.0 — campos v3.1 indisponíveis. Re-rodar TUNE para atualizar.*\n\n---\n\n"
+
     # Parâmetros TUNE
     markdown += "## Parâmetros TUNE\n"
     markdown += "| Campo | Atual | Sugerido | Delta |\n"
@@ -905,7 +1046,73 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
     markdown += f"- Acerto: {dados['acerto_pct']:.1f}%\n"
     markdown += "\n"
     markdown += "---\n\n"
-     
+
+    # Distribuição temporal de stops
+    markdown += "## Distribuição temporal de stops\n"
+    stops_por_ano = dados.get("stops_por_ano") or {}
+    if stops_por_ano:
+        markdown += "| Ano | Stops |\n"
+        markdown += "|-----|-------|\n"
+        for _ano, _n in sorted(stops_por_ano.items()):
+            markdown += f"| {_ano} | {_n} |\n"
+    else:
+        markdown += "_Sem stops registrados no histórico._\n"
+    markdown += "\n"
+    markdown += "---\n\n"
+
+    # P&L por ano
+    markdown += "## P&L por ano\n"
+    pnl_por_ano = dados.get("pnl_por_ano") or []
+    if pnl_por_ano:
+        markdown += "| Ano | P&L médio/trade | N trades |\n"
+        markdown += "|-----|-----------------|----------|\n"
+        for _row in pnl_por_ano:
+            _sinal = "+" if _row["pnl_medio"] >= 0 else ""
+            markdown += f"| {_row['ano']} | R$ {_sinal}{_row['pnl_medio']:,.2f} | {_row['n_trades']} |\n"
+    else:
+        markdown += "_Sem histórico de trades disponível._\n"
+    markdown += "\n"
+    markdown += "---\n\n"
+
+    # Frequência de regimes
+    markdown += "## Frequência de regimes (janela de backtest)\n"
+    freq_regimes = dados.get("freq_regimes") or {}
+    if freq_regimes:
+        markdown += "| Regime | Ciclos |\n"
+        markdown += "|--------|--------|\n"
+        for _regime, _ciclos in sorted(freq_regimes.items(), key=lambda x: -x[1]):
+            markdown += f"| {_regime} | {_ciclos} |\n"
+    else:
+        markdown += "_Sem dados de regime no histórico._\n"
+    markdown += "\n"
+    markdown += "---\n\n"
+
+    # Estado REFLECT atual
+    markdown += "## Estado REFLECT atual\n"
+    _rs = dados.get("reflect_state_atual") or "—"
+    _sf = dados.get("sizing_final", 0.0)
+    _so = dados.get("sizing_orbit", 0.0)
+    _rm = dados.get("reflect_mult", 1.0)
+    markdown += f"- Estado: {_rs}\n"
+    markdown += f"- Sizing final recomendado: {_sf} (orbit {_so} × reflect {_rm})\n"
+    markdown += "\n"
+    markdown += "---\n\n"
+
+    # Reconciliação TUNE × GATE
+    markdown += "## Reconciliação TUNE × GATE\n"
+    _pt = dados.get("pnl_medio_tune", 0.0)
+    _pg = dados.get("pnl_medio_gate", 0.0)
+    _diff = dados.get("diferenca_tune_gate", 0.0)
+    _sinal_diff = "+" if _diff >= 0 else ""
+    markdown += f"- P&L médio TUNE: R$ {_pt:,.2f}\n"
+    markdown += f"- P&L médio GATE: R$ {_pg:,.2f}\n"
+    markdown += f"- Diferença: R$ {_sinal_diff}{_diff:,.2f}\n"
+    if dados.get("nota_obrigatoria_b57"):
+        markdown += "> ⚠ Divergência significativa entre janelas TUNE e GATE. Revisar com board\n"
+        markdown += "> antes de aplicar parâmetros. Possível sobreajuste ou viés de janela.\n"
+    markdown += "\n"
+    markdown += "---\n\n"
+
     # Pior trade
     markdown += "## Pior trade (janela de teste)\n"
     markdown += f"- Data: {dados['pior_data']}\n"

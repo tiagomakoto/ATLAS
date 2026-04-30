@@ -47,6 +47,14 @@ impacted_modules:
 resolution:
 
 notes:
+  - AUDITORIA SCAN 2026-04-29: renomeação E→T implementada em edge.py (reflect_cycle_calcular e
+    reflect_sizing_calcular). Estado T atingido por score < threshold_D. Critério discreto de cauda
+    (condição separada de "evento de cauda") ausente — T é puramente score-driven no código atual.
+    Rerrodar JSONs históricos (substituir reflect_state: E por T) pendente.
+    Lookup em reflect_sizing_calcular trata 'E' legado como 0.0 com comentário correto.
+    Etapa 2 (critério de cauda) bloqueada por B04 não resolvido.
+
+notes_originais:
   - Dados empíricos (sessão 2026-04-24): 5 ativos analisados, 4 ciclos X/E
     históricos — todos com IR profundamente negativo e score abaixo de -1.5.
     Threshold de X deve ser significativamente mais negativo que threshold de D.

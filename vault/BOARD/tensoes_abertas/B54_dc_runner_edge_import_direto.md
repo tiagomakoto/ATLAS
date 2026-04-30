@@ -43,4 +43,8 @@ notes:
   - Ação concreta derivada: remover de edge.py todos os emit_dc_event de ciclo de vida
     para TAPE, ORBIT, REFLECT, TUNE (linhas 673–781 aproximadamente). Dupla emissão
     com dc_runner é bug silencioso — frontend recebe eventos duplicados sem erro aparente.
+  - AUDITORIA SCAN 2026-04-29: import direto implementado (dc_runner.py linha 8). asyncio.to_thread()
+    em uso em todos os wrappers. BUG ATIVO: rodar_backtest_dados() e rodar_orbit_update() em edge.py
+    ainda emitem emit_dc_event de ciclo de vida para TAPE/ORBIT/REFLECT — dupla emissão com dc_runner.
+    Pendência única para fechamento: remover essas chamadas de edge.py.
 ---

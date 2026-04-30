@@ -1,14 +1,14 @@
 # ════════════════════════════════════════════════════════════════════
 import json
 import os
-# DELTA CHAOS — TUNE v3.0
-# Eleição competitiva de estratégia por regime via Optuna.
-# Para cada regime admissível, roda um study Optuna por candidato
-# (lidos de config.tune.candidatos_por_regime — nunca hardcoded)
-# com máscara REFLECT idêntica entre candidatos do mesmo regime.
-# Ranking gravado atomicamente no JSON do ativo. Confirmação por regime
-# exige ação explícita do CEO no ATLAS antes de gravar estrategias[regime].
-# Removido: executar_tune (Optuna global), tune_aplicar_estrategias.
+# DELTA CHAOS — TUNE v3.1
+# Eleição em duas etapas: A (grid neutro fixo) → B (Optuna TP/Stop).
+# Etapa A: elege estratégia por regime via 9 combinações fixas (3×3),
+#   métrica = mediana do IR (ordinal). Sem Optuna nesta etapa.
+# Etapa B: calibra TP/Stop com Optuna para regimes com estratégia
+#   definida. janela_anos fixo do config — nunca livre no Optuna.
+# Confirmação CEO via POST /tune/confirmar-regime grava o trio:
+#   estrategias[regime] + tp_por_regime[regime] + stop_por_regime[regime].
 # Mantido: tune_diagnostico_estrategia (análise retrospectiva BOOK).
 # ════════════════════════════════════════════════════════════════════
 
@@ -72,9 +72,138 @@ def _escrever_regime_atomico(path_ativo: str, regime: str, entrada_regime: dict)
     os.replace(tmp_path, path_ativo)
 
 
-def _rodar_optuna_candidato(
+def _avaliar_anomalia(regime_dados: dict, dados_ativo: dict, cfg_anomalia: dict) -> dict:
+    """
+    Avalia se um regime tem anomalia que impede aplicação automática.
+    Retorna {"anomalo": bool, "motivos": List[str]}.
+
+    Critérios fixos (não configuráveis):
+      - status_fallback_global: fallback sempre é anomalia
+      - mudanca_estrategia: mudança em relação ao ciclo anterior é anomalia
+        (primeira execução sem estratégia anterior NÃO é anomalia)
+
+    Critérios configuráveis (tune.anomalia no config):
+      - ir_minimo: IR calibrado abaixo do limiar
+      - variacao_tp_max: variação de tp_calibrado vs take_profit global
+      - variacao_stop_max: variação de stop_calibrado vs stop_loss global
+    """
+    motivos = []
+
+    # Fixo 1: fallback_global
+    if regime_dados.get("status_calibracao") == "fallback_global":
+        motivos.append("status_calibracao=fallback_global")
+
+    # Fixo 2: mudança de estratégia (apenas se havia estratégia anterior)
+    regime_key = regime_dados.get("_regime_key")  # injetado pelo chamador
+    estrategia_nova = regime_dados.get("estrategia_eleita")
+    estrategia_anterior = dados_ativo.get("estrategias", {}).get(regime_key)
+    if estrategia_anterior is not None and estrategia_nova != estrategia_anterior:
+        motivos.append(
+            f"mudanca_estrategia: {estrategia_anterior} → {estrategia_nova}"
+        )
+
+    # Configuráveis — só avalia se calibrado (não fallback, que já captou acima)
+    if regime_dados.get("status_calibracao") == "calibrado":
+        ir_cal = regime_dados.get("ir_calibrado")
+        ir_min = cfg_anomalia.get("ir_minimo", 0.5)
+        if ir_cal is not None and ir_cal < ir_min:
+            motivos.append(f"ir_calibrado={ir_cal:.3f} < ir_minimo={ir_min}")
+
+        tp_cal  = regime_dados.get("tp_calibrado")
+        tp_glob = dados_ativo.get("take_profit")
+        variacao_tp_max = cfg_anomalia.get("variacao_tp_max", 0.30)
+        if tp_cal is not None and tp_glob and tp_glob > 0:
+            delta_tp_pct = abs(tp_cal - tp_glob) / tp_glob
+            if delta_tp_pct > variacao_tp_max:
+                motivos.append(
+                    f"variacao_tp={delta_tp_pct:.1%} > max={variacao_tp_max:.1%}"
+                )
+
+        stop_cal  = regime_dados.get("stop_calibrado")
+        stop_glob = dados_ativo.get("stop_loss")
+        variacao_stop_max = cfg_anomalia.get("variacao_stop_max", 0.30)
+        if stop_cal is not None and stop_glob and stop_glob > 0:
+            delta_stop_pct = abs(stop_cal - stop_glob) / stop_glob
+            if delta_stop_pct > variacao_stop_max:
+                motivos.append(
+                    f"variacao_stop={delta_stop_pct:.1%} > max={variacao_stop_max:.1%}"
+                )
+
+    return {"anomalo": len(motivos) > 0, "motivos": motivos}
+
+
+def _aplicar_regime_no_ativo(
+    dados: dict,
+    regime: str,
+    regime_dados: dict,
+    run_id: str,
+    modo: str,
+) -> None:
+    """
+    Aplica estratégia + tp_por_regime + stop_por_regime no dict de dados do ativo.
+    Modifica dados in-place. Não escreve em disco.
+    modo: "automatica" | "anomalia_aprovada_ceo"
+    """
+    from datetime import datetime
+    agora = str(datetime.now())[:19]
+    versao_label = "TUNE v3.1"
+    motivo_base = f"Aplicação {modo.replace('_', ' ')} — run_id={run_id}"
+
+    estrategia = regime_dados.get("estrategia_eleita")
+    status_calib = regime_dados.get("status_calibracao")
+
+    if status_calib == "calibrado":
+        tp_val   = regime_dados.get("tp_calibrado")
+        stop_val = regime_dados.get("stop_calibrado")
+    else:
+        tp_val   = dados.get("take_profit")
+        stop_val = dados.get("stop_loss")
+
+    if not isinstance(dados.get("historico_config"), list):
+        dados["historico_config"] = []
+    if "estrategias" not in dados:
+        dados["estrategias"] = {}
+
+    estrategia_anterior = dados["estrategias"].get(regime)
+    dados["estrategias"][regime] = estrategia
+
+    tp_por_regime   = dados.setdefault("tp_por_regime", {})
+    stop_por_regime = dados.setdefault("stop_por_regime", {})
+    tp_ant   = tp_por_regime.get(regime)
+    stop_ant = stop_por_regime.get(regime)
+    tp_por_regime[regime]   = tp_val
+    stop_por_regime[regime] = stop_val
+
+    dados["historico_config"].append({
+        "data":            agora[:10],
+        "modulo":          versao_label,
+        "parametro":       f"estrategia.{regime}",
+        "valor_anterior":  estrategia_anterior,
+        "valor_novo":      estrategia,
+        "motivo":          motivo_base,
+    })
+    dados["historico_config"].append({
+        "data":            agora[:10],
+        "modulo":          versao_label,
+        "parametro":       f"tp_por_regime.{regime}",
+        "valor_anterior":  tp_ant,
+        "valor_novo":      tp_val,
+        "motivo":          motivo_base,
+    })
+    dados["historico_config"].append({
+        "data":            agora[:10],
+        "modulo":          versao_label,
+        "parametro":       f"stop_por_regime.{regime}",
+        "valor_anterior":  stop_ant,
+        "valor_novo":      stop_val,
+        "motivo":          motivo_base,
+    })
+
+
+def _rodar_optuna_tpstop(
     regime: str,
     candidato: str,
+    janela_anos: int,
     n_trials: int,
     seed: int,
     startup: int,
@@ -82,22 +211,20 @@ def _rodar_optuna_candidato(
     patience: int,
     tp_min: float, tp_max: float, tp_step: float,
     stop_min: float, stop_max: float, stop_step: float,
-    janela_min: int, janela_max: int,
     simular_fn,
     ticker: str,
 ) -> tuple:
     """
-    Roda um study Optuna para regime × candidato.
+    Etapa B — Optuna varia apenas TP e Stop. janela_anos fixo.
     Retorna (tp, stop, ir, trials_rodados).
     """
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     def objective(trial):
-        tp          = trial.suggest_float("tp",   tp_min,   tp_max,   step=tp_step)
-        stop        = trial.suggest_float("stop", stop_min, stop_max, step=stop_step)
-        janela_anos = trial.suggest_int("janela_anos", janela_min, janela_max)
-        res = simular_fn(tp, stop, janela_anos, candidato, regime)
+        tp   = trial.suggest_float("tp",   tp_min,   tp_max,   step=tp_step)
+        stop = trial.suggest_float("stop", stop_min, stop_max, step=stop_step)
+        res  = simular_fn(tp, stop, janela_anos, candidato, regime)
         for k, v in res.items():
             if k not in ("ano_teste_ini",):
                 trial.set_user_attr(k, v)
@@ -112,11 +239,12 @@ def _rodar_optuna_candidato(
             ir=best_ir,
             best_tp=round(tp, 2),
             best_stop=round(stop, 2),
+            etapa="B",
         )
         return res["ir_valido"]
 
     sampler = optuna.samplers.TPESampler(n_startup_trials=startup, seed=seed)
-    study = optuna.create_study(storage=None, direction="maximize", sampler=sampler)
+    study   = optuna.create_study(storage=None, direction="maximize", sampler=sampler)
 
     _sem_melhoria = [0]
     _melhor = [-999.0]
@@ -152,24 +280,23 @@ def _rodar_optuna_candidato(
 
 def tune_eleicao_competitiva(ticker: str) -> dict:
     """
-    TUNE v3.0 — Eleição competitiva de estratégia por regime.
+    TUNE v3.1 — Eleição em duas etapas: A (grid neutro) → B (Optuna TP/Stop).
 
-    Para cada regime:
-      - candidatos = [] → bloqueado (nenhum Optuna, nenhuma gravação)
-      - N < estrategia_n_minimo → estrutural_fixo (PE-008): usa
-        tune.estrategia_estrutural_fixo[regime] do config.json
-      - N >= threshold → competitiva: Optuna separado por candidato,
-        máscara REFLECT idêntica entre candidatos do mesmo regime
-
-    PE-008 — valor empírico provisório. Threshold N≥15 e tabela de
-    candidatos definidos em sessão board 2026-04-25. Revisão condicionada
-    a expansão do histórico de paper trading.
-    Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
+    Etapa A — Eleição de estratégia (sem Optuna):
+      - candidatos=[] → bloqueado.
+      - Simulação-piloto com ESTRUTURAL_FIXO[regime] no ponto central do grid.
+        N_trades_reais < N_MINIMO → estrutural_fixo (PE-008).
+        N_trades_reais >= N_MINIMO → grid 3×3 (9 combinações por candidato),
+        métrica=mediana IR (ordinal). Vencedora = maior mediana.
+    Etapa B — Calibração TP/Stop (Optuna):
+      - Apenas para regimes com eleicao_status competitiva ou estrutural_fixo
+        E estrategia_eleita definida.
+      - janela_anos fixo do config — nunca livre no Optuna.
+      - N_trades_calibracao < n_minimo_calibracao → fallback_global.
 
     Persistência:
-      - tune_ranking_estrategia gravado atomicamente por regime, imediato.
-      - estrategias[regime] NÃO é atualizado aqui — requer confirmação
-        explícita do CEO via POST /delta-chaos/tune/confirmar-regime.
+      - tune_ranking_estrategia gravado atomicamente por regime.
+      - estrategias[regime] NÃO é atualizado aqui — requer confirmação CEO.
 
     Retorna dict com ticker, run_id e tune_ranking_estrategia completo.
     """
@@ -180,40 +307,46 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
     import uuid
     from datetime import datetime
 
-    # ── Parâmetros Optuna ──────────────────────────────────────────────
-    OPTUNA_SEED     = 42
+    # ── Config v3.1 — tudo lido do config.json (zero hardcode) ────────
+    OPTUNA_SEED      = 42
     OPTUNA_MIN_DELTA = 0.001
-    TP_MIN,   TP_MAX,   TP_STEP   = 0.40, 0.95, 0.05
-    STOP_MIN, STOP_MAX, STOP_STEP = 1.0,  3.0,  0.25
-    JANELA_MIN, JANELA_MAX        = 3, 10
-    REFLECT_ESTADOS_BLOQUEADOS    = {"C", "D", "E", "T"}
+    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "E", "T"}
 
-    # ── Config v3.0 — lido do config.json (zero hardcode)
-    # PE-008 — valor empírico provisório. Threshold N≥15 definido em sessão
-    # board 2026-04-25. Revisão condicionada a expansão do histórico.
+    # PE-008 — threshold N mínimo e tabelas de candidatos lidos do config.
     # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
-    _cfg_tune      = carregar_config()["tune"]
-    N_MINIMO       = int(_cfg_tune["estrategia_n_minimo"])       # PE-008
-    TRIALS_POR_CAND = int(_cfg_tune.get("trials_por_candidato", 150))
-    PATIENCE       = int(_cfg_tune.get("early_stop_patience", 40))
-    # PE-008 — tabela de candidatos por regime lida do config.json.
-    # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
-    CANDIDATOS     = _cfg_tune["candidatos_por_regime"]          # PE-008
-    ESTRUTURAL_FIXO = _cfg_tune["estrategia_estrutural_fixo"]   # PE-008
+    _cfg_tune       = carregar_config()["tune"]
+    N_MINIMO        = int(_cfg_tune["estrategia_n_minimo"])           # PE-008
+    TRIALS_POR_CAND = int(_cfg_tune.get("trials_por_candidato", 100))
+    PATIENCE        = int(_cfg_tune.get("early_stop_patience", 30))
+    STARTUP         = int(_cfg_tune.get("startup_trials", 30))
+    STARTUP         = max(10, min(STARTUP, TRIALS_POR_CAND))
+    JANELA_ANOS     = int(_cfg_tune.get("janela_anos", 5))
+    N_MINIMO_CALIB  = int(_cfg_tune.get("n_minimo_calibracao", 15))
+    CANDIDATOS      = _cfg_tune["candidatos_por_regime"]               # PE-008
+    ESTRUTURAL_FIXO = _cfg_tune["estrategia_estrutural_fixo"]          # PE-008
 
-    STARTUP = int(_cfg_tune.get("startup_trials", 30))
-    STARTUP = max(10, min(STARTUP, TRIALS_POR_CAND))
+    _ref = _cfg_tune.get("referencia_eleicao", {})
+    TP_VALUES   = _ref.get("tp_values",   [0.50, 0.75, 0.90])
+    STOP_VALUES = _ref.get("stop_values", [1.50, 2.00, 2.50])
+    TP_PILOTO   = TP_VALUES[len(TP_VALUES) // 2]    # ponto central do grid
+    STOP_PILOTO = STOP_VALUES[len(STOP_VALUES) // 2]
+
+    _cfg_calib        = _cfg_tune.get("calibracao", {})
+    _tp_cfg           = _cfg_calib.get("tp",   {"min": 0.40, "max": 0.95, "step": 0.05})
+    _stop_cfg         = _cfg_calib.get("stop", {"min": 1.0,  "max": 3.0,  "step": 0.25})
+    TP_MIN, TP_MAX, TP_STEP         = _tp_cfg["min"],   _tp_cfg["max"],   _tp_cfg["step"]
+    STOP_MIN, STOP_MAX, STOP_STEP   = _stop_cfg["min"], _stop_cfg["max"], _stop_cfg["step"]
 
     # ── ETAPA 1 — pré-computação única ────────────────────────────────
     ANO_WARMUP = 2004
     ano_atual  = datetime.now().year
     ANOS       = list(range(2002, ano_atual + 1))
 
-    emit_log(f"TUNE v3.0 [{TICKER}] Etapa 1: carregando TAPE/ORBIT/REFLECT...", level="info")
+    emit_log(f"TUNE v3.1 [{TICKER}] Etapa 1: carregando TAPE/ORBIT/REFLECT...", level="info")
     print("=" * 60)
-    print(f"  TUNE v3.0 — {TICKER}")
-    print(f"  Eleição competitiva por regime (PE-008: N_min={N_MINIMO})")
-    print(f"  Trials por candidato: {TRIALS_POR_CAND} (early stop patience={PATIENCE})")
+    print(f"  TUNE v3.1 — {TICKER}")
+    print(f"  Etapa A: grid {len(TP_VALUES)}×{len(STOP_VALUES)} | N_min={N_MINIMO}")
+    print(f"  Etapa B: Optuna TP/Stop | janela_anos={JANELA_ANOS} | trials={TRIALS_POR_CAND}")
     print("=" * 60)
 
     print(f"\n  [1/4] TAPE...")
@@ -246,7 +379,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             dados_ativo = json.load(f)
         historico_c = pd.DataFrame(dados_ativo.get("historico", []))
         if len(historico_c) == 0:
-            raise ValueError(f"TUNE v3.0 bloqueado em {TICKER}: ORBIT não gerou histórico")
+            raise ValueError(f"TUNE v3.1 bloqueado em {TICKER}: ORBIT não gerou histórico")
         print(f"  ✓ ORBIT calculado — {len(historico_c)} ciclos")
 
     historico_c["ciclo_id"] = historico_c["ciclo_id"].astype(str)
@@ -260,14 +393,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
 
     reflect_cycle_hist = dados_ativo.get("reflect_cycle_history", {})
 
-    # N por regime (contagem de ciclos históricos — proxy para N_trades esperados)
-    n_por_regime: dict[str, int] = {}
-    if "regime" in historico_c.columns:
-        for r, grp in historico_c.groupby("regime"):
-            n_por_regime[str(r)] = len(grp)
-
-    # Máscara REFLECT por regime: calculada UMA VEZ por regime,
-    # idêntica entre candidatos do mesmo regime — SPEC §4
+    # Máscara REFLECT por regime — pré-computada UMA VEZ, idêntica entre candidatos (SPEC §4)
     mask_reflect_por_regime: dict[str, dict[str, bool]] = {}
     if "regime" in historico_c.columns:
         for r, grp in historico_c.groupby("regime"):
@@ -278,10 +404,10 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             }
 
     n_mask_total = sum(sum(m.values()) for m in mask_reflect_por_regime.values())
-    print(f"  ✓ REFLECT masks: {n_mask_total} ciclos bloqueados (Edge C/D/E) em todos os regimes")
+    print(f"  ✓ REFLECT masks: {n_mask_total} ciclos bloqueados (Edge C/D/E/T) em todos os regimes")
 
     # ── Pré-computação df_dias e tape_lookup (uma vez, para todos os studies) ──
-    emit_log(f"TUNE v3.0 [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
+    emit_log(f"TUNE v3.1 [{TICKER}] pré-computando {len(datas):,} dias...", level="info")
     emit_dc_event("dc_tune_index_start", "TUNE", "running", ticker=TICKER, total=len(datas))
     df_dias = {}
     for i, data in enumerate(datas):
@@ -289,7 +415,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         if (i + 1) % 100 == 0 or (i + 1) == len(datas):
             emit_dc_event("dc_tune_index_progress", "TUNE", "running",
                           ticker=TICKER, current=i + 1, total=len(datas))
-    emit_log(f"TUNE v3.0 [{TICKER}] pré-cômputo concluído — iniciando eleição", level="info")
+    emit_log(f"TUNE v3.1 [{TICKER}] pré-cômputo concluído — iniciando Etapa A→B", level="info")
     emit_dc_event("dc_tune_index_complete", "TUNE", "ok", ticker=TICKER)
 
     df_ops_idx = df_tape_c[df_tape_c["tipo"].isin(["CALL", "PUT"])].copy()
@@ -316,8 +442,6 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         "BULL_PUT_SPREAD":  {"PUT":  _delta_alvo_cfg["BULL_PUT_SPREAD"]["put_vendida"]},
         "BEAR_CALL_SPREAD": {"CALL": _delta_alvo_cfg["BEAR_CALL_SPREAD"]["call_vendida"]},
     }
-
-    _reg_sizing = cfg_ativo.get("regimes_sizing", {})
 
     def _get_regime(ciclo_id):
         raw = regime_idx_c.get(ciclo_id, {})
@@ -444,9 +568,8 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
                     if (pd.Timestamp(data_str) - ultimo_stop_dt).days < COOLING_OFF:
                         continue
 
-                sizing_config = float(_reg_sizing.get(regime, 0.0))
                 sizing_orbit  = orbit["sizing"]
-                if sizing_config <= 0.0 or sizing_orbit <= 0.0:
+                if sizing_orbit <= 0.0:
                     continue
 
                 estrategia = estrategia_fixa
@@ -468,7 +591,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
                 if premio_liq < PREMIO_MIN:
                     continue
 
-                n = max(int(10_000 * _RT * sizing_orbit * sizing_config /
+                n = max(int(10_000 * _RT * sizing_orbit /
                             (premio_liq * _FM + 1e-10)), _NM)
 
                 posicao_aberta = {
@@ -495,7 +618,8 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         _mean_v   = float(np.mean(pnls_v))
         # Floor relativo: max(std, |mean| * 0.1) evita IR > ~35 por baixa
         # dispersão em séries de alta taxa de win (ex: NEUTRO_BEAR IR=264).
-        # PE-009 — valor empírico provisório; revisão após 24 ciclos paper.
+        # PE-009 provisório — revisão gatilhada por B62 após
+        # 1 trimestre paper trading TUNE v3.1
         _std_floor = max(_std_v, abs(_mean_v) * 0.10, 1e-6)
         ir_valido = (float(_mean_v / _std_floor *
                      np.sqrt(252 / 21)) if len(pnls_v) > 5 else 0.0)
@@ -519,13 +643,17 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
 
     ranking_inicial: dict = {
         "_meta": {
-            "run_id":              run_id,
-            "iniciado_em":         datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "concluido_em":        None,
-            "versao":              "3.0",
+            "run_id":               run_id,
+            "iniciado_em":          datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "concluido_em":         None,
+            "versao":               "3.1",
             "trials_por_candidato": TRIALS_POR_CAND,
-            "early_stop_patience": PATIENCE,
-            "startup_trials":      STARTUP,
+            "early_stop_patience":  PATIENCE,
+            "startup_trials":       STARTUP,
+            "janela_anos":          JANELA_ANOS,
+            "n_minimo_calibracao":  N_MINIMO_CALIB,
+            "tp_values":            TP_VALUES,
+            "stop_values":          STOP_VALUES,
         }
     }
     for regime in todos_regimes:
@@ -533,12 +661,12 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             "eleicao_status":    "in_progress",
             "confirmado":        False,
             "estrategia_eleita": None,
-            "ranking":           [],
+            "ranking_eleicao":   [],
         }
 
     _escrever_ativo_atomico(path_ativo, {
         "tune_ranking_estrategia": ranking_inicial,
-        "tune_versao":             "3.0",
+        "tune_versao":             "3.1",
         "tune_versao_pendente":    False,
     })
 
@@ -546,161 +674,329 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
                   ticker=TICKER, run_id=run_id,
                   regimes_planejados=sorted(todos_regimes))
 
-    emit_log(f"TUNE v3.0 [{TICKER}] Etapa 2: eleição competitiva por regime...", level="info")
-    print(f"\n{'=' * 60}")
-    print(f"  Etapa 2 — Eleição competitiva ({len(todos_regimes)} regimes)")
-    print(f"{'=' * 60}")
-
-    # ── ETAPA 3 — Eleição por regime ──────────────────────────────────
+    # ── ETAPA 3A — Eleição por regime (grid neutro, sem Optuna) ───────
     # PE-008 — candidatos_por_regime lidos do config.json.
     # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
+    emit_log(f"TUNE v3.1 [{TICKER}] Etapa 3A: eleição por grid neutro...", level="info")
+    print(f"\n{'=' * 60}")
+    print(f"  Etapa 3A — Eleição (grid {len(TP_VALUES)}×{len(STOP_VALUES)}, {len(todos_regimes)} regimes)")
+    print(f"{'=' * 60}")
+
     for regime in sorted(todos_regimes):
         candidatos_raw = CANDIDATOS.get(regime, [])
         candidatos = [_normalizar_estrategia(c) for c in candidatos_raw]
-        n_trades   = n_por_regime.get(regime, 0)
 
         emit_dc_event("dc_tune_eleicao_regime_start", "TUNE", "running",
                       ticker=TICKER, regime=regime, candidatos=candidatos,
-                      n_trades=n_trades)
+                      n_trades=0)
 
-        print(f"\n  {regime} — N={n_trades} | candidatos={candidatos or '[]'}")
+        print(f"\n  {regime} — candidatos={candidatos or '[]'}")
 
-        # Caso 1: regime bloqueado
+        # Caso 1: regime bloqueado (sem candidatos)
         if not candidatos:
             entrada = {
                 "eleicao_status":    "bloqueado",
-                "n_trades":          n_trades,
-                "data_eleicao":      datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-                "confirmado":        False,
+                "n_trades_reais":    0,
+                "ir_eleicao_mediana": None,
+                "ranking_eleicao":   [],
                 "estrategia_eleita": None,
-                "ranking":           [],
+                "data_eleicao":      datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "status_calibracao": None,
+                "tp_calibrado":      None,
+                "stop_calibrado":    None,
+                "ir_calibrado":      None,
+                "n_trades_calibracao": None,
+                "janela_anos":       JANELA_ANOS,
+                "trials_rodados":    None,
+                "data_calibracao":   None,
+                "confirmado":        False,
             }
             _escrever_regime_atomico(path_ativo, regime, entrada)
             emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                           ticker=TICKER, regime=regime, eleicao_status="bloqueado",
-                          ranking=[])
-            emit_log(f"TUNE v3.0 [{TICKER}] {regime}: BLOQUEADO", level="info")
+                          ranking_eleicao=[])
+            emit_log(f"TUNE v3.1 [{TICKER}] {regime}: BLOQUEADO", level="info")
             print(f"    → BLOQUEADO (candidatos=[])")
             continue
 
+        # Simulação-piloto (Adenda 1): candidato=ESTRUTURAL_FIXO[regime], ponto central do grid
+        # Determina N_trades_reais real antes de decidir estrutural_fixo vs competitiva.
+        piloto_raw  = ESTRUTURAL_FIXO.get(regime)
+        piloto      = _normalizar_estrategia(piloto_raw) if piloto_raw else None
+        n_trades_reais = 0
+        res_piloto     = None
+
+        if piloto and piloto in DELTA_ALVO_TUNE:
+            res_piloto     = _simular_para_candidato(TP_PILOTO, STOP_PILOTO, JANELA_ANOS, piloto, regime)
+            n_trades_reais = res_piloto.get("trades_valido", 0)
+
+        print(f"    Piloto={piloto} | N_trades_reais={n_trades_reais} (limiar={N_MINIMO})")
+
         # Caso 2: N < N_MINIMO → estrutural_fixo (PE-008)
-        # PE-008 — N<15 usa estrategia_estrutural_fixo do config.json.
+        # PE-008 — N<N_MINIMO usa estrategia_estrutural_fixo do config.json.
         # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
-        if n_trades < N_MINIMO:
-            estrategia_fixa_raw = ESTRUTURAL_FIXO.get(regime)
-            estrategia_fixa = _normalizar_estrategia(estrategia_fixa_raw) if estrategia_fixa_raw else None
-
-            tp_fixo, stop_fixo, ir_fixo, trials_fixo = None, None, 0.0, 0
-            if estrategia_fixa and estrategia_fixa in DELTA_ALVO_TUNE:
-                emit_log(f"TUNE v3.0 [{TICKER}] {regime}: estrutural_fixo={estrategia_fixa}, rodando Optuna...", level="info")
-                tp_fixo, stop_fixo, ir_fixo, trials_fixo = _rodar_optuna_candidato(
-                    regime, estrategia_fixa, TRIALS_POR_CAND, OPTUNA_SEED,
-                    STARTUP, OPTUNA_MIN_DELTA, PATIENCE,
-                    TP_MIN, TP_MAX, TP_STEP,
-                    STOP_MIN, STOP_MAX, STOP_STEP,
-                    JANELA_MIN, JANELA_MAX,
-                    _simular_para_candidato, TICKER,
-                )
-
-            ranking_fixo = ([{
-                "estrategia": estrategia_fixa,
-                "ir":         round(ir_fixo, 4),
-                "n_trades":   n_trades,
-                "tp":         tp_fixo,
-                "stop":       stop_fixo,
-                "trials":     trials_fixo,
-                "seed":       OPTUNA_SEED,
-            }] if estrategia_fixa else [])
+        if n_trades_reais < N_MINIMO:
+            ranking_eleicao = []
+            if res_piloto is not None:
+                ranking_eleicao = [{
+                    "estrategia":    piloto,
+                    "ir_mediana":    round(res_piloto["ir_valido"], 4),
+                    "n_trades_reais": n_trades_reais,
+                }]
 
             entrada = {
                 "eleicao_status":    "estrutural_fixo",
-                "n_trades":          n_trades,
+                "n_trades_reais":    n_trades_reais,
+                "ir_eleicao_mediana": round(res_piloto["ir_valido"], 4) if res_piloto else None,
+                "ranking_eleicao":   ranking_eleicao,
+                "estrategia_eleita": piloto,
                 "data_eleicao":      datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "status_calibracao": None,
+                "tp_calibrado":      None,
+                "stop_calibrado":    None,
+                "ir_calibrado":      None,
+                "n_trades_calibracao": None,
+                "janela_anos":       JANELA_ANOS,
+                "trials_rodados":    None,
+                "data_calibracao":   None,
                 "confirmado":        False,
-                "estrategia_eleita": estrategia_fixa,
-                "ranking":           ranking_fixo,
             }
             _escrever_regime_atomico(path_ativo, regime, entrada)
             emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                           ticker=TICKER, regime=regime, eleicao_status="estrutural_fixo",
-                          ranking=ranking_fixo)
-            emit_log(f"TUNE v3.0 [{TICKER}] {regime}: ESTRUTURAL_FIXO "
-                     f"(N={n_trades} < {N_MINIMO}) → {estrategia_fixa}", level="info")
-            print(f"    → ESTRUTURAL_FIXO: {estrategia_fixa} "
-                  f"(N={n_trades} < {N_MINIMO})")
+                          ranking_eleicao=ranking_eleicao)
+            emit_log(f"TUNE v3.1 [{TICKER}] {regime}: ESTRUTURAL_FIXO "
+                     f"(N={n_trades_reais} < {N_MINIMO}) → {piloto}", level="info")
+            print(f"    → ESTRUTURAL_FIXO: {piloto} (N={n_trades_reais} < {N_MINIMO})")
             continue
 
-        # Caso 3: Eleição competitiva
-        ranking_regime = []
+        # Caso 3: Eleição competitiva via grid neutro 3×3
+        ranking_eleicao = []
         for candidato in candidatos:
-            # Seed único por candidato para diversidade de warmup (D9)
-            seed_cand = OPTUNA_SEED + (hash(candidato) % 10000)
-            emit_log(f"TUNE v3.0 [{TICKER}] {regime} × {candidato}: "
-                     f"{TRIALS_POR_CAND} trials (seed={seed_cand})...", level="info")
-            print(f"    {candidato}: rodando {TRIALS_POR_CAND} trials...")
+            irs_grid = []
+            for tp_g in TP_VALUES:
+                for stop_g in STOP_VALUES:
+                    # Reaproveita simulação-piloto quando candidato e ponto coincidem
+                    if (candidato == piloto and
+                            abs(tp_g - TP_PILOTO) < 1e-9 and
+                            abs(stop_g - STOP_PILOTO) < 1e-9 and
+                            res_piloto is not None):
+                        res_g = res_piloto
+                    else:
+                        res_g = _simular_para_candidato(tp_g, stop_g, JANELA_ANOS, candidato, regime)
+                    irs_grid.append(res_g["ir_valido"])
+                    emit_dc_event(
+                        "dc_tune_progress", "TUNE", "running",
+                        ticker=TICKER, regime=regime, estrategia=candidato,
+                        trial=len(irs_grid), total=len(TP_VALUES) * len(STOP_VALUES),
+                        ir=round(res_g["ir_valido"], 3),
+                        best_tp=round(tp_g, 2),
+                        best_stop=round(stop_g, 2),
+                        etapa="A",
+                    )
 
-            tp_c, stop_c, ir_c, trials_c = _rodar_optuna_candidato(
-                regime, candidato, TRIALS_POR_CAND, seed_cand,
-                STARTUP, OPTUNA_MIN_DELTA, PATIENCE,
-                TP_MIN, TP_MAX, TP_STEP,
-                STOP_MIN, STOP_MAX, STOP_STEP,
-                JANELA_MIN, JANELA_MAX,
-                _simular_para_candidato, TICKER,
-            )
-            ranking_regime.append({
-                "estrategia": candidato,
-                "ir":         round(ir_c, 4),
-                "n_trades":   n_trades,
-                "tp":         tp_c,
-                "stop":       stop_c,
-                "trials":     trials_c,
-                "seed":       seed_cand,
+            ir_mediana = float(np.median(irs_grid))
+            ranking_eleicao.append({
+                "estrategia":    candidato,
+                "ir_mediana":    round(ir_mediana, 4),
+                "n_trades_reais": n_trades_reais,
             })
-            print(f"      ✓ IR={ir_c:+.3f} TP={tp_c} STOP={stop_c} ({trials_c} trials)")
+            print(f"    {candidato}: IR_mediana={ir_mediana:+.3f} (grid {len(TP_VALUES)}×{len(STOP_VALUES)})")
 
-        ranking_regime.sort(key=lambda x: x["ir"], reverse=True)
+        ranking_eleicao.sort(key=lambda x: x["ir_mediana"], reverse=True)
+        vencedora      = ranking_eleicao[0]
+        ir_venc_mediana = vencedora["ir_mediana"]
 
         entrada = {
             "eleicao_status":    "competitiva",
-            "n_trades":          n_trades,
+            "n_trades_reais":    n_trades_reais,
+            "ir_eleicao_mediana": ir_venc_mediana,
+            "ranking_eleicao":   ranking_eleicao,
+            "estrategia_eleita": vencedora["estrategia"],
             "data_eleicao":      datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "status_calibracao": None,
+            "tp_calibrado":      None,
+            "stop_calibrado":    None,
+            "ir_calibrado":      None,
+            "n_trades_calibracao": None,
+            "janela_anos":       JANELA_ANOS,
+            "trials_rodados":    None,
+            "data_calibracao":   None,
             "confirmado":        False,
-            "estrategia_eleita": None,
-            "ranking":           ranking_regime,
         }
         _escrever_regime_atomico(path_ativo, regime, entrada)
         emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                       ticker=TICKER, regime=regime, eleicao_status="competitiva",
-                      ranking=ranking_regime)
-        vencedora = ranking_regime[0]
-        emit_log(f"TUNE v3.0 [{TICKER}] {regime}: COMPETITIVA — "
-                 f"vencedora={vencedora['estrategia']} IR={vencedora['ir']:+.3f}", level="info")
-        print(f"    → VENCEDORA: {vencedora['estrategia']} "
-              f"IR={vencedora['ir']:+.3f} TP={vencedora['tp']} STOP={vencedora['stop']}")
+                      ranking_eleicao=ranking_eleicao)
+        emit_log(f"TUNE v3.1 [{TICKER}] {regime}: COMPETITIVA — "
+                 f"vencedora={vencedora['estrategia']} IR_mediana={ir_venc_mediana:+.3f}", level="info")
+        print(f"    → VENCEDORA: {vencedora['estrategia']} IR_mediana={ir_venc_mediana:+.3f} (ordinal)")
+
+    # ── ETAPA 3B — Calibração TP/Stop por Optuna ──────────────────────
+    emit_log(f"TUNE v3.1 [{TICKER}] Etapa 3B: calibração TP/Stop por Optuna...", level="info")
+    print(f"\n{'=' * 60}")
+    print(f"  Etapa 3B — Calibração TP/Stop (janela_anos={JANELA_ANOS})")
+    print(f"{'=' * 60}")
+
+    with open(path_ativo, encoding="utf-8") as f:
+        dados_pos_a = json.load(f)
+    ranking_pos_a = dados_pos_a.get("tune_ranking_estrategia", {})
+
+    for regime in sorted(todos_regimes):
+        regime_dados = ranking_pos_a.get(regime, {})
+        eleicao_status   = regime_dados.get("eleicao_status")
+        estrategia_eleita = regime_dados.get("estrategia_eleita")
+
+        # Só calibra regimes com estratégia definida
+        if eleicao_status not in ("competitiva", "estrutural_fixo") or not estrategia_eleita:
+            continue
+
+        print(f"\n  {regime} — estrategia={estrategia_eleita}")
+
+        # Mede N_trades_calibracao: simula com estratégia eleita no ponto central
+        res_calib_piloto = _simular_para_candidato(
+            TP_PILOTO, STOP_PILOTO, JANELA_ANOS, estrategia_eleita, regime
+        )
+        n_trades_calib = res_calib_piloto.get("trades_valido", 0)
+
+        if n_trades_calib < N_MINIMO_CALIB:
+            # fallback: herda campos globais do JSON do ativo
+            com_dados_ativo = dados_pos_a
+            tp_fallback   = com_dados_ativo.get("take_profit")
+            stop_fallback = com_dados_ativo.get("stop_loss")
+            regime_dados["status_calibracao"]    = "fallback_global"
+            regime_dados["tp_calibrado"]         = tp_fallback
+            regime_dados["stop_calibrado"]       = stop_fallback
+            regime_dados["ir_calibrado"]         = None
+            regime_dados["n_trades_calibracao"]  = n_trades_calib
+            regime_dados["trials_rodados"]       = 0
+            regime_dados["data_calibracao"]      = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            _escrever_regime_atomico(path_ativo, regime, regime_dados)
+            emit_log(f"TUNE v3.1 [{TICKER}] {regime}: FALLBACK_GLOBAL "
+                     f"(N={n_trades_calib} < {N_MINIMO_CALIB})", level="info")
+            print(f"    → FALLBACK_GLOBAL (N={n_trades_calib} < {N_MINIMO_CALIB})"
+                  f" — tp={tp_fallback} stop={stop_fallback}")
+            continue
+
+        # Optuna: varia só TP e Stop (janela fixo)
+        seed_b = OPTUNA_SEED + (hash(regime) % 10000)
+        emit_log(f"TUNE v3.1 [{TICKER}] {regime}: Optuna TP/Stop "
+                 f"({TRIALS_POR_CAND} trials, seed={seed_b})...", level="info")
+        print(f"    Optuna {TRIALS_POR_CAND} trials (seed={seed_b})...")
+
+        tp_b, stop_b, ir_b, trials_b = _rodar_optuna_tpstop(
+            regime, estrategia_eleita, JANELA_ANOS,
+            TRIALS_POR_CAND, seed_b, STARTUP, OPTUNA_MIN_DELTA, PATIENCE,
+            TP_MIN, TP_MAX, TP_STEP,
+            STOP_MIN, STOP_MAX, STOP_STEP,
+            _simular_para_candidato, TICKER,
+        )
+        regime_dados["status_calibracao"]   = "calibrado"
+        regime_dados["tp_calibrado"]        = tp_b
+        regime_dados["stop_calibrado"]      = stop_b
+        regime_dados["ir_calibrado"]        = round(ir_b, 4) if ir_b is not None else None
+        regime_dados["n_trades_calibracao"] = n_trades_calib
+        regime_dados["trials_rodados"]      = trials_b
+        regime_dados["data_calibracao"]     = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        _escrever_regime_atomico(path_ativo, regime, regime_dados)
+        emit_log(f"TUNE v3.1 [{TICKER}] {regime}: CALIBRADO — "
+                 f"tp={tp_b} stop={stop_b} IR={ir_b:+.3f} ({trials_b} trials)", level="info")
+        print(f"    → CALIBRADO: tp={tp_b} stop={stop_b} IR_calibrado={ir_b:+.3f} ({trials_b} trials)")
+
+    # ── ETAPA C — Gate de Anomalia + Aplicação Automática ────────────
+    emit_log(f"TUNE v3.1 [{TICKER}] Etapa C: gate de anomalia + aplicação automática...", level="info")
+    print(f"\n{'=' * 60}")
+    print(f"  Etapa C — Gate de Anomalia + Aplicação Automática")
+    print(f"{'=' * 60}")
+
+    _cfg_anomalia = _cfg_tune.get("anomalia", {})
+
+    with open(path_ativo, encoding="utf-8") as f:
+        dados_pos_b = json.load(f)
+    ranking_pos_b = dados_pos_b.get("tune_ranking_estrategia", {})
+
+    regimes_automaticos = []
+    regimes_anomalos    = []
+
+    for regime in sorted(todos_regimes):
+        regime_dados = ranking_pos_b.get(regime, {})
+        eleicao_status = regime_dados.get("eleicao_status")
+
+        # Apenas regimes com estratégia definida passam pelo gate
+        if eleicao_status not in ("competitiva", "estrutural_fixo"):
+            continue
+        if not regime_dados.get("estrategia_eleita"):
+            continue
+
+        # Injeta chave do regime para _avaliar_anomalia identificar estratégia anterior
+        regime_dados["_regime_key"] = regime
+        avaliacao = _avaliar_anomalia(regime_dados, dados_pos_b, _cfg_anomalia)
+        del regime_dados["_regime_key"]
+
+        if avaliacao["anomalo"]:
+            regime_dados["anomalia"] = {"detectada": True, "motivos": avaliacao["motivos"]}
+            regime_dados["aplicacao"] = "pendente_anomalia"
+            regime_dados["confirmado"] = False
+            ranking_pos_b[regime] = regime_dados
+            regimes_anomalos.append(regime)
+            emit_log(
+                f"TUNE v3.1 [{TICKER}] {regime}: ANOMALIA — {avaliacao['motivos']}",
+                level="warning",
+            )
+            emit_dc_event(
+                "dc_tune_anomalia_detectada", "TUNE", "warning",
+                ticker=TICKER, regime=regime, motivos=avaliacao["motivos"],
+            )
+            print(f"\n  {regime} → ANOMALIA")
+            for m in avaliacao["motivos"]:
+                print(f"    • {m}")
+        else:
+            regime_dados["anomalia"] = {"detectada": False, "motivos": []}
+            regime_dados["aplicacao"] = "automatica"
+            regime_dados["confirmado"] = True
+            ranking_pos_b[regime] = regime_dados
+            regimes_automaticos.append(regime)
+            emit_log(f"TUNE v3.1 [{TICKER}] {regime}: aplicação automática OK", level="info")
+            emit_dc_event(
+                "dc_tune_aplicacao_automatica", "TUNE", "ok",
+                ticker=TICKER, regime=regime,
+            )
+            print(f"\n  {regime} → aplicado automaticamente")
+
+    # Escrita atômica única: ranking atualizado + aplicação dos regimes automáticos
+    dados_pos_b["tune_ranking_estrategia"] = ranking_pos_b
+    for regime in regimes_automaticos:
+        regime_dados = ranking_pos_b[regime]
+        _aplicar_regime_no_ativo(dados_pos_b, regime, regime_dados, run_id, "automatica")
 
     # ── ETAPA 4 — Finaliza meta ────────────────────────────────────────
-    with open(path_ativo, encoding="utf-8") as f:
-        dados_pre = json.load(f)
-    ranking_final = dados_pre.get("tune_ranking_estrategia", {})
-    ranking_final.setdefault("_meta", {})["concluido_em"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    _escrever_ativo_atomico(path_ativo, {"tune_ranking_estrategia": ranking_final})
+    ranking_pos_b.setdefault("_meta", {})["concluido_em"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    dados_pos_b["tune_ranking_estrategia"] = ranking_pos_b
+    _escrever_ativo_atomico(path_ativo, dados_pos_b)
 
     emit_dc_event("dc_tune_eleicao_complete", "TUNE", "ok",
-                  ticker=TICKER, run_id=run_id)
+                  ticker=TICKER, run_id=run_id,
+                  regimes_automaticos=regimes_automaticos,
+                  regimes_anomalos=regimes_anomalos)
 
     print(f"\n{'=' * 60}")
-    print(f"  TUNE v3.0 [{TICKER}] — Eleição concluída")
+    print(f"  TUNE v3.1 [{TICKER}] — Eleição A→B→C concluída")
     print(f"  run_id: {run_id}")
-    print(f"  Aguardando confirmação CEO por regime no ATLAS.")
+    if regimes_automaticos:
+        print(f"  Aplicados automaticamente: {', '.join(regimes_automaticos)}")
+    if regimes_anomalos:
+        print(f"  Anomalias pendentes CEO:   {', '.join(regimes_anomalos)}")
+    if not regimes_anomalos:
+        print(f"  Nenhuma anomalia detectada — todos os regimes aplicados.")
     print(f"{'=' * 60}")
 
     with open(path_ativo, encoding="utf-8") as f:
         dados_final = json.load(f)
 
     return {
-        "ticker":                    TICKER,
-        "run_id":                    run_id,
-        "tune_ranking_estrategia":   dados_final.get("tune_ranking_estrategia", {}),
+        "ticker":                  TICKER,
+        "run_id":                  run_id,
+        "tune_ranking_estrategia": dados_final.get("tune_ranking_estrategia", {}),
     }
 
 

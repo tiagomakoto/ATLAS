@@ -71,8 +71,6 @@ PRIOR_PADRAO = {
     "macro":     0.20
 }
 
-REGIMES_SIZING_PADRAO = carregar_config()["fire"]["regimes_sizing_padrao"]
-
 SELIC_HISTORICA = {
     2000: 17.4, 2001: 17.3, 2002: 19.4, 2003: 23.3,
     2004: 16.2, 2005: 19.1, 2006: 15.0, 2007: 12.0,
@@ -310,7 +308,6 @@ def tape_ativo_carregar(ticker: str) -> dict:
             "usdbrl":                   False,
             "minerio":                  False,
         },
-        "regimes_sizing":               REGIMES_SIZING_PADRAO.copy(),
         "prior": {
             "tendencia":                0.20,
             "momentum":                 0.20,
@@ -344,11 +341,6 @@ def tape_ativo_carregar(ticker: str) -> dict:
                 for key, val in default_config.items():
                     if key not in dados:
                         dados[key] = val
-
-                # Garante sub-regimes em regimes_sizing
-                for regime, sizing in REGIMES_SIZING_PADRAO.items():
-                    if regime not in dados["regimes_sizing"]:
-                        dados["regimes_sizing"][regime] = sizing
 
                 # Garante sub-regimes em estrategias
                 if "estrategias" not in dados:
@@ -446,19 +438,6 @@ def tape_ativo_inicializar(ticker: str) -> dict:
             "PANICO":            None,
         },
 
-        "regimes_sizing": {
-            "ALTA":              1.0,
-            "NEUTRO_BULL":       0.8,
-            "NEUTRO_BEAR":       0.8,
-            "NEUTRO":            0.5,
-            "NEUTRO_LATERAL":    0.0,
-            "NEUTRO_MORTO":      0.0,
-            "NEUTRO_TRANSICAO":  0.0,
-            "BAIXA":             0.0,
-            "RECUPERACAO":       0.0,
-            "PANICO":            0.0,
-        },
-
         # REFLECT
         "reflect_state":                "B",
         "reflect_score":                0.0,
@@ -471,12 +450,6 @@ def tape_ativo_inicializar(ticker: str) -> dict:
         if campo not in cfg:
             cfg[campo] = valor
             alterado = True
-        elif campo == "regimes_sizing":
-            # Garante que todos os sub-regimes existem
-            for regime, sizing in valor.items():
-                if regime not in cfg[campo]:
-                    cfg[campo][regime] = sizing
-                    alterado = True
         elif campo == "estrategias":
             # Garante que todos os regimes existem
             for regime, estrategia in valor.items():
