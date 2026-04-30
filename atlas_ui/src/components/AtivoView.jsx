@@ -233,7 +233,7 @@ const OrbitTab = ({ ticker, data }) => {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--atlas-blue)" }} />
-          <span>NEUTRO</span>
+          <span>LATERAL</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--atlas-amber)" }} />
@@ -456,7 +456,7 @@ const CiclosTab = ({ ticker, data }) => {
     if (r.includes("ALTA") || r.includes("BULL")) return "var(--atlas-green)";
     if (r.includes("BAIXA") || r.includes("BEAR")) return "var(--atlas-red)";
     if (r.includes("TRANSICAO") || r.includes("TRANSIÇÃO")) return "var(--atlas-amber)";
-    if (r.includes("NEUTRO")) return "var(--atlas-blue)";
+    if (r.includes("LATERAL")) return "var(--atlas-blue)";
     return "var(--atlas-text-secondary)";
   };
 

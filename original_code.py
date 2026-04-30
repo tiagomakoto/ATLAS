@@ -12,7 +12,7 @@ for ticker in ativos:
     historico = data.get("historico_ciclos", [])
     from collections import Counter
     regimes = Counter(c.get("regime") for c in historico if c.get("regime"))
-    neutros = {k: v for k, v in regimes.items() if "NEUTRO" in k}
+    neutros = {k: v for k, v in regimes.items() if "LATERAL" in k}
     print(f"\n{ticker} — {len(historico)} ciclos total")
     for r, n in sorted(neutros.items()):
         print(f"  {r}: {n} ciclos")

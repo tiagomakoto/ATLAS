@@ -53,12 +53,12 @@ DELTA_ALVO = carregar_config()["fire"]["delta_alvo"]
 
 REGIME_ESTRATEGIA = {
     "ALTA":              "CSP",
-    "NEUTRO":            "BULL_PUT_SPREAD",
-    "NEUTRO_BULL":       "BULL_PUT_SPREAD",
-    "NEUTRO_BEAR":       "BEAR_CALL_SPREAD",
-    "NEUTRO_LATERAL":    None,
-    "NEUTRO_MORTO":      None,
-    "NEUTRO_TRANSICAO":  None,
+    "_LATERAL_ROUTE":            "BULL_PUT_SPREAD",
+    "LATERAL_BULL":       "BULL_PUT_SPREAD",
+    "LATERAL_BEAR":       "BEAR_CALL_SPREAD",
+    "LATERAL":    None,
+    "LATERAL":      None,
+    "LATERAL_TRANSICAO":  None,
     "BAIXA":             None,
     "RECUPERACAO":       None,
     "PANICO":            None,

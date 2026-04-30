@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-028
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan | Lilian | Board
 
@@ -37,6 +37,7 @@ constraints:
 - lifespan inicia event_dispatcher como task assíncrona
 
 notes:
+  - 2026-04-30: código modificado — main.py
 - 2026-04-22 — módulo criado automaticamente a partir de atlas_backend/main.py
 - 2026-04-25 — vault validado: campos BOARD_REVIEW_REQUIRED preenchidos via análise de código
 - _started_at usa datetime.utcnow() (deprecated) — divergência com timeutils.iso_utc()

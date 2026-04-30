@@ -560,6 +560,21 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
             if _r != "_meta" and isinstance(_rd, dict):
                 ranking_v31[_r] = _rd
 
+    # Regime representativo para fallback do bloco "Qualidade da Otimização" (v3.1)
+    _rep_v31: dict = {}
+    if ranking_v31:
+        _curr_regime = str(dados_ativo.get("regime") or "")
+        _cand = ranking_v31.get(_curr_regime) or {}
+        if _cand.get("ir_calibrado") is not None or _cand.get("n_trades_calibracao") is not None:
+            _rep_v31 = _cand
+        if not _rep_v31:
+            _best_ir: float = -float("inf")
+            for _rd in ranking_v31.values():
+                _ir = _rd.get("ir_calibrado")
+                if isinstance(_ir, (int, float)) and not math.isnan(float(_ir)) and float(_ir) > _best_ir:
+                    _best_ir = float(_ir)
+                    _rep_v31 = _rd
+
     # Extrair historico_config com tolerância a dados malformados
     historico_config_raw = dados_ativo.get("historico_config")
     if not isinstance(historico_config_raw, list):
@@ -578,9 +593,10 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
     
     # Ordenar por data (mais recente primeiro)
     tune_records.sort(key=lambda x: str((x or {}).get("data") or ""), reverse=True)
-    
-    # Pegar o mais recente
-    tune_mais_recente = tune_records[0]
+
+    # TUNE v3.1 grava 3 registros por regime; só estrategia.* tem campos estruturados
+    _tune_est = [r for r in tune_records if str(r.get("parametro") or "").startswith("estrategia.")]
+    tune_mais_recente = _tune_est[0] if _tune_est else tune_records[0]
     
     def _to_float(value, default=0.0):
         try:
@@ -640,17 +656,37 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
 
     if _is_v31 and tune_mais_recente.get("ir_calibrado") is not None:
         ir_valido = _to_float(tune_mais_recente.get("ir_calibrado"), default=0.0)
+    elif _rep_v31.get("ir_calibrado") is not None:
+        ir_valido = _to_float(_rep_v31.get("ir_calibrado"), default=0.0)
     else:
         ir_valido_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo)
         ir_valido = _to_float(ir_valido_match.group(1), default=0.0) if ir_valido_match else 0.0
 
-    confianca_match = re.search(r"(Alta|Baixa|amostra_insuficiente)", motivo, flags=re.IGNORECASE)
-    confianca = confianca_match.group(1).lower() if confianca_match else ""
+    # Confiança: v3.1 deriva de n_trades_calibracao; legado via regex
+    if _is_v31 or _rep_v31:
+        _n_calib_raw = (tune_mais_recente.get("n_trades_calibracao")
+                        if _is_v31 else None) or _rep_v31.get("n_trades_calibracao")
+        _n_calib = int(_n_calib_raw or 0)
+        if _n_calib >= 30:
+            confianca = "alta"
+        elif _n_calib >= 20:
+            confianca = "baixa"
+        elif _n_calib > 0:
+            confianca = "amostra_insuficiente"
+        else:
+            confianca_match = re.search(r"(Alta|Baixa|amostra_insuficiente)", motivo, flags=re.IGNORECASE)
+            confianca = confianca_match.group(1).lower() if confianca_match else ""
+    else:
+        confianca_match = re.search(r"(Alta|Baixa|amostra_insuficiente)", motivo, flags=re.IGNORECASE)
+        confianca = confianca_match.group(1).lower() if confianca_match else ""
 
     # Extrair janela de teste
-    if _is_v31 and tune_mais_recente.get("janela_anos_usada"):
-        janela_anos = int(tune_mais_recente.get("janela_anos_usada") or 0)
-        ano_teste_ini = str(datetime.now().year - janela_anos) if janela_anos else ""
+    _janela_src = tune_mais_recente.get("janela_anos_usada") if _is_v31 else None
+    if _janela_src is None:
+        _janela_src = _rep_v31.get("janela_anos")
+    if _janela_src is not None:
+        janela_anos = int(_janela_src or 0)
+        ano_teste_ini = str(datetime.now(tz=ZoneInfo('America/Sao_Paulo')).year - janela_anos) if janela_anos else ""
     else:
         periodo_teste = str(tune_mais_recente.get("periodo_teste") or "")
         if periodo_teste and "-" in periodo_teste:
@@ -666,10 +702,13 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
             ano_teste_ini = ""
 
     # Extrair trials
-    if _is_v31 and tune_mais_recente.get("trials_executados") is not None:
-        trials_rodados = int(tune_mais_recente.get("trials_executados") or 0)
-        meta = tune_mais_recente.get("_meta") or {}
-        trials_total = int(_to_float(meta.get("trials_por_candidato", 150), default=150))
+    _trials_src = tune_mais_recente.get("trials_executados") if _is_v31 else None
+    if _trials_src is None:
+        _trials_src = _rep_v31.get("trials_rodados")
+    if _trials_src is not None:
+        trials_rodados = int(_trials_src or 0)
+        _meta_trials = tune_mais_recente.get("_meta") or _meta_ranking or {}
+        trials_total = int(_to_float(_meta_trials.get("trials_por_candidato", 150), default=150))
     else:
         trials_match = re.search(r"Trials:\s*(\d+)\s*/\s*(\d+)", motivo)
         trials_rodados = int(trials_match.group(1)) if trials_match else 0
@@ -679,8 +718,11 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
             trials_total = int(_to_float(meta.get("trials_por_candidato", 150), default=150))
 
     # Extrair early stop
-    if _is_v31 and "early_stop_ativado" in tune_mais_recente:
-        early_stop = bool(tune_mais_recente.get("early_stop_ativado"))
+    _early_src = tune_mais_recente.get("early_stop_ativado") if _is_v31 else None
+    if _early_src is None and _rep_v31:
+        _early_src = _rep_v31.get("early_stop_ativado")
+    if _early_src is not None:
+        early_stop = bool(_early_src)
     else:
         early_stop = "early stop" in motivo.lower()
     
@@ -728,8 +770,11 @@ def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]
         pior_pnl = 0.0
     
     # Extrair n_trades — PADRÃO v3.1 estruturado; FALLBACK regex legado
-    if _is_v31 and tune_mais_recente.get("n_trades_calibracao") is not None:
-        n_trades = int(tune_mais_recente.get("n_trades_calibracao") or 0)
+    _n_src = tune_mais_recente.get("n_trades_calibracao") if _is_v31 else None
+    if _n_src is None:
+        _n_src = _rep_v31.get("n_trades_calibracao")
+    if _n_src is not None:
+        n_trades = int(_n_src or 0)
     else:
         n_trades_match = re.search(r"N trades: (\d+)", motivo)
         n_trades = int(n_trades_match.group(1)) if n_trades_match else 0
@@ -986,20 +1031,45 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
         markdown += "## Eleição de Estratégia por Regime (Etapa A — IR ordinal)\n"
         markdown += "> IR_eleicao é ordinal — serve apenas para comparar candidatos entre si.\n"
         markdown += "> Não é comparável ao IR_calibrado da Etapa B.\n\n"
-        markdown += "| Regime | Status | Estratégia Eleita | IR_eleicao (ordinal) | N_trades_reais | Alerta |\n"
-        markdown += "|--------|--------|-------------------|----------------------|----------------|--------|\n"
+        markdown += "| Regime | Status Eleição | Estratégia Eleita | N Trades | Candidatos (top-3) | Motivo | Alerta |\n"
+        markdown += "|--------|---------------|-------------------|----------|--------------------|--------|--------|\n"
         for regime in sorted(ranking_v31.keys()):
             rd            = ranking_v31[regime]
             status        = rd.get("eleicao_status", "—")
             eleita        = rd.get("estrategia_eleita") or "—"
-            ir_med        = rd.get("ir_eleicao_mediana")
-            n_tr          = rd.get("n_trades_reais", "—")
-            ir_str        = f"{ir_med:+.3f}" if isinstance(ir_med, (int, float)) else "—"
+            n_tr_raw      = rd.get("n_trades_reais")
+            n_tr_str      = str(n_tr_raw) if n_tr_raw is not None else "—"
             atual         = estrategias_atu.get(regime)
             alerta        = ""
             if eleita != "—" and atual and eleita != atual:
                 alerta = "**⚠️ MUDANÇA DE ESTRATÉGIA**"
-            markdown += f"| {regime} | {status} | {eleita} | {ir_str} | {n_tr} | {alerta} |\n"
+
+            # Candidatos: top-3 de ranking_eleicao; vencedor com valores calibrados de Etapa B
+            ranking_cands = rd.get("ranking_eleicao") or []
+            cand_parts = []
+            for c in ranking_cands[:3]:
+                if not isinstance(c, dict):
+                    continue
+                est   = c.get("estrategia", "?")
+                ir_c  = c.get("ir_mediana")
+                ir_s  = f"{ir_c:+.3f}" if isinstance(ir_c, (int, float)) else "?"
+                if est == eleita and isinstance(rd.get("tp_calibrado"), (int, float)):
+                    cand_parts.append(
+                        f"{est}✓ IR={ir_s} TP={rd['tp_calibrado']:.2f} STOP={rd['stop_calibrado']:.2f}"
+                    )
+                else:
+                    cand_parts.append(f"{est} IR={ir_s}")
+            cands_str = "; ".join(cand_parts) if cand_parts else "—"
+
+            # Motivo: apenas para regimes sem eleição
+            if status == "bloqueado":
+                motivo_reg = "bloqueado_regra"
+            elif status == "estrutural_fixo" and (n_tr_raw or 0) == 0:
+                motivo_reg = "sem_trades"
+            else:
+                motivo_reg = "—"
+
+            markdown += f"| {regime} | {status} | {eleita} | {n_tr_str} | {cands_str} | {motivo_reg} | {alerta} |\n"
         markdown += "\n---\n\n"
 
         # Etapa B — Calibração TP/Stop por Regime (v3.1)
@@ -1053,7 +1123,7 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
     markdown += f"- IR válido (janela de teste): {dados['ir_valido']}\n"
     markdown += f"- N trades na janela: {dados['n_trades']}\n"
     markdown += f"- Confiança: {dados['confianca']}\n"
-    markdown += f"- Janela de teste: {dados['janela_anos']} anos ({dados['ano_teste_ini']}–{datetime.now().year})\n"
+    markdown += f"- Janela de teste: {dados['janela_anos']} anos ({dados['ano_teste_ini']}–{datetime.now(tz=ZoneInfo('America/Sao_Paulo')).year})\n"
     markdown += f"- Trials rodados: {dados['trials_rodados']} / {dados['trials_total']}\n"
     markdown += f"- Early stop ativado: {'SIM' if dados['early_stop'] else 'NÃO'}\n"
     markdown += f"- Study Optuna retomado: {'SIM' if dados['retomado'] else 'NÃO'}\n"

@@ -117,7 +117,7 @@ async def ws_events(websocket: WebSocket):
 async def get_cycle():
     return {
         "ativo": "VALE3",
-        "regime": "NEUTRO_TRANSICAO",
+        "regime": "LATERAL",
         "confianca": 0.72,
         "posicao": "OFF",
         "pnl": 1.016

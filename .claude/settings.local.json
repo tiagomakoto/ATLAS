@@ -36,7 +36,10 @@
       "Bash(python -m pytest atlas_backend/tests/test_tune_confirmar.py atlas_backend/tests/test_tune_anomalia.py -v --tb=short)",
       "Bash(python -m pytest atlas_backend/tests/ -x -q)",
       "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['delta_chaos/gate.py', 'delta_chaos/tune.py', 'atlas_backend/core/relatorios.py']]; print\\('syntax OK'\\)\")",
-      "Bash(python -m pytest atlas_backend/tests/ -k \"relatorio or tune or gate\" --tb=short -q)"
+      "Bash(python -m pytest atlas_backend/tests/ -k \"relatorio or tune or gate\" --tb=short -q)",
+      "Bash(python -m pytest atlas_backend/tests/test_relatorio_tune.py -v)",
+      "Bash(python -m pytest atlas_backend/tests/ -v --tb=short)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

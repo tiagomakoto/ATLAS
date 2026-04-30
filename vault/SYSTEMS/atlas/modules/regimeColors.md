@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-015
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan
 
@@ -31,5 +31,6 @@ constraints:
   - Retorno padrão: var(--atlas-text-secondary) para regime desconhecido
 
 notes:
+  - 2026-04-30: código modificado — regimeColors.js
   - Duas variantes: REGIME_COLORS (var CSS para foreground) e REGIME_BG_COLORS (rgba 0.2 para backgrounds)
 ---

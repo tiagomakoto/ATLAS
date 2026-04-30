@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-016
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan
 
@@ -31,5 +31,6 @@ constraints:
   - Cores de regime via regimeColors
 
 notes:
+  - 2026-04-30: código modificado — AtivosTable.jsx
   - 2026-04-13 — módulo criado automaticamente a partir de atlas_ui/src/components/AtivosTable.jsx
 ---

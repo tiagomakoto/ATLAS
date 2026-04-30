@@ -346,6 +346,7 @@ def obter_relatorio_tune(ticker: str, historico: bool = Query(False, description
         # quando houver formato inesperado em campos do histórico.
         try:
             from datetime import datetime
+            from zoneinfo import ZoneInfo
             from atlas_backend.core.delta_chaos_reader import get_ativo_raw
 
             raw = get_ativo_raw(ticker)
@@ -363,7 +364,7 @@ def obter_relatorio_tune(ticker: str, historico: bool = Query(False, description
             tune_records.sort(key=lambda r: str(r.get("data") or ""), reverse=True)
             rec = tune_records[0]
             ciclo = str(rec.get("ciclo_id") or "")
-            data_exec = str(rec.get("data") or datetime.now().strftime("%Y-%m-%d"))
+            data_exec = str(rec.get("data") or datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d"))
 
             markdown_lines = [
                 f"# Relatório de TUNE — {ticker} — {ciclo}",

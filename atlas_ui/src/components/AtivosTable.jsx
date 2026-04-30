@@ -24,8 +24,8 @@ const getRegimeColor = (regime) => {
   // 🟡 Regimes de transição / recuperação
   if (r.includes("TRANSICAO") || r.includes("TRANSIÇÃO") || r.includes("RECUPERACAO")) return "var(--atlas-amber)";
   
-  // 🔵 Regimes neutros / laterais
-  if (r.includes("NEUTRO") || r.includes("LATERAL") || r.includes("MORTO")) return "var(--atlas-blue)";
+  // 🔵 Regimes laterais
+  if (r.includes("LATERAL")) return "var(--atlas-blue)";
   
   // ⚪ Fallback
   return "var(--atlas-text-secondary)";

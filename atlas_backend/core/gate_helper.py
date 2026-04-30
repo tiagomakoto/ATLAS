@@ -7,6 +7,7 @@ import json
 import math
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -61,7 +62,7 @@ def _load_historico(ticker: str) -> pd.DataFrame:
 
 def _get_anos_validos() -> List[int]:
     """Calcula ANOS_VALIDOS baseado no ano atual e configuração."""
-    ano_atual = datetime.now().year
+    ano_atual = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).year
     cfg_path = os.path.join(os.path.dirname(__file__), "..", "..", "delta_chaos", "config.json")
     anos_passados = 3
     if os.path.exists(cfg_path):
@@ -133,7 +134,7 @@ def compute_gate_criterios(ticker: str) -> Dict[str, Any]:
     Retorna dicionário com estrutura completa para o endpoint.
     """
     ticker = ticker.strip().upper()
-    ano_atual = datetime.now().year
+    ano_atual = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).year
     ANOS_VALIDOS = _get_anos_validos()
 
     IR_GATE_E1 = 0.10

@@ -289,16 +289,13 @@ def tape_ativo_carregar(ticker: str) -> dict:
     path   = os.path.join(ATIVOS_DIR, f"{ticker}.json")
 
     _estrategias_padrao = {
-        "ALTA":             "CSP",
-        "NEUTRO_BULL":      "BULL_PUT_SPREAD",
-        "NEUTRO_BEAR":      "BEAR_CALL_SPREAD",
-        "NEUTRO":           "BULL_PUT_SPREAD",
-        "NEUTRO_LATERAL":   None,
-        "NEUTRO_MORTO":     None,
-        "NEUTRO_TRANSICAO": None,
-        "BAIXA":            None,
-        "RECUPERACAO":      None,
-        "PANICO":           None,
+        "ALTA":         "CSP",
+        "LATERAL_BULL": "BULL_PUT_SPREAD",
+        "LATERAL_BEAR": "BEAR_CALL_SPREAD",
+        "LATERAL":      None,
+        "BAIXA":        None,
+        "RECUPERACAO":  None,
+        "PANICO":       None,
     }
 
     default_config = {
@@ -426,16 +423,13 @@ def tape_ativo_inicializar(ticker: str) -> dict:
         "externas":     {"usdbrl": False, "minerio": False},
 
         "estrategias": {
-            "ALTA":              "CSP",
-            "NEUTRO_BULL":       "BULL_PUT_SPREAD",
-            "NEUTRO_BEAR":       "BEAR_CALL_SPREAD",
-            "NEUTRO":            "BULL_PUT_SPREAD",
-            "NEUTRO_LATERAL":    None,
-            "NEUTRO_MORTO":      None,
-            "NEUTRO_TRANSICAO":  None,
-            "BAIXA":             None,
-            "RECUPERACAO":       None,
-            "PANICO":            None,
+            "ALTA":         "CSP",
+            "LATERAL_BULL": "BULL_PUT_SPREAD",
+            "LATERAL_BEAR": "BEAR_CALL_SPREAD",
+            "LATERAL":      None,
+            "BAIXA":        None,
+            "RECUPERACAO":  None,
+            "PANICO":       None,
         },
 
         # REFLECT

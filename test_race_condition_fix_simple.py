@@ -41,7 +41,7 @@ def test_race_condition_scenario():
                 "historico": [
                     {"ciclo_id": "2023-03", "regime": "ALTA", "ir": 0.05},
                     {"ciclo_id": "2023-04", "regime": "BAIXA", "ir": 0.03},
-                    {"ciclo_id": "2023-05", "regime": "NEUTRO", "ir": 0.04}
+                    {"ciclo_id": "2023-05", "regime": "LATERAL", "ir": 0.04}
                 ],
                 "historico_config": [
                     {"data": "2026-04-25", "modulo": "TUNE v3.0", "parametro": "estrategia.ALTA", 
@@ -50,13 +50,10 @@ def test_race_condition_scenario():
                 ],
                 "estrategias": {
                     "ALTA": "BULL_PUT_SPREAD",
-                    "BAIXA": "BEAR_CALL_SPREAD", 
-                    "NEUTRO": None,
-                    "NEUTRO_BULL": None,
-                    "NEUTRO_BEAR": None,
-                    "NEUTRO_LATERAL": None,
-                    "NEUTRO_MORTO": None,
-                    "NEUTRO_TRANSICAO": None,
+                    "BAIXA": "BEAR_CALL_SPREAD",
+                    "LATERAL_BULL": None,
+                    "LATERAL_BEAR": None,
+                    "LATERAL": None,
                     "RECUPERACAO": None,
                     "PANICO": None
                 },

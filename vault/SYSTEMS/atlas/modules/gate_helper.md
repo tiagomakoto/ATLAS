@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-026
-version: 1.0.1
+version: 1.0.2
 status: validated
 owner: Chan | Lilian | Board
 
@@ -38,5 +38,6 @@ constraints:
 - Lê de book_backtest.parquet + master JSON
 
 notes:
+  - 2026-04-30: código modificado — gate_helper.py
 - 2026-04-17 — módulo criado automaticamente a partir de atlas_backend/core/gate_helper.py
 - 2026-04-25 — vault validado: campos BOARD_REVIEW_REQUIRED preenchidos via análise de código

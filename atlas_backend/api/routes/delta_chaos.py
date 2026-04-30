@@ -4,6 +4,7 @@ import re
 import json
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -243,7 +244,7 @@ async def calibracao(payload: CalibracaoPayload):
         emit_log(f"[CALIBRAÇÃO] Iniciando {ticker}", level="info")
 
         # Ano dinâmico para ORBIT
-        ano_atual = datetime.now().year
+        ano_atual = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).year
         anos_orbit = list(range(2002, ano_atual + 1))
         await dc_orbit_backtest(ticker=ticker, anos=anos_orbit)
         await dc_tune(ticker=ticker)
@@ -354,7 +355,7 @@ async def tune_confirmar_regime_anomalia(payload: dict):
                 detail=f"Regime {regime} não tem anomalia detectada — não requer confirmação CEO",
             )
 
-        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        agora = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d %H:%M:%S")
         motivos = anomalia.get("motivos") or []
 
         if not isinstance(dados.get("historico_config"), list):

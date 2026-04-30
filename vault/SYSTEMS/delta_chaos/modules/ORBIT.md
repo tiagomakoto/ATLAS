@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-002
-version: 3.4.8
+version: 3.4.11
 status: validated
 owner: Chan
 
@@ -41,6 +41,9 @@ constraints:
   - Vocabulario exclusivo — nao misturar com estados do REFLECT (A-E)
 
 notes:
+  - 2026-04-30: código modificado — orbit.py
+  - 2026-04-30: código modificado — orbit.py
+  - 2026-04-30: código modificado — orbit.py
   - 2026-04-25: código modificado — orbit.py
   - 2026-04-14: código modificado — orbit.py
   - 2026-04-14: código modificado — orbit.py

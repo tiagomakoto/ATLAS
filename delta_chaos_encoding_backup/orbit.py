@@ -3,7 +3,7 @@
 # AlteraÃ§Ãµes em relaÃ§Ã£o Ã  v3.4:
 # MIGRADO (P2): imports explÃ­citos de init e tape â€” sem escopo global
 # MIGRADO (P5): prints de inicializaÃ§Ã£o sob if __name__ == "__main__"
-# MANTIDO: S1â€“S6, calibraÃ§Ã£o Ridge, regimes, NEUTRO_LATERAL/MORTO
+# MANTIDO: S1â€“S6, calibraÃ§Ã£o Ridge, regimes, LATERAL/MORTO
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 from delta_chaos.init import (
@@ -356,7 +356,7 @@ def _classificar_regime(score_hist, vol_hist, thresh):
         s = score_hist[-1] if score_hist else 0
         if   s >  thresh: return "ALTA"
         elif s < -thresh: return "BAIXA"
-        else:             return "NEUTRO"
+        else:             return "_LATERAL_ROUTE"
 
     s_atual = score_hist[-1]
     s_ant1  = score_hist[-2]
@@ -384,7 +384,7 @@ def _classificar_regime(score_hist, vol_hist, thresh):
 
     if   s_atual >  thresh: return "ALTA"
     elif s_atual < -thresh: return "BAIXA"
-    else:                   return "NEUTRO"
+    else:                   return "_LATERAL_ROUTE"
 
 def _classificar_sub_regime_neutro(score, score_vel,
                                     vol_21d, vol_63d,
@@ -393,18 +393,18 @@ def _classificar_sub_regime_neutro(score, score_vel,
     abs_vel   = abs(score_vel)
 
     if abs_score > thresh * 0.85 and abs_vel > 0.05:
-        return "NEUTRO_TRANSICAO"
+        return "LATERAL_TRANSICAO"
 
     if abs_score < 0.05:
         if vol_21d > vol_63d:
-            return "NEUTRO_LATERAL"
+            return "LATERAL"
         else:
-            return "NEUTRO_MORTO"
+            return "LATERAL"
 
     if score > 0:
-        return "NEUTRO_BULL"
+        return "LATERAL_BULL"
 
-    return "NEUTRO_BEAR"
+    return "LATERAL_BEAR"
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # CLASSE ORBIT v3.4
@@ -619,7 +619,7 @@ class ORBIT:
             vol_hist_global[ativo],
             thresh)
 
-        if regime == "NEUTRO":
+        if regime == "_LATERAL_ROUTE":
             regime = _classificar_sub_regime_neutro(
                 score_atual,
                 score_vel,
@@ -634,9 +634,9 @@ class ORBIT:
 
         pred = np.where(df_p["score"] >  thresh, "ALTA",
                np.where(df_p["score"] < -thresh, "BAIXA",
-                                                  "NEUTRO"))
+                                                  "_LATERAL_ROUTE"))
         ret  = df_p["ret_futuro"].values
-        mask = pred != "NEUTRO"
+        mask = pred != "_LATERAL_ROUTE"
         rs   = np.where(pred=="ALTA",  ret,
                np.where(pred=="BAIXA",-ret, 0))[mask]
 
@@ -656,7 +656,7 @@ class ORBIT:
             sizing = 0.0
 
         pesos_at = ph[-1]["pesos"]
-        pct_n    = (pred=="NEUTRO").mean()*100
+        pct_n    = (pred=="_LATERAL_ROUTE").mean()*100
 
         return {
             "ciclo_id":   str(ciclo_id),

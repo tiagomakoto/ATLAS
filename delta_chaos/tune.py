@@ -641,7 +641,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         _std_v    = float(np.std(pnls_v))
         _mean_v   = float(np.mean(pnls_v))
         # Floor relativo: max(std, |mean| * 0.1) evita IR > ~35 por baixa
-        # dispersão em séries de alta taxa de win (ex: NEUTRO_BEAR IR=264).
+        # dispersão em séries de alta taxa de win (ex: LATERAL_BEAR IR=264).
         # PE-009 provisório — revisão gatilhada por B62 após
         # 1 trimestre paper trading TUNE v3.1
         _std_floor = max(_std_v, abs(_mean_v) * 0.10, 1e-6)

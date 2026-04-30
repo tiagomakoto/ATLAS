@@ -15,6 +15,7 @@ import re
 import sys
 import time
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import AsyncIterator, Optional
 import delta_chaos.edge as edge
@@ -636,7 +637,7 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
             },
             "historico": [],
             "historico_config": [],
-            "atualizado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "atualizado_em": datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d %H:%M:%S")
         }
 
         # Criar arquivo
@@ -677,7 +678,7 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
             current = json.load(f)
 
         current.update(updates)
-        current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current["atualizado_em"] = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d %H:%M:%S")
 
         # Criar arquivo temporário
         tmp_path = config_path + ".tmp"
@@ -717,7 +718,7 @@ async def _executar_calibracao_step1(ticker: str):
                 current = json.load(f)
 
             current.update(updates)
-            current["atualizado_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current["atualizado_em"] = datetime.now(tz=ZoneInfo('America/Sao_Paulo')).strftime("%Y-%m-%d %H:%M:%S")
 
             # Criar arquivo temporário
             tmp_path = config_path + ".tmp"

@@ -7,7 +7,7 @@ The sole operator is the CEO — no team. Current phase: paper trading.
 
 ## Architecture
 Pipeline: TAPE (market data ingestion) → ORBIT (regime classification: ALTA/BAIXA/
-NEUTRO_BULL/NEUTRO_BEAR/NEUTRO_LATERAL/NEUTRO_TRANSICAO) → TUNE (TP/STOP optimization
+LATERAL_BULL/LATERAL_BEAR/LATERAL/RECUPERACAO/PANICO) → TUNE (TP/STOP optimization
 via Optuna, 200 trials TPE) → GATE (historical validation, 8 criteria) → FIRE (strategy
 selection and order sizing) → BOOK (trade registry) → REFLECT (edge quality monitoring,
 states A–E, sizing multiplier).

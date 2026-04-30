@@ -3,7 +3,7 @@
 # Alterações em relação à v3.4:
 # MIGRADO (P2): imports explícitos de init e tape — sem escopo global
 # MIGRADO (P5): prints de inicialização sob if __name__ == "__main__"
-# MANTIDO: S1–S6, calibração Ridge, regimes, NEUTRO_LATERAL/MORTO
+# MANTIDO: S1–S6, calibração Ridge, regimes LATERAL_*
 # ════════════════════════════════════════════════════════════════════
 
 from delta_chaos.init import (
@@ -373,7 +373,7 @@ def _classificar_regime(score_hist, vol_hist, thresh):
         s = score_hist[-1] if score_hist else 0
         if   s >  thresh: return "ALTA"
         elif s < -thresh: return "BAIXA"
-        else:             return "NEUTRO"
+        else:             return "_LATERAL_ROUTE"
 
     s_atual = score_hist[-1]
     s_ant1  = score_hist[-2]
@@ -401,27 +401,33 @@ def _classificar_regime(score_hist, vol_hist, thresh):
 
     if   s_atual >  thresh: return "ALTA"
     elif s_atual < -thresh: return "BAIXA"
-    else:                   return "NEUTRO"
+    else:                   return "_LATERAL_ROUTE"
 
-def _classificar_sub_regime_neutro(score, score_vel,
-                                    vol_21d, vol_63d,
-                                    thresh):
+def _classificar_sub_regime_lateral(score, score_vel,
+                                     vol_21d, vol_63d,
+                                     thresh):
     abs_score = abs(score)
     abs_vel   = abs(score_vel)
 
     if abs_score > thresh * 0.85 and abs_vel > 0.05:
-        return "NEUTRO_TRANSICAO"
+        return "LATERAL_TRANSICAO"  # marcador temporário — redistribuído em seguida
 
     if abs_score < 0.05:
-        if vol_21d > vol_63d:
-            return "NEUTRO_LATERAL"
-        else:
-            return "NEUTRO_MORTO"
+        return "LATERAL"  # abs_score baixo → regime lateral sem direcionalidade
 
     if score > 0:
-        return "NEUTRO_BULL"
+        return "LATERAL_BULL"
 
-    return "NEUTRO_BEAR"
+    return "LATERAL_BEAR"
+
+
+def _redistribuir_transicao(regime, prev_regime=None):
+    """Elimina LATERAL_TRANSICAO: herda prev_regime se disponível, senão LATERAL."""
+    if regime != "LATERAL_TRANSICAO":
+        return regime
+    if prev_regime and prev_regime != "LATERAL_TRANSICAO":
+        return prev_regime
+    return "LATERAL"
 
 # ════════════════════════════════════════════════════════════════════
 # CLASSE ORBIT v3.5
@@ -628,13 +634,17 @@ class ORBIT:
             vol_hist_global[ativo],
             thresh)
 
-        if regime == "NEUTRO":
-            regime = _classificar_sub_regime_neutro(
+        if regime == "_LATERAL_ROUTE":
+            regime = _classificar_sub_regime_lateral(
                 score_atual,
                 score_vel,
                 vol_21d_atual,
                 vol_63d_atual,
                 thresh)
+            if regime == "LATERAL_TRANSICAO":
+                _hist = cfg.get("historico", [])
+                _prev = _hist[-1].get("regime") if _hist else None
+                regime = _redistribuir_transicao(regime, _prev)
 
         df_p = pd.DataFrame({
             "score":      scores_ate_ref,
@@ -643,9 +653,9 @@ class ORBIT:
 
         pred = np.where(df_p["score"] >  thresh, "ALTA",
                np.where(df_p["score"] < -thresh, "BAIXA",
-                                                  "NEUTRO"))
+                                                  "_LAT"))
         ret  = df_p["ret_futuro"].values
-        mask = pred != "NEUTRO"
+        mask = pred != "_LAT"
         rs   = np.where(pred=="ALTA",  ret,
                np.where(pred=="BAIXA",-ret, 0))[mask]
 
@@ -662,7 +672,7 @@ class ORBIT:
             sizing = 0.0
 
         pesos_at = ph[-1]["pesos"]
-        pct_n    = (pred=="NEUTRO").mean()*100
+        pct_n    = (pred=="_LAT").mean()*100
 
         # Fase 5 — iv_rank por ciclo (B42)
         # IV disponível via vol_garch_21d do OHLCV como proxy de vol impliedada.

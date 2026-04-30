@@ -69,7 +69,7 @@ class TestFireDiagnosticoEndpoint:
                     "stops_por_regime": {
                         "BAIXA": 4,
                         "ALTA": 2,
-                        "NEUTRO_BULL": 1
+                        "LATERAL_BULL": 1
                     }
                 }
             },
@@ -160,7 +160,7 @@ class TestFireDiagnosticoEndpoint:
                 "fire_diagnostico": {
                     "regimes": [],
                     "cobertura": {"ciclos_com_operacao": 10, "total_ciclos": 12, "total_trades": 10, "acerto_geral_pct": 80.0, "pnl_total": 500.0},
-                    "stops_por_regime": {"BAIXA": 5, "ALTA": 2, "NEUTRO_BULL": 1}
+                    "stops_por_regime": {"BAIXA": 5, "ALTA": 2, "LATERAL_BULL": 1}
                 }
             },
             "historico": []

@@ -2,29 +2,23 @@
 // Importar em AtivoView.jsx, DigestPanel.jsx e qualquer outro componente
 
 export const REGIME_COLORS = {
-  ALTA:              "var(--atlas-green)",
-  BAIXA:             "var(--atlas-red)",
-  NEUTRO_BULL:       "var(--atlas-green)",  // bull → verde
-  NEUTRO_BEAR:       "var(--atlas-red)",    // bear → vermelho
-  NEUTRO_LATERAL:    "var(--atlas-blue)",   // neutro → azul
-  NEUTRO_TRANSICAO:  "var(--atlas-amber)", // transição → âmbar
-  NEUTRO_MORTO:      "var(--atlas-blue)",   // neutro → azul
-  RECUPERACAO:       "var(--atlas-green)",  // bull → verde
-  PANICO:            "var(--atlas-red)",    // bear → vermelho
-  NEUTRO:            "var(--atlas-blue)",   // fallback genérico
+  ALTA:         "var(--atlas-green)",
+  BAIXA:        "var(--atlas-red)",
+  LATERAL_BULL: "var(--atlas-green)",
+  LATERAL_BEAR: "var(--atlas-red)",
+  LATERAL:      "var(--atlas-blue)",
+  RECUPERACAO:  "var(--atlas-green)",
+  PANICO:       "var(--atlas-red)",
 };
 
 export const REGIME_BG_COLORS = {
-  ALTA:              "rgba(34, 197, 94, 0.2)",
-  BAIXA:             "rgba(239, 68, 68, 0.2)",
-  NEUTRO_BULL:       "rgba(34, 197, 94, 0.2)",
-  NEUTRO_BEAR:       "rgba(239, 68, 68, 0.2)",
-  NEUTRO_LATERAL:    "rgba(59, 130, 246, 0.2)",
-  NEUTRO_TRANSICAO:  "rgba(245, 158, 11, 0.2)",
-  NEUTRO_MORTO:      "rgba(59, 130, 246, 0.2)",
-  RECUPERACAO:       "rgba(34, 197, 94, 0.2)",
-  PANICO:            "rgba(239, 68, 68, 0.2)",
-  NEUTRO:            "rgba(59, 130, 246, 0.2)",
+  ALTA:         "rgba(34, 197, 94, 0.2)",
+  BAIXA:        "rgba(239, 68, 68, 0.2)",
+  LATERAL_BULL: "rgba(34, 197, 94, 0.2)",
+  LATERAL_BEAR: "rgba(239, 68, 68, 0.2)",
+  LATERAL:      "rgba(59, 130, 246, 0.2)",
+  RECUPERACAO:  "rgba(34, 197, 94, 0.2)",
+  PANICO:       "rgba(239, 68, 68, 0.2)",
 };
 
 /**
@@ -40,7 +34,7 @@ export function getRegimeColor(regime) {
   if (r.includes("BAIXA") || r.includes("BEAR")) return REGIME_COLORS.BAIXA;
   if (r.includes("PANICO")) return REGIME_COLORS.PANICO;
   if (r.includes("RECUPERACAO")) return REGIME_COLORS.RECUPERACAO;
-  if (r.includes("NEUTRO")) return REGIME_COLORS.NEUTRO;
+  if (r.includes("LATERAL")) return REGIME_COLORS.LATERAL;
   return "var(--atlas-text-secondary)";
 }
 
@@ -52,6 +46,6 @@ export function getRegimeBgColor(regime) {
   if (r.includes("BAIXA") || r.includes("BEAR")) return REGIME_BG_COLORS.BAIXA;
   if (r.includes("PANICO")) return REGIME_BG_COLORS.PANICO;
   if (r.includes("RECUPERACAO")) return REGIME_BG_COLORS.RECUPERACAO;
-  if (r.includes("NEUTRO")) return REGIME_BG_COLORS.NEUTRO;
+  if (r.includes("LATERAL")) return REGIME_BG_COLORS.LATERAL;
   return "var(--atlas-surface)";
 }

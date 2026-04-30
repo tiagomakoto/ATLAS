@@ -205,7 +205,7 @@ def test_confirmar_anomalia_rejeitar_mantem_ciclo_anterior():
 
 def test_confirmar_anomalia_regime_sem_anomalia_retorna_400():
     """Regime sem anomalia detectada (aplicado automaticamente) deve retornar 400."""
-    ticker, run_id, regime = "TEST", "run-v31-003", "NEUTRO"
+    ticker, run_id, regime = "TEST", "run-v31-003", "LATERAL"
 
     mock_data = {
         "ticker": ticker,
