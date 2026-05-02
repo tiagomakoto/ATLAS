@@ -13,8 +13,8 @@ const PULSE_ANIMATION = `
 
 const STEPS = [
   { id: "1_backtest_dados", label: "backtest_dados", name: "Integridade de dados", modulo: "ORBIT" },
-  { id: "2_tune", label: "tune", name: "Parametrização", modulo: "TUNE" },
-  { id: "3_gate_fire", label: "gate + fire", name: "Validação", modulo: "GATE" },
+  { id: "2_tune", label: "tune", name: "Parametrizacao", modulo: "TUNE" },
+  { id: "3_gate_fire", label: "gate + fire", name: "Validacao", modulo: "GATE" },
 ];
 
 const DEFAULT_STEPS = {
@@ -61,7 +61,7 @@ function statusVisual(status, isNext) {
     return { bg: "rgba(59,130,246,0.15)", border: "var(--atlas-blue)", label: "EXECUTANDO", color: "var(--atlas-blue)" };
   }
   if (status === "done") {
-    return { bg: "rgba(34,197,94,0.1)", border: "var(--atlas-green)", label: "CONCLUÍDO", color: "var(--atlas-green)" };
+    return { bg: "rgba(34,197,94,0.1)", border: "var(--atlas-green)", label: "CONCLUIDO", color: "var(--atlas-green)" };
   }
   if (status === "error") {
     return { bg: "rgba(239,68,68,0.1)", border: "var(--atlas-red)", label: "ERRO", color: "var(--atlas-red)" };
@@ -70,17 +70,17 @@ function statusVisual(status, isNext) {
     return { bg: "rgba(245,158,11,0.1)", border: "var(--atlas-amber)", label: "PAUSADO", color: "var(--atlas-amber)" };
   }
   if (isNext) {
-    return { bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.3)", label: "PRÓXIMO", color: "var(--atlas-blue)" };
+    return { bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.3)", label: "PROXIMO", color: "var(--atlas-blue)" };
   }
   return { bg: "rgba(156,163,175,0.1)", border: "var(--atlas-border)", label: "PENDENTE", color: "var(--atlas-text-secondary)" };
 }
 
-function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag, tuneStats, gateStats, tuneRanking }) {
+function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, gateResult, gateError, fireDiag, tuneStats, gateStats, tuneRanking, b57 }) {
   const now = new Date().toISOString().slice(0, 10);
-  const header = `# Relatório de Calibração — ${ticker} — ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
+  const header = `# Relatório de Calibração - ${ticker} - ${cycle || "N/D"}\n**Data:** ${now}\n**Gerado por:** ATLAS\n\n---\n`;
 
-  // Placeholder "—" (U+2014) é deliberado para as tabelas novas abaixo, conforme
-  // SPEC do patch. As seções legadas continuam usando "–" (U+2013) — não unificar.
+// Placeholder "—" is deliberate for the new tables below, per
+// SPEC of the patch. Legacy sections continue using "–" — do not unify.
   const fmt = (value, kind = "raw") => {
     if (value == null) return "—";
     switch (kind) {
@@ -211,7 +211,164 @@ ${Object.entries(gateStats.estrategia_por_regime)
     }
   }
 
-  return `${header}${step1Section}${step2Section}${tuneQualidadeSection}${tuneRankingSection}${gateSection}${gateDiagSection}${estrategiaSection}${fireSection}`;
+  // ═══════════════════════════════════════════════════════════════
+  // B57 — 11 seções adicionais do TUNE (relatório unificado)
+  // ═══════════════════════════════════════════════════════════════
+
+  // 1. Limitação de simulação
+  const limitacaoSection = `
+---
+## ⚠️ Limitação de simulação
+Os valores foram otimizados usando proxies intradiários: mínimo do dia
+como proxy de TP e máximo do dia como proxy de STOP. Em dias de alta
+volatilidade, esses proxies podem superestimar ganhos de TP e
+subestimar custos de STOP.
+`;
+
+  // 2. Diagnóstico executivo
+  const diagnosticoSection = b57?.diagnostico_executivo ? `
+---
+## Diagnóstico executivo
+${b57.diagnostico_executivo}
+` : "";
+
+  // 3. GATE E5 — Estabilidade ORBIT
+  let gateE5Section = "";
+  if (b57?.gate_valores || b57?.ir_por_regime_janela) {
+    const e5Str = b57.gate_valores?.["E5 — ORBIT"] || "—";
+    const anosValidos = b57.anos_validos_usados || "—";
+    let irRows = "";
+    const irReg = b57.ir_por_regime_janela || {};
+    Object.entries(irReg).sort((a, b) => b[1] - a[1]).forEach(([r, ir]) => {
+      const marker = ir >= 0.10 ? " ← PASSOU" : " ← bloqueado";
+      irRows += `  - ${r}: ${ir >= 0 ? "+" : ""}${ir.toFixed(4)}${marker}\n`;
+    });
+    gateE5Section = `
+---
+## GATE E5 — Estabilidade ORBIT
+- Resultado: ${e5Str}
+- Anos válidos usados: ${anosValidos}
+- IR por regime (janela válida):
+${irRows || "  (dados indisponíveis)"}
+`;
+  }
+
+  // 4. Máscara REFLECT
+  const mascaraSection = b57?.total_ciclos ? `
+---
+## Máscara REFLECT
+- Ciclos mascarados (Edge C/D/T): ${fmt(b57.reflect_mask_pct * b57.total_ciclos / 100, "int")} de ${fmt(b57.total_ciclos, "int")} (${fmt(b57.reflect_mask_pct, "percent")})
+- Ciclos com REFLECT real: ${fmt(b57.ciclos_reais, "int")}
+- Ciclos com fallback B: ${fmt(b57.ciclos_fallback, "int")}
+` : "";
+
+  // 5. Distribuição de saídas
+  const distribuicaoSaidasSection = (b57?.n_tp || b57?.n_stop || b57?.n_venc) ? `
+---
+## Distribuição de saídas (janela de teste)
+- Take Profit: ${fmt(b57.n_tp, "int")} (${b57.n_tp && b57.n_tp + b57.n_stop + b57.n_venc ? ((b57.n_tp / (b57.n_tp + b57.n_stop + b57.n_venc)) * 100).toFixed(1) : "0.0"}%)
+- Stop Loss:   ${fmt(b57.n_stop, "int")} (${b57.n_stop && b57.n_tp + b57.n_stop + b57.n_venc ? ((b57.n_stop / (b57.n_tp + b57.n_stop + b57.n_venc)) * 100).toFixed(1) : "0.0"}%)
+- Vencimento:  ${fmt(b57.n_venc, "int")} (${b57.n_venc && b57.n_tp + b57.n_stop + b57.n_venc ? ((b57.n_venc / (b57.n_tp + b57.n_stop + b57.n_venc)) * 100).toFixed(1) : "0.0"}%)
+- Acerto: ${fmt(b57.acerto_pct, "percent")}
+` : "";
+
+  // 6. Stops por ano
+  let stopsPorAnoSection = "";
+  if (b57?.stops_por_ano && Object.keys(b57.stops_por_ano).length > 0) {
+    const rows = Object.entries(b57.stops_por_ano)
+      .sort((a, b) => b[0] - a[0])
+      .map(([ano, n]) => `| ${ano} | ${n} |`)
+      .join("\n");
+    stopsPorAnoSection = `
+---
+## Distribuição temporal de stops
+| Ano | Stops |
+|-----|-------|
+${rows}
+`;
+  }
+
+  // 7. P&L por ano
+  let pnlPorAnoSection = "";
+  if (b57?.pnl_por_ano && b57.pnl_por_ano.length > 0) {
+    const rows = b57.pnl_por_ano
+      .sort((a, b) => b.ano - a.ano)
+      .map((row) => `| ${row.ano} | R$ ${row.pnl_medio >= 0 ? "+" : ""}${row.pnl_medio.toFixed(2).replace(".", ",")} | ${row.n_trades} |`)
+      .join("\n");
+    pnlPorAnoSection = `
+---
+## P&L por ano
+| Ano | P&L médio/trade | N trades |
+|-----|-----------------|----------|
+${rows}
+`;
+  }
+
+  // 8. Frequência de regimes
+  let freqRegimesSection = "";
+  if (b57?.freq_regimes && Object.keys(b57.freq_regimes).length > 0) {
+    const rows = Object.entries(b57.freq_regimes)
+      .sort((a, b) => b[1] - a[1])
+      .map(([regime, n]) => `| ${regime} | ${n} |`)
+      .join("\n");
+    freqRegimesSection = `
+---
+## Frequência de regimes (janela de backtest)
+| Regime | Ciclos |
+|--------|--------|
+${rows}
+`;
+  }
+
+  // 9. Estado REFLECT atual
+  const reflectStateSection = b57?.reflect_state_atual ? `
+---
+## Estado REFLECT atual
+- Estado: ${b57.reflect_state_atual}
+- Sizing final recomendado: ${fmt(b57.sizing_final, "float")} (orbit ${fmt(b57.sizing_orbit, "float")} × reflect ${fmt(b57.reflect_mult, "float")})
+` : "";
+
+  // 10. Reconciliação TUNE × GATE
+  let reconciliacaoSection = "";
+  if (b57?.pnl_medio_tune != null && b57?.pnl_medio_gate != null) {
+    const diff = b57.diferenca_tune_gate;
+    const diffStr = diff >= 0 ? `+R$ ${diff.toFixed(2)}` : `-R$ ${Math.abs(diff).toFixed(2)}`;
+    reconciliacaoSection = `
+---
+## Reconciliação TUNE × GATE
+- P&L médio TUNE: R$ ${b57.pnl_medio_tune.toFixed(2).replace(".", ",")}
+- P&L médio GATE: R$ ${b57.pnl_medio_gate.toFixed(2).replace(".", ",")}
+- Diferença: R$ ${diffStr}
+${b57.nota_obrigatoria_b57 ? "> ⚠️ Divergência significativa entre janelas TUNE e GATE. Revisar com board antes de aplicar parâmetros. Possível sobreajuste ou viés de janela." : ""}
+`;
+  }
+
+  // 11. Pior trade
+  const piorTradeSection = b57?.pior_data ? `
+---
+## Pior trade (janela de teste)
+- Data: ${b57.pior_data}
+- Motivo: ${b57.pior_motivo || "—"}
+- P&L: R$ ${b57.pior_pnl < 0 ? "-" : ""}${Math.abs(b57.pior_pnl).toFixed(2).replace(".", ",")}
+` : "";
+
+  // 12. Histórico de TUNEs aplicados
+  let historicoTunesSection = "";
+  if (b57?.historico_tunes && b57.historico_tunes.length > 0) {
+    const rows = b57.historico_tunes
+      .slice(0, 10)
+      .map((t) => `| ${t.data || "—"} | ${t.tp || "—"} | ${t.stop || "—"} | ${t.ir || "—"} | ${t.confianca || "—"} |`)
+      .join("\n");
+    historicoTunesSection = `
+---
+## Histórico de TUNEs aplicados
+| Data | TP | STOP | IR válido | Confiança |
+|------|-----|------|-----------|-----------|
+${rows}
+`;
+  }
+
+  return `${header}${step1Section}${step2Section}${tuneQualidadeSection}${tuneRankingSection}${limitacaoSection}${diagnosticoSection}${gateSection}${gateDiagSection}${estrategiaSection}${fireSection}${gateE5Section}${mascaraSection}${distribuicaoSaidasSection}${stopsPorAnoSection}${pnlPorAnoSection}${freqRegimesSection}${reflectStateSection}${reconciliacaoSection}${piorTradeSection}${historicoTunesSection}`;
 }
 
 function downloadTextFile(filename, content) {
@@ -275,14 +432,11 @@ function TuneRegimeProgressPanel({ progressByRegime }) {
                 ⚫ sem candidatos
               </div>
             )}
-            {status === "estrutural_fixo" && dados?.estrategia_eleita && (
+            {(status === "estrutural_fixo" || status === "competitiva") && dados?.estrategia_eleita && (
               <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
                 {dados.estrategia_eleita}
-              </div>
-            )}
-            {status === "competitiva" && dados?.estrategia_eleita && (
-              <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-blue)", marginTop: 2 }}>
-                {dados.estrategia_eleita}
+                {dados.tp_calibrado != null && ` | TP: ${Number(dados.tp_calibrado).toFixed(2)} | Stop: ${Number(dados.stop_calibrado ?? 0).toFixed(2)}${dados.ir_calibrado != null ? ` | IR: ${Number(dados.ir_calibrado).toFixed(3)}` : ""}`}
+                {dados.tp_calibrado == null && top?.ir_mediana != null && ` | IR mediana: ${Number(top.ir_mediana).toFixed(3)}`}
               </div>
             )}
             {status === "in_progress" && top && (
@@ -355,9 +509,9 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     return "idle";
   }, [steps, step3Fase, gateResult, fireDiag]);
 
-  useEffect(() => {
+    useEffect(() => {
     let mounted = true;
-    async function loadInitial() {
+    async function loadInitial() {  // ← função definida
       try {
         const [statusRes, cotahistRes] = await Promise.all([
           fetch(`${API_BASE}/delta-chaos/calibracao/${ticker}`),
@@ -380,9 +534,6 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           if (step2Data?.trials_total != null) setTrialTotal(Number(step2Data.trials_total));
 
           const step3Payload = data?.step_3 || {};
-          // Trata criterios=[] como ausente — normalize_gate_resultado retorna
-          // objeto não-null mesmo quando gate_stored=null, o que causaria []
-          // (truthy) a ganhar prioridade sobre gateCriteriosProgresso no render.
           const _gateRaw = step3Payload.gate_resultado;
           const gateResultadoInit = (_gateRaw?.criterios?.length > 0) ? _gateRaw : null;
           const fireDiagInit = step3Payload.fire_diagnostico || null;
@@ -391,7 +542,6 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             if (gateResultadoInit && !fireDiagInit) {
               setStep3Fase(STEP3_FASES.FIRE);
             } else {
-              // GATE está rodando (sem resultado ainda) ou estado ambíguo
               setStep3Fase(STEP3_FASES.GATE);
             }
           }
@@ -401,7 +551,6 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           if (data?.steps?.["2_tune"]?.iniciado_em) setStep2IniciadoEm(new Date(data.steps["2_tune"].iniciado_em).getTime());
           if (data?.ultimo_evento_em) setUltimoEventoEm(new Date(data.ultimo_evento_em).getTime());
 
-          // TUNE v3.0 ranking e banner tune_versao_pendente
           const step2Payload = data?.step_2 || {};
           if (step2Payload.tune_ranking) {
             setTuneRanking(step2Payload.tune_ranking);
@@ -409,7 +558,6 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             setTuneRankingConfirmado(jaConfirmados);
             setTuneRegimeProgress(step2Payload.tune_ranking?.regimes || {});
           }
-          // Banner pendência: buscar do ativo raw se step2 não trouxer
           try {
             const ativoRawRes = await fetch(`${API_BASE}/ativos/${ticker}`);
             if (ativoRawRes.ok) {
@@ -418,34 +566,34 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             }
           } catch (_) { /* ignora */ }
 
-      // Carregar TP/Stop persistido se step 2 já concluiu
-      if (step2Data?.status === "done") {
-        try {
-          const ativoRes = await fetch(`${API_BASE}/ativos/${ticker}`);
-          if (ativoRes.ok) {
-            const ativoData = await ativoRes.json();
-            if (ativoData?.take_profit != null) setBestTp(Number(ativoData.take_profit));
-            if (ativoData?.stop_loss != null) setBestStop(Number(ativoData.stop_loss));
+          // Carregar TP/Stop persistido se step 2 já concluiu
+          if (step2Data?.status === "done") {
+            try {
+              const ativoRes = await fetch(`${API_BASE}/ativos/${ticker}`);
+              if (ativoRes.ok) {
+                const ativoData = await ativoRes.json();
+                if (ativoData?.take_profit != null) setBestTp(Number(ativoData.take_profit));
+                if (ativoData?.stop_loss != null) setBestStop(Number(ativoData.stop_loss));
+              }
+            } catch (e) { /* ignora */ }
           }
-        } catch (e) { /* ignora */ }
-      }
 
-      // Fallback: se step 3 está done mas não tem gateResult, buscar via endpoint
-      const step3Status = step3Data?.status || persistedSteps["3_gate_fire"]?.status;
-      if (step3Status === "done" && !gateResultadoInit) {
-        try {
-          const gateRes = await fetch(`${API_BASE}/ativos/${ticker}/gate-resultado`);
-          if (gateRes.ok) setGateResult(await gateRes.json());
-        } catch (e) { console.error("Erro gate-resultado:", e); }
-      }
-      // Fallback: se GATE aprovou mas não tem fireDiag, buscar via endpoint
-      if (step3Status === "done" && gateResultadoInit?.resultado === "OPERAR" && !fireDiagInit) {
-        try {
-          const fireRes = await fetch(`${API_BASE}/ativos/${ticker}/fire-diagnostico`);
-          if (fireRes.ok) setFireDiag(await fireRes.json());
-        } catch (e) { console.error("Erro fire-diagnostico:", e); }
-      }
-        }
+          // Fallback: se step 3 está done mas não tem gateResult, buscar via endpoint
+          const step3Status = step3Data?.status || persistedSteps["3_gate_fire"]?.status;
+          if (step3Status === "done" && !gateResultadoInit) {
+            try {
+              const gateRes = await fetch(`${API_BASE}/ativos/${ticker}/gate-resultado`);
+              if (gateRes.ok) setGateResult(await gateRes.json());
+            } catch (e) { console.error("Erro gate-resultado:", e); }
+          }
+          // Fallback: se GATE aprovou mas não tem fireDiag, buscar via endpoint
+          if (step3Status === "done" && gateResultadoInit?.resultado === "OPERAR" && !fireDiagInit) {
+            try {
+              const fireRes = await fetch(`${API_BASE}/ativos/${ticker}/fire-diagnostico`);
+              if (fireRes.ok) setFireDiag(await fireRes.json());
+            } catch (e) { console.error("Erro fire-diagnostico:", e); }
+          }
+        }  // ← fecha if (statusRes.ok)
         if (cotahistRes.ok) {
           const info = await cotahistRes.json();
           if (!mounted) return;
@@ -455,10 +603,11 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       } catch (error) {
         console.error("Erro ao carregar calibração:", error);
       }
-    }
-    loadInitial();
-    return () => { mounted = false; };
-  }, [ticker]);
+    }  // ← ← ← FECHAMENTO DA FUNÇÃO loadInitial (CORREÇÃO PRINCIPAL)
+    
+    loadInitial();  // ← chamada fora da definição
+    return () => { mounted = false; };  // ← cleanup do useEffect
+  }, [ticker]);  // ← ← ← fechamento correto do useEffect
 
   // ──────────────────────────────────────────────────────────────────────────
   // Polling defensivo: reconcilia estado via API a cada 3s enquanto houver
@@ -492,6 +641,10 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
             if (!sv) continue;
             // Não regride estados terminais já observados no frontend.
             if (prev[key]?.status === "done" || prev[key]?.status === "error") continue;
+            // Não regride de "running" para "paused": o backend pode ainda não ter
+            // escrito o JSON quando o background task do step 3 acabou de iniciar.
+            // Exceção: permite regressão quando o paused é por anomalia aguardando CEO.
+            if (prev[key]?.status === "running" && sv.status === "paused" && sv.erro !== "aguardando_confirmacao_regimes") continue;
             // Só avança se backend tem info diferente.
             if (
               sv.status !== prev[key]?.status ||
@@ -584,6 +737,11 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       if (modulo === "TUNE") {
         setSteps((prev) => ({
           ...prev,
+          // Step 1 pode ainda constar "running" se os eventos de REFLECT chegaram
+          // depois do dc_module_start TUNE — fecha aqui como belt-and-suspenders.
+          "1_backtest_dados": prev["1_backtest_dados"]?.status === "running"
+            ? { ...prev["1_backtest_dados"], status: "done", concluido_em: evento?.data?.timestamp || new Date().toISOString() }
+            : prev["1_backtest_dados"],
           "2_tune": {
             ...prev["2_tune"],
             status: "running",
@@ -609,11 +767,12 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         setFireDiag(null);
         setGateCriteriosProgresso([]);
         setStep3Fase(STEP3_FASES.GATE);
+        const gateStatus = evento?.data?.status === "paused" ? "paused" : "running";
         setSteps((prev) => ({
           ...prev,
           "3_gate_fire": {
             ...prev["3_gate_fire"],
-            status: "running",
+            status: gateStatus,
             iniciado_em: prev["3_gate_fire"]?.iniciado_em || evento?.data?.timestamp || new Date().toISOString(),
           },
         }));
@@ -793,8 +952,19 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
 
     if (evento?.type === "dc_tune_anomalia_resolvida") {
       // Anomalia resolvida via resposta HTTP 200 do POST /tune/confirmar-regime-anomalia.
-      // NÃO atualiza estado aqui — a fonte da verdade é a resposta do endpoint (handleAcao em RegimeRow).
+      // Verifica se ainda há regimes pendentes no ranking local; se todos resolvidos,
+      // força tuneRankingConfirmado como fallback defensivo.
       console.debug("[TUNE] dc_tune_anomalia_resolvida (diagnóstico):", evento?.data);
+      setTuneRanking((prev) => {
+        if (!prev?.regimes) return prev;
+        const aindaPendentes = Object.values(prev.regimes).filter(
+          (r) => r.anomalia?.detectada && !r.confirmado
+        );
+        if (aindaPendentes.length === 0) {
+          setTuneRankingConfirmado(true);
+        }
+        return prev;
+      });
     }
 
     if (evento?.type === "dc_tune_eleicao_start") {
@@ -829,22 +999,26 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       }));
     }
 
-    if (evento?.type === "dc_tune_eleicao_regime_complete") {
-      const d = evento?.data || {};
-      if (!d.regime) return;
-      setTuneRegimeProgress((prev) => ({
-        ...prev,
-        [d.regime]: {
-          ...(prev[d.regime] || {}),
-          eleicao_status: d.eleicao_status || prev[d.regime]?.eleicao_status || "in_progress",
-          n_trades: d.n_trades ?? prev[d.regime]?.n_trades,
-          ranking: d.ranking || [],
-          estrategia_eleita: d.estrategia_eleita ?? prev[d.regime]?.estrategia_eleita ?? null,
-          ir_mediana: d.ir_mediana ?? null,
-          confirmado: prev[d.regime]?.confirmado || false,
-        },
-      }));
-    }
+     if (evento?.type === "dc_tune_eleicao_regime_complete") {
+       const d = evento?.data || {};
+       if (!d.regime) return;
+       setTuneRegimeProgress((prev) => ({
+         ...prev,
+         [d.regime]: {
+           ...(prev[d.regime] || {}),
+           eleicao_status: d.eleicao_status || prev[d.regime]?.eleicao_status || "in_progress",
+           n_trades: d.n_trades_reais ?? d.n_trades ?? prev[d.regime]?.n_trades,
+           ranking: d.ranking_eleicao || [],
+           estrategia_eleita: d.estrategia_eleita ?? prev[d.regime]?.estrategia_eleita ?? null,
+           ir_mediana: d.ir_mediana ?? null,
+           tp_calibrado: d.tp_calibrado ?? null,
+           stop_calibrado: d.stop_calibrado ?? null,
+           ir_calibrado: d.ir_calibrado ?? null,
+           status_calibracao: d.status_calibracao ?? null,
+           confirmado: prev[d.regime]?.confirmado || false,
+         },
+       }));
+     }
 
     if (evento?.type === "dc_tune_index_start") {
       setIndexProgress({ current: evento?.data?.current || 0, total: evento?.data?.total || 0 });
@@ -1010,6 +1184,36 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               tuneStats: data.tune_stats,
               gateStats: data.gate_stats,
               tuneRanking: data.tune_ranking_estrategia || tuneRanking,
+              // B57 — campos enriquecidos do backend
+              b57: {
+                diagnostico_executivo: data.diagnostico_executivo,
+                gate_valores: data.gate_valores,
+                ir_por_regime_janela: data.ir_por_regime_janela,
+                anos_validos_usados: data.anos_validos_usados,
+                total_ciclos: data.total_ciclos,
+                reflect_mask_pct: data.reflect_mask_pct,
+                ciclos_reais: data.ciclos_reais,
+                ciclos_fallback: data.ciclos_fallback,
+                n_tp: data.n_tp,
+                n_stop: data.n_stop,
+                n_venc: data.n_venc,
+                acerto_pct: data.acerto_pct,
+                stops_por_ano: data.stops_por_ano,
+                pnl_por_ano: data.pnl_por_ano,
+                freq_regimes: data.freq_regimes,
+                reflect_state_atual: data.reflect_state_atual,
+                sizing_orbit: data.sizing_orbit,
+                reflect_mult: data.reflect_mult,
+                sizing_final: data.sizing_final,
+                pnl_medio_tune: data.pnl_medio_tune,
+                pnl_medio_gate: data.pnl_medio_gate,
+                diferenca_tune_gate: data.diferenca_tune_gate,
+                nota_obrigatoria_b57: data.nota_obrigatoria_b57,
+                pior_data: data.pior_data,
+                pior_motivo: data.pior_motivo,
+                pior_pnl: data.pior_pnl,
+                historico_tunes: data.historico_tunes,
+              },
             })
           );
           return;
@@ -1305,30 +1509,30 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
                     <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--atlas-text-primary)", marginBottom: 6 }}>FIRE — Diagnóstico histórico</div>
                     {fireDiag?.regimes?.length ? (
                       <>
-{fireDiag.regimes.map((r) => (
-              <div key={r.regime} style={{ display: "grid", gridTemplateColumns: "1fr .6fr .6fr .5fr .7fr", gap: 4, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginBottom: 2 }}>
-                <span>{r.regime}</span>
-                <span>{r.trades}t</span>
-                <span>{r.acerto_pct}%</span>
-                <span>IR {r.ir?.toFixed(2)}{r.trades < 5 && <span style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-amber)", marginLeft: 4 }}>⚠ N&lt;5</span>}</span>
-                <span style={{ color: r.worst_trade < 0 ? "var(--atlas-red)" : r.worst_trade > 0 ? "var(--atlas-green)" : "inherit" }}>{r.worst_trade != null ? `W: R$${Number(r.worst_trade).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
-              </div>
-            ))}
-            {fireDiag.regimes.some((r) => r.estrategia_dominante) && (
-              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
-                <span style={{ color: "var(--atlas-blue)", fontWeight: "bold" }}>Estrat.: </span>
-                {fireDiag.regimes.filter((r) => r.estrategia_dominante).map((r) => `${r.regime}→${r.estrategia_dominante}`).join(" | ")}
-              </div>
-            )}
-<div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 6 }}>
-            Cobertura: {fireDiag?.cobertura?.ciclos_com_operacao ?? 0}/{fireDiag?.cobertura?.total_ciclos ?? 0} ciclos
-          </div>
-          {fireDiag?.stops_por_regime && Object.keys(fireDiag.stops_por_regime).length > 0 && (
-            <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
-              <span style={{ color: "var(--atlas-amber)" }}>Stops: </span>
-              {Object.entries(fireDiag.stops_por_regime).map(([regime, count]) => `${regime}: ${count}`).join(" | ")}
-            </div>
-          )}
+                        {fireDiag.regimes.map((r) => (
+                          <div key={r.regime} style={{ display: "grid", gridTemplateColumns: "1fr .6fr .6fr .5fr .7fr", gap: 4, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginBottom: 2 }}>
+                            <span>{r.regime}</span>
+                            <span>{r.trades}t</span>
+                            <span>{r.acerto_pct}%</span>
+                            <span>IR {r.ir?.toFixed(2)}{r.trades < 5 && <span style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-amber)", marginLeft: 4 }}>⚠ N&lt;5</span>}</span>
+                            <span style={{ color: r.worst_trade < 0 ? "var(--atlas-red)" : r.worst_trade > 0 ? "var(--atlas-green)" : "inherit" }}>{r.worst_trade != null ? `W: R$${Number(r.worst_trade).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
+                          </div>
+                        ))}
+                        {fireDiag.regimes.some((r) => r.estrategia_dominante) && (
+                          <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>
+                            <span style={{ color: "var(--atlas-blue)", fontWeight: "bold" }}>Estrat.: </span>
+                            {fireDiag.regimes.filter((r) => r.estrategia_dominante).map((r) => `${r.regime}→${r.estrategia_dominante}`).join(" | ")}
+                          </div>
+                        )}
+                        <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 6 }}>
+                          Cobertura: {fireDiag?.cobertura?.ciclos_com_operacao ?? 0}/{fireDiag?.cobertura?.total_ciclos ?? 0} ciclos
+                        </div>
+                        {fireDiag?.stops_por_regime && Object.keys(fireDiag.stops_por_regime).length > 0 && (
+                          <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
+                            <span style={{ color: "var(--atlas-amber)" }}>Stops: </span>
+                            {Object.entries(fireDiag.stops_por_regime).map(([regime, count]) => `${regime}: ${count}`).join(" | ")}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>Aguardando diagnóstico FIRE...</div>
@@ -1473,5 +1677,3 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     </>
   );
 }
-
-

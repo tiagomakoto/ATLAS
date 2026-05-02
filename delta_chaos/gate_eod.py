@@ -36,7 +36,7 @@ from datetime import date, datetime, timedelta
 
 GATE_EOD_VALIDADE_DIAS  = 30
 GATE_EOD_VALIDADE_AVISO = 20
-REFLECT_BLOCK_STATES    = ("D", "E")
+REFLECT_BLOCK_STATES    = ("D", "E", "T")
 REFLECT_AVISO_STATES    = ("C",)
 IR_MINIMO_EOD           = 0.10
 

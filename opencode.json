@@ -29,15 +29,6 @@
         "bash": "allow",
         "write": "allow"
       },
-      "subagents": [
-        {
-          "name": "fixer",
-          "model": "nvidia/stepfun-ai/step-3.5-flash",
-          "temperature": 0.1,
-          "prompt": "{file:./prompts/atlas_fixer.txt}",
-          "description": "Valida integridade estrutural, sintaxe e fechamento de blocos pós-build."
-        }
-      ]
     },
     "commit": {
       "mode": "primary",

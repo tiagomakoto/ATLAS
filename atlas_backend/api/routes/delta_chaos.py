@@ -67,8 +67,9 @@ def _validar_confirm(confirm: bool, description: str):
         )
 
 def _validar_ticker(ticker: str):
-    ativos = list_ativos()
-    if ticker not in ativos:
+    paths = get_paths()
+    config_path = Path(paths.get("config_dir", "")) / f"{ticker}.json"
+    if not config_path.exists():
         raise HTTPException(
             status_code=404,
             detail=f"Ativo '{ticker}' não encontrado nos ativos parametrizados"
@@ -623,6 +624,46 @@ async def calibracao_exportar_relatorio(ticker: str):
             "tune_stats": result.get("tune_stats"),
             "gate_stats": result.get("gate_stats"),
             "tune_ranking_estrategia": result.get("tune_ranking_estrategia"),
+            # B57 — campos enriquecidos
+            "tp_atual": result.get("tp_atual"),
+            "stop_atual": result.get("stop_atual"),
+            "tp_novo": result.get("tp_novo"),
+            "stop_novo": result.get("stop_novo"),
+            "delta_tp": result.get("delta_tp"),
+            "delta_stop": result.get("delta_stop"),
+            "trials_rodados": result.get("trials_rodados"),
+            "trials_total": result.get("trials_total"),
+            "early_stop": result.get("early_stop"),
+            "retomado": result.get("retomado"),
+            "total_ciclos": result.get("total_ciclos"),
+            "reflect_mask_pct": result.get("reflect_mask_pct"),
+            "ciclos_reais": result.get("ciclos_reais"),
+            "ciclos_fallback": result.get("ciclos_fallback"),
+            "n_tp": result.get("n_tp"),
+            "n_stop": result.get("n_stop"),
+            "n_venc": result.get("n_venc"),
+            "acerto_pct": result.get("acerto_pct"),
+            "pior_data": result.get("pior_data"),
+            "pior_motivo": result.get("pior_motivo"),
+            "pior_pnl": result.get("pior_pnl"),
+            "diagnostico_executivo": result.get("diagnostico_executivo"),
+            "historico_tunes": result.get("historico_tunes"),
+            "ranking_v31": result.get("ranking_v31"),
+            "estrategias_atuais": result.get("estrategias_atuais"),
+            "stops_por_ano": result.get("stops_por_ano"),
+            "pnl_por_ano": result.get("pnl_por_ano"),
+            "reflect_state_atual": result.get("reflect_state_atual"),
+            "sizing_orbit": result.get("sizing_orbit"),
+            "reflect_mult": result.get("reflect_mult"),
+            "sizing_final": result.get("sizing_final"),
+            "pnl_medio_tune": result.get("pnl_medio_tune"),
+            "pnl_medio_gate": result.get("pnl_medio_gate"),
+            "diferenca_tune_gate": result.get("diferenca_tune_gate"),
+            "nota_obrigatoria_b57": result.get("nota_obrigatoria_b57"),
+            "freq_regimes": result.get("freq_regimes"),
+            "gate_valores": result.get("gate_valores"),
+            "anos_validos_usados": result.get("anos_validos_usados"),
+            "ir_por_regime_janela": result.get("ir_por_regime_janela"),
         }
     except HTTPException:
         raise

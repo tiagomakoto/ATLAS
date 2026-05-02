@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-007
-version: 1.1.17
+version: 1.1.18
 status: validated
 owner: Chan
 
@@ -41,6 +41,7 @@ constraints:
   - Pinta celula pronta para aplicar TP/STOP ao final do screening
 
 notes:
+  - 2026-05-02: código modificado — tune.py
   - 2026-04-30: código modificado — tune.py
   - 2026-04-30: código modificado — tune.py
   - 2026-04-30: código modificado — tune.py

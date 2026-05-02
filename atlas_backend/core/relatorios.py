@@ -11,6 +11,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import re
+from collections import defaultdict
 
 RELATORIOS_DIR = Path(__file__).parent / "relatorios"
 INDEX_PATH = RELATORIOS_DIR / "index.json"
@@ -347,6 +348,100 @@ def _parse_tune_historico(historico_config: list) -> dict:
     }
 
 
+def _to_float(value, default=0.0):
+    """Converte valor para float com fallback seguro."""
+    try:
+        if value is None:
+            return float(default)
+        if isinstance(value, str):
+            v = value.strip().replace("%", "")
+            if "," in v and "." in v:
+                v = v.replace(".", "").replace(",", ".")
+            elif "," in v and "." not in v:
+                v = v.replace(",", ".")
+            parsed = float(v)
+        else:
+            parsed = float(value)
+        if math.isnan(parsed) or math.isinf(parsed):
+            return float(default)
+        return parsed
+    except Exception:
+        return float(default)
+
+
+def _extract_tp_stop(*texts):
+    """Extrai TP e STOP de textos como 'TP=0.80 STOP=1.20'."""
+    normalized = []
+    for t in texts:
+        if t is None:
+            continue
+        if isinstance(t, str):
+            if t.strip():
+                normalized.append(t)
+        else:
+            normalized.append(str(t))
+    combined = " ".join(normalized).strip()
+    if not combined:
+        return None, None
+    tp_match = re.search(r"TP\s*=\s*([+-]?\d+(?:[.,]\d+)?)", combined, flags=re.IGNORECASE)
+    stop_match = re.search(r"(?:STOP|STOPLOSS|SL)\s*=\s*([+-]?\d+(?:[.,]\d+)?)", combined, flags=re.IGNORECASE)
+    tp = _to_float(tp_match.group(1), default=0.0) if tp_match else None
+    stop = _to_float(stop_match.group(1), default=0.0) if stop_match else None
+    return tp, stop
+
+
+# =============================================================================
+# Diagnóstico executivo (usado por exportar_relatorio_calibracao e gerar_relatorio_tune)
+# =============================================================================
+
+def gerar_diagnostico_executivo(dados_tune: dict[str, any]) -> str:
+    """
+    Gera diagnóstico executivo em linguagem natural baseado em regras determinísticas.
+
+    Regras:
+    - SE ir_valido >= 1.0 E confianca == "alta":
+      → "Edge forte confirmado. TUNE sugere ajuste de TP/STOP com alta confiança estatística (N={n}). Recomendação: APLICAR."
+    - SE ir_valido >= 0.5 E confianca == "baixa":
+      → "Edge positivo com amostra limitada (N={n}). Ajuste sugerido é plausível mas incerto. Recomendação: REVISAR com board antes de aplicar."
+    - SE ir_valido < 0.5:
+      → "IR válido abaixo de 0.5. Parâmetros atuais podem ser superiores ao sugerido. Recomendação: MANTER parâmetros atuais."
+    - SE confianca == "amostra_insuficiente":
+      → "Amostra insuficiente (N={n} < 20). Resultado não confiável. Recomendação: NÃO APLICAR — aguardar mais ciclos."
+    - SE reflect_mask_pct > 30%:
+      → Acrescentar: " Atenção: {reflect_mask_pct:.0f}% dos ciclos foram mascarados pelo REFLECT — IR válido pode estar inflado."
+    - SE janela_anos <= 3:
+      → Acrescentar: " Atenção: janela de {janela_anos} anos (Optuna) exclui ciclos anteriores a {ano_teste_ini} — eventos extremos históricos não estão no cálculo."
+    """
+
+    ir_valido = dados_tune.get("ir_valido", 0)
+    confianca = dados_tune.get("confianca", "")
+    n_trades = dados_tune.get("n_trades", 0)
+    reflect_mask_pct = dados_tune.get("reflect_mask_pct", 0)
+    janela_anos = dados_tune.get("janela_anos", 0)
+    ano_teste_ini = dados_tune.get("ano_teste_ini", "")
+
+    # Base do diagnóstico
+    if ir_valido >= 1.0 and confianca == "alta":
+        diagnóstico = f"Edge forte confirmado. TUNE sugere ajuste de TP/STOP com alta confiança estatística (N={n_trades}). Recomendação: APLICAR."
+    elif ir_valido >= 0.5 and confianca == "baixa":
+        diagnóstico = f"Edge positivo com amostra limitada (N={n_trades}). Ajuste sugerido é plausível mas incerto. Recomendação: REVISAR com board antes de aplicar."
+    elif ir_valido < 0.5:
+        diagnóstico = "IR válido abaixo de 0.5. Parâmetros atuais podem ser superiores ao sugerido. Recomendação: MANTER parâmetros atuais."
+    elif confianca == "amostra_insuficiente":
+        diagnóstico = f"Amostra insuficiente (N={n_trades} < 20). Resultado não confiável. Recomendação: NÃO APLICAR — aguardar mais ciclos."
+    else:
+        diagnóstico = "Diagnóstico não classificado."
+
+    # Acrescentar alertas
+    if reflect_mask_pct > 30:
+        diagnóstico += f" Atenção: {reflect_mask_pct:.0f}% dos ciclos foram mascarados pelo REFLECT — IR válido pode estar inflado."
+
+    if janela_anos <= 3:
+        diagnóstico += f" Atenção: janela de {janela_anos} anos (Optuna) exclui ciclos anteriores a {ano_teste_ini} — eventos extremos históricos não estão no cálculo."
+
+    return diagnóstico
+
+
 def exportar_relatorio_calibracao(ticker: str) -> dict:
     """
     Lê o estado atual da calibração do ticker e retorna os dados para
@@ -354,7 +449,8 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
     Não grava nenhum arquivo em disco.
 
     Returns:
-        dict com gate_resultado, fire_diagnostico, steps e data,
+        dict com gate_resultado, fire_diagnostico, steps, data,
+        tune_stats, gate_stats, tune_ranking_estrategia e campos B57,
         ou erro se calibração não chegou ao step 3.
     """
     from atlas_backend.core.delta_chaos_reader import get_ativo_raw
@@ -388,6 +484,7 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
         {},
     )
 
+    # ── tune_stats (legado) ──
     tune_stats = {
         "tp_sugerido":   tune_rec.get("valor_novo"),
         "ir_valido":     tune_rec.get("ir_valido"),
@@ -404,6 +501,7 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
         "acerto_pct":    tune_rec.get("acerto_valido"),
     }
 
+    # ── gate_stats (legado) ──
     gate_stats = {
         "n_trades_valido":       gate_rec.get("n_trades_valido"),
         "pnl_total":             gate_rec.get("pnl_total"),
@@ -418,6 +516,157 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
 
     tune_ranking = dados_raw.get("tune_ranking_estrategia") or {}
 
+    # ═══════════════════════════════════════════════════════════════
+    # B57 — Campos enriquecidos para relatório unificado
+    # ═══════════════════════════════════════════════════════════════
+
+    # TP/STOP atuais do ativo
+    tp_atual = _to_float(dados_raw.get("take_profit", 0), default=0.0)
+    stop_atual = _to_float(dados_raw.get("stop_loss", 0), default=0.0)
+
+    # TP/STOP sugeridos pelo TUNE
+    tp_extraido, stop_extraido = _extract_tp_stop(
+        tune_rec.get("combinacao", ""),
+        tune_rec.get("valor_novo", ""),
+        tune_rec.get("motivo", ""),
+    )
+    tp_novo = tp_extraido if tp_extraido is not None else tp_atual
+    stop_novo = stop_extraido if stop_extraido is not None else stop_atual
+    delta_tp = tp_novo - tp_atual
+    delta_stop = stop_novo - stop_atual
+
+    # Trials
+    trials_rodados = _to_float(tune_rec.get("trials_executados") or tune_rec.get("trials"), default=0)
+    trials_total = _to_float(tune_rec.get("trials_total", 150), default=150)
+
+    # Early stop / retomado
+    motivo = str(tune_rec.get("motivo") or "")
+    early_stop = bool(tune_rec.get("early_stop_ativado", False)) or "early stop" in motivo.lower()
+    retomado = "Study retomado" in motivo
+
+    # Reflect mask
+    reflect_mask = _to_float(tune_rec.get("reflect_mask"), default=0)
+    total_ciclos = _to_float(tune_rec.get("total_ciclos"), default=0)
+    reflect_mask_pct = (reflect_mask / total_ciclos * 100) if total_ciclos > 0 else 0.0
+
+    # Ciclos reais / fallback
+    ciclos_reais = _to_float(tune_rec.get("ciclos_reais"), default=0)
+    ciclos_fallback = _to_float(tune_rec.get("ciclos_fallback"), default=0)
+
+    # Distribuição de saídas
+    n_tp = _to_float(tune_rec.get("n_tp"), default=0)
+    n_stop = _to_float(tune_rec.get("n_stops"), default=0)
+    n_venc = _to_float(tune_rec.get("n_venc"), default=0)
+    acerto_pct = _to_float(tune_rec.get("acerto_valido"), default=0.0)
+
+    # Pior trade
+    pior_data = str(tune_rec.get("pior_data") or "")
+    pior_motivo = str(tune_rec.get("pior_motivo") or "")
+    pior_pnl = _to_float(tune_rec.get("pnl_pior"), default=0.0)
+
+    # Estado REFLECT atual
+    reflect_state_atual = dados_raw.get("reflect_state")
+
+    # Sizing
+    historico_trades = dados_raw.get("historico", [])
+    _ultimo_ciclo_hist = historico_trades[-1] if historico_trades else {}
+    sizing_orbit = _to_float(_ultimo_ciclo_hist.get("sizing", 0.0), default=0.0)
+    _reflect_mult_map = {"A": 1.0, "B": 1.0, "C": 0.5, "D": 0.0, "T": 0.0}
+    reflect_mult = _reflect_mult_map.get(reflect_state_atual, 1.0)
+    sizing_final = round(sizing_orbit * reflect_mult, 4)
+
+    # P&L médio TUNE e GATE
+    pnl_medio_tune = _to_float(tune_rec.get("pnl_medio"), default=0.0)
+    pnl_medio_gate = _to_float(gate_rec.get("pnl_medio"), default=0.0)
+    diferenca_tune_gate = round(pnl_medio_tune - pnl_medio_gate, 4)
+    nota_obrigatoria_b57 = (
+        abs(diferenca_tune_gate) > 0.5
+        and bool(pnl_medio_tune) and bool(pnl_medio_gate)
+        and (pnl_medio_tune * pnl_medio_gate < 0)
+    )
+
+    # Stops por ano
+    stops_por_ano = {}
+    for _trade in historico_trades:
+        if _trade.get("motivo_saida") == "STOP":
+            _dt = str(_trade.get("data", "") or _trade.get("data_saida", "") or "")
+            if len(_dt) >= 4:
+                _ano = _dt[:4]
+                stops_por_ano[_ano] = stops_por_ano.get(_ano, 0) + 1
+
+    # P&L por ano
+    _pnl_por_ano_raw = defaultdict(list)
+    for _trade in historico_trades:
+        _dt = str(_trade.get("data", "") or _trade.get("data_saida", "") or "")
+        _pnl = _trade.get("pnl")
+        if len(_dt) >= 4 and _pnl is not None:
+            try:
+                _pnl_por_ano_raw[_dt[:4]].append(float(_pnl))
+            except (ValueError, TypeError):
+                pass
+    pnl_por_ano = [
+        {"ano": _a, "pnl_medio": round(sum(_v) / len(_v), 2), "n_trades": len(_v)}
+        for _a, _v in sorted(_pnl_por_ano_raw.items())
+    ]
+
+    # Frequência de regimes
+    freq_regimes = {}
+    for _trade in historico_trades:
+        _r = _trade.get("regime")
+        if _r:
+            freq_regimes[_r] = freq_regimes.get(_r, 0) + 1
+
+    # GATE E5 — estabilidade ORBIT
+    gate_valores_b57 = gate_rec.get("gate_valores") or {}
+    anos_validos_usados = gate_rec.get("anos_validos_usados")
+    ir_por_regime_janela = gate_rec.get("ir_por_regime_janela") or {}
+
+    # Ranking v3.1 e estratégias atuais
+    _ranking_raw = dados_raw.get("tune_ranking_estrategia") or {}
+    _meta_ranking = _ranking_raw.get("_meta") or {}
+    _versao_ranking = str(_meta_ranking.get("versao", ""))
+    ranking_v31 = {}
+    if _versao_ranking == "3.1":
+        for _r, _rd in _ranking_raw.items():
+            if _r != "_meta" and isinstance(_rd, dict):
+                ranking_v31[_r] = _rd
+    estrategias_atuais = dados_raw.get("estrategias") or {}
+
+    # Histórico de TUNEs aplicados
+    historico_tunes = []
+    for record in historico_config:
+        if "TUNE" in str(record.get("modulo") or "").upper():
+            motivo_record = str(record.get("motivo") or "")
+            tp_hist, stop_hist = _extract_tp_stop(
+                record.get("valor_novo", ""),
+                record.get("combinacao", ""),
+                motivo_record,
+            )
+            ir_match = re.search(r"IR=([+-]?\d+(?:\.\d+)?)", motivo_record)
+            ir = ir_match.group(1) if ir_match else ""
+            confianca_record = ""
+            if re.search(r"\bAlta\b", motivo_record, flags=re.IGNORECASE):
+                confianca_record = "Alta"
+            elif re.search(r"\bBaixa\b", motivo_record, flags=re.IGNORECASE):
+                confianca_record = "Baixa"
+            historico_tunes.append({
+                "data": str(record.get("data") or ""),
+                "tp": f"{tp_hist:.2f}" if tp_hist is not None else "",
+                "stop": f"{stop_hist:.2f}" if stop_hist is not None else "",
+                "ir": ir,
+                "confianca": confianca_record,
+            })
+
+    # Diagnóstico executivo
+    diagnostico_executivo = gerar_diagnostico_executivo({
+        "ir_valido": _to_float(tune_rec.get("ir_valido"), default=0.0),
+        "confianca": str(tune_rec.get("confianca_n") or ""),
+        "n_trades": _to_float(tune_rec.get("trades_valido"), default=0),
+        "reflect_mask_pct": reflect_mask_pct,
+        "janela_anos": _to_float(tune_rec.get("janela_anos"), default=0),
+        "ano_teste_ini": str(tune_rec.get("ano_teste_ini") or ""),
+    })
+
     return {
         "gate_resultado": gate_resultado,
         "fire_diagnostico": fire_diagnostico,
@@ -426,59 +675,52 @@ def exportar_relatorio_calibracao(ticker: str) -> dict:
         "tune_stats": tune_stats,
         "gate_stats": gate_stats,
         "tune_ranking_estrategia": tune_ranking,
+        # B57 — campos enriquecidos
+        "tp_atual": tp_atual,
+        "stop_atual": stop_atual,
+        "tp_novo": tp_novo,
+        "stop_novo": stop_novo,
+        "delta_tp": delta_tp,
+        "delta_stop": delta_stop,
+        "trials_rodados": int(trials_rodados),
+        "trials_total": int(trials_total),
+        "early_stop": early_stop,
+        "retomado": retomado,
+        "total_ciclos": int(total_ciclos),
+        "reflect_mask_pct": reflect_mask_pct,
+        "ciclos_reais": int(ciclos_reais),
+        "ciclos_fallback": int(ciclos_fallback),
+        "n_tp": int(n_tp),
+        "n_stop": int(n_stop),
+        "n_venc": int(n_venc),
+        "acerto_pct": acerto_pct,
+        "pior_data": pior_data,
+        "pior_motivo": pior_motivo,
+        "pior_pnl": pior_pnl,
+        "diagnostico_executivo": diagnostico_executivo,
+        "historico_tunes": historico_tunes,
+        "ranking_v31": ranking_v31,
+        "estrategias_atuais": estrategias_atuais,
+        "stops_por_ano": stops_por_ano,
+        "pnl_por_ano": pnl_por_ano,
+        "reflect_state_atual": reflect_state_atual,
+        "sizing_orbit": sizing_orbit,
+        "reflect_mult": reflect_mult,
+        "sizing_final": sizing_final,
+        "pnl_medio_tune": pnl_medio_tune,
+        "pnl_medio_gate": pnl_medio_gate,
+        "diferenca_tune_gate": diferenca_tune_gate,
+        "nota_obrigatoria_b57": nota_obrigatoria_b57,
+        "freq_regimes": freq_regimes,
+        "gate_valores": gate_valores_b57,
+        "anos_validos_usados": anos_validos_usados,
+        "ir_por_regime_janela": ir_por_regime_janela,
     }
 
 
 # =============================================================================
 # NOVO: RELATÓRIO DE TUNE v2.0 (SPEC_RELATORIO_TUNE_v1.0.md)
 # =============================================================================
-
-def gerar_diagnostico_executivo(dados_tune: dict[str, any]) -> str:
-    """
-    Gera diagnóstico executivo em linguagem natural baseado em regras determinísticas.
-    
-    Regras:
-    - SE ir_valido >= 1.0 E confianca == "alta":
-      → "Edge forte confirmado. TUNE sugere ajuste de TP/STOP com alta confiança estatística (N={n}). Recomendação: APLICAR."
-    - SE ir_valido >= 0.5 E confianca == "baixa":
-      → "Edge positivo com amostra limitada (N={n}). Ajuste sugerido é plausível mas incerto. Recomendação: REVISAR com board antes de aplicar."
-    - SE ir_valido < 0.5:
-      → "IR válido abaixo de 0.5. Parâmetros atuais podem ser superiores ao sugerido. Recomendação: MANTER parâmetros atuais."
-    - SE confianca == "amostra_insuficiente":
-      → "Amostra insuficiente (N={n} < 20). Resultado não confiável. Recomendação: NÃO APLICAR — aguardar mais ciclos."
-    - SE reflect_mask_pct > 30%:
-      → Acrescentar: " Atenção: {reflect_mask_pct:.0f}% dos ciclos foram mascarados pelo REFLECT — IR válido pode estar inflado."
-    - SE janela_anos <= 3:
-      → Acrescentar: " Atenção: janela de {janela_anos} anos (Optuna) exclui ciclos anteriores a {ano_teste_ini} — eventos extremos históricos não estão no cálculo."
-    """
-    
-    ir_valido = dados_tune.get("ir_valido", 0)
-    confianca = dados_tune.get("confianca", "")
-    n_trades = dados_tune.get("n_trades", 0)
-    reflect_mask_pct = dados_tune.get("reflect_mask_pct", 0)
-    janela_anos = dados_tune.get("janela_anos", 0)
-    ano_teste_ini = dados_tune.get("ano_teste_ini", "")
-    
-    # Base do diagnóstico
-    if ir_valido >= 1.0 and confianca == "alta":
-        diagnóstico = f"Edge forte confirmado. TUNE sugere ajuste de TP/STOP com alta confiança estatística (N={n_trades}). Recomendação: APLICAR."
-    elif ir_valido >= 0.5 and confianca == "baixa":
-        diagnóstico = f"Edge positivo com amostra limitada (N={n_trades}). Ajuste sugerido é plausível mas incerto. Recomendação: REVISAR com board antes de aplicar."
-    elif ir_valido < 0.5:
-        diagnóstico = "IR válido abaixo de 0.5. Parâmetros atuais podem ser superiores ao sugerido. Recomendação: MANTER parâmetros atuais."
-    elif confianca == "amostra_insuficiente":
-        diagnóstico = f"Amostra insuficiente (N={n_trades} < 20). Resultado não confiável. Recomendação: NÃO APLICAR — aguardar mais ciclos."
-    else:
-        diagnóstico = "Diagnóstico não classificado."
-    
-    # Acrescentar alertas
-    if reflect_mask_pct > 30:
-        diagnóstico += f" Atenção: {reflect_mask_pct:.0f}% dos ciclos foram mascarados pelo REFLECT — IR válido pode estar inflado."
-    
-    if janela_anos <= 3:
-        diagnóstico += f" Atenção: janela de {janela_anos} anos (Optuna) exclui ciclos anteriores a {ano_teste_ini} — eventos extremos históricos não estão no cálculo."
-    
-    return diagnóstico
 
 def gerar_relatorio_tune(ticker: str, historico: bool = False) -> dict[str, any]:
     """
@@ -1145,7 +1387,7 @@ def formatar_relatorio_markdown(dados: dict[str, any], incluir_json_bruto: bool 
 
     # Máscara REFLECT
     markdown += "## Máscara REFLECT\n"
-    markdown += f"- Ciclos mascarados (Edge C/D/E): {dados['reflect_mask']} de {dados['total_ciclos']} ({dados['reflect_mask_pct']:.1f}%)\n"
+    markdown += f"- Ciclos mascarados (Edge C/D/T): {dados['reflect_mask']} de {dados['total_ciclos']} ({dados['reflect_mask_pct']:.1f}%)\n"
     markdown += f"- Ciclos com REFLECT real: {dados['ciclos_reais']}\n"
     markdown += f"- Ciclos com fallback B: {dados['ciclos_fallback']}\n"
     markdown += "\n"

@@ -513,3 +513,32 @@
 {"timestamp": "2026-04-30T16:08:29.071047", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-30T16:11:45.859717", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
 {"timestamp": "2026-04-30T16:12:55.689862", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-30T17:06:26.917321", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-30T17:09:33.767918", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-04-30T17:10:33.725150", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T00:41:26.160026", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T00:44:50.907668", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T00:45:46.732019", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T01:02:12.140815", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T01:10:00.929452", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T01:11:06.291932", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T01:21:36.270010", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "ERRO", "error": "ValueError('GATE bloqueado em VALE3: estrategias n\u00e3o configuradas no master JSON')"}}
+{"timestamp": "2026-05-01T10:55:44.931762", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T11:03:03.279490", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T11:04:47.184518", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T11:21:53.972152", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T11:28:20.748778", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T19:57:05.772917", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T19:57:05.940524", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "ERRO", "error": "IndentationError('unexpected indent', ('C:\\\\Users\\\\tiago\\\\OneDrive\\\\Documentos\\\\ATLAS\\\\delta_chaos\\\\tune.py', 981, 9, '         tp_b, stop_b, ir_b, trials_b = _rodar_optuna_tpstop(\\n', 981, -1))"}}
+{"timestamp": "2026-05-01T20:34:06.217429", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T20:41:06.542453", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-01T22:25:08.351499", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "ERRO", "error": "ImportError(\"cannot import name 'gate_executar' from 'delta_chaos.gate' (C:\\\\Users\\\\tiago\\\\OneDrive\\\\Documentos\\\\ATLAS\\\\delta_chaos\\\\gate.py)\")"}}
+{"timestamp": "2026-05-02T11:10:16.363251", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "VALE3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T11:17:45.586064", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T11:18:39.438234", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "VALE3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T11:57:27.128298", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T12:00:05.942228", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T12:02:28.360316", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T20:42:30.744330", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T20:45:51.397153", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-02T20:47:37.949262", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}

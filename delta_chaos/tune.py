@@ -334,7 +334,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
     # ── Config v3.1 — tudo lido do config.json (zero hardcode) ────────
     OPTUNA_SEED      = 42
     OPTUNA_MIN_DELTA = 0.001
-    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "E", "T"}
+    REFLECT_ESTADOS_BLOQUEADOS = {"C", "D", "T"}
 
     # PE-008 — threshold N mínimo e tabelas de candidatos lidos do config.
     # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
@@ -737,33 +737,42 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             _escrever_regime_atomico(path_ativo, regime, entrada)
             emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                           ticker=TICKER, regime=regime, eleicao_status="bloqueado",
-                          ranking_eleicao=[])
+                          ranking_eleicao=[],
+                          estrategia_eleita=None,
+                          n_trades_reais=0,
+                          tp_calibrado=None,
+                          stop_calibrado=None,
+                          ir_calibrado=None,
+                          status_calibracao=None)
             emit_log(f"TUNE v3.1 [{TICKER}] {regime}: BLOQUEADO", level="info")
             print(f"    → BLOQUEADO (candidatos=[])")
             continue
 
-        # Simulação-piloto (Adenda 1): candidato=ESTRUTURAL_FIXO[regime], ponto central do grid
-        # Determina N_trades_reais real antes de decidir estrutural_fixo vs competitiva.
+        # Simulação-piloto (Adenda 1): conta N_trades_reais antes de decidir caminho.
+        # Estratégia do piloto: ESTRUTURAL_FIXO[regime] se definido (regime tem fallback),
+        # senão primeiro candidato (regime competitivo puro — usado apenas para contar N).
         # Rodada ANTES do emit start para popular N no painel imediatamente.
-        piloto_raw  = ESTRUTURAL_FIXO.get(regime)
-        piloto      = _normalizar_estrategia(piloto_raw) if piloto_raw else None
-        n_trades_reais = 0
-        res_piloto     = None
+        piloto_estrutural = ESTRUTURAL_FIXO.get(regime)
+        tem_estrutural    = piloto_estrutural is not None
+        piloto_raw        = piloto_estrutural if tem_estrutural else (candidatos[0] if candidatos else None)
+        piloto            = _normalizar_estrategia(piloto_raw) if piloto_raw else None
+        n_trades_reais    = 0
+        res_piloto        = None
 
         if piloto and piloto in DELTA_ALVO_TUNE:
             res_piloto     = _simular_para_candidato(TP_PILOTO, STOP_PILOTO, JANELA_ANOS, piloto, regime)
             n_trades_reais = res_piloto.get("trades_valido", 0)
 
-        print(f"    Piloto={piloto} | N_trades_reais={n_trades_reais} (limiar={N_MINIMO})")
+        print(f"    Piloto={piloto} (estrutural={tem_estrutural}) | "
+              f"N_trades_reais={n_trades_reais} (limiar={N_MINIMO})")
 
         emit_dc_event("dc_tune_eleicao_regime_start", "TUNE", "running",
                       ticker=TICKER, regime=regime, candidatos=candidatos,
                       n_trades=n_trades_reais)
 
-        # Caso 2: N < N_MINIMO → estrutural_fixo (PE-008)
-        # PE-008 — N<N_MINIMO usa estrategia_estrutural_fixo do config.json.
+        # Caso 2a: N < N_MINIMO E há ESTRUTURAL_FIXO → fallback estruturado (PE-008)
         # Ref: vault/BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md
-        if n_trades_reais < N_MINIMO:
+        if n_trades_reais < N_MINIMO and tem_estrutural:
             ranking_eleicao = []
             if res_piloto is not None:
                 ranking_eleicao = [{
@@ -792,10 +801,50 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             _escrever_regime_atomico(path_ativo, regime, entrada)
             emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                           ticker=TICKER, regime=regime, eleicao_status="estrutural_fixo",
-                          ranking_eleicao=ranking_eleicao)
+                          ranking_eleicao=ranking_eleicao,
+                          estrategia_eleita=entrada.get("estrategia_eleita"),
+                          n_trades_reais=entrada.get("n_trades_reais"),
+                          tp_calibrado=entrada.get("tp_calibrado"),
+                          stop_calibrado=entrada.get("stop_calibrado"),
+                          ir_calibrado=entrada.get("ir_calibrado"),
+                          status_calibracao=entrada.get("status_calibracao"))
             emit_log(f"TUNE v3.1 [{TICKER}] {regime}: ESTRUTURAL_FIXO "
                      f"(N={n_trades_reais} < {N_MINIMO}) → {piloto}", level="info")
             print(f"    → ESTRUTURAL_FIXO: {piloto} (N={n_trades_reais} < {N_MINIMO})")
+            continue
+
+        # Caso 2b: N < N_MINIMO E sem ESTRUTURAL_FIXO → amostra insuficiente (sem estratégia)
+        if n_trades_reais < N_MINIMO and not tem_estrutural:
+            entrada = {
+                "eleicao_status":    "amostra_insuficiente",
+                "n_trades_reais":    n_trades_reais,
+                "ir_eleicao_mediana": None,
+                "ranking_eleicao":   [],
+                "estrategia_eleita": None,
+                "data_eleicao":      datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "status_calibracao": None,
+                "tp_calibrado":      None,
+                "stop_calibrado":    None,
+                "ir_calibrado":      None,
+                "n_trades_calibracao": None,
+                "janela_anos":       JANELA_ANOS,
+                "trials_rodados":    None,
+                "data_calibracao":   None,
+                "confirmado":        False,
+            }
+            _escrever_regime_atomico(path_ativo, regime, entrada)
+            emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
+                          ticker=TICKER, regime=regime, eleicao_status="amostra_insuficiente",
+                          ranking_eleicao=[],
+                          estrategia_eleita=None,
+                          n_trades_reais=n_trades_reais,
+                          tp_calibrado=None,
+                          stop_calibrado=None,
+                          ir_calibrado=None,
+                          status_calibracao=None)
+            emit_log(f"TUNE v3.1 [{TICKER}] {regime}: AMOSTRA_INSUFICIENTE "
+                     f"(N={n_trades_reais} < {N_MINIMO}, sem estrutural_fixo)", level="info")
+            print(f"    → AMOSTRA_INSUFICIENTE (N={n_trades_reais} < {N_MINIMO})")
             continue
 
         # Caso 3: Eleição competitiva via grid neutro 3×3
@@ -855,7 +904,13 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         _escrever_regime_atomico(path_ativo, regime, entrada)
         emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
                       ticker=TICKER, regime=regime, eleicao_status="competitiva",
-                      ranking_eleicao=ranking_eleicao)
+                      ranking_eleicao=ranking_eleicao,
+                      estrategia_eleita=entrada.get("estrategia_eleita"),
+                      n_trades_reais=entrada.get("n_trades_reais"),
+                      tp_calibrado=entrada.get("tp_calibrado"),
+                      stop_calibrado=entrada.get("stop_calibrado"),
+                      ir_calibrado=entrada.get("ir_calibrado"),
+                      status_calibracao=entrada.get("status_calibracao"))
         emit_log(f"TUNE v3.1 [{TICKER}] {regime}: COMPETITIVA — "
                  f"vencedora={vencedora['estrategia']} IR_mediana={ir_venc_mediana:+.3f}", level="info")
         print(f"    → VENCEDORA: {vencedora['estrategia']} IR_mediana={ir_venc_mediana:+.3f} (ordinal)")
@@ -901,6 +956,16 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
             regime_dados["early_stop_ativado"]   = False
             regime_dados["data_calibracao"]      = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             _escrever_regime_atomico(path_ativo, regime, regime_dados)
+            emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
+                          ticker=TICKER, regime=regime,
+                          eleicao_status=regime_dados.get("eleicao_status"),
+                          ranking_eleicao=regime_dados.get("ranking_eleicao", []),
+                          estrategia_eleita=regime_dados.get("estrategia_eleita"),
+                          n_trades_reais=regime_dados.get("n_trades_reais"),
+                          tp_calibrado=regime_dados.get("tp_calibrado"),
+                          stop_calibrado=regime_dados.get("stop_calibrado"),
+                          ir_calibrado=regime_dados.get("ir_calibrado"),
+                          status_calibracao=regime_dados.get("status_calibracao"))
             emit_log(f"TUNE v3.1 [{TICKER}] {regime}: FALLBACK_GLOBAL "
                      f"(N={n_trades_calib} < {N_MINIMO_CALIB})", level="info")
             print(f"    → FALLBACK_GLOBAL (N={n_trades_calib} < {N_MINIMO_CALIB})"
@@ -929,6 +994,16 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
         regime_dados["early_stop_ativado"]  = bool(trials_b is not None and trials_b < TRIALS_POR_CAND)
         regime_dados["data_calibracao"]     = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         _escrever_regime_atomico(path_ativo, regime, regime_dados)
+        emit_dc_event("dc_tune_eleicao_regime_complete", "TUNE", "running",
+            ticker=TICKER, regime=regime,
+            eleicao_status=regime_dados.get("eleicao_status"),
+            ranking_eleicao=regime_dados.get("ranking_eleicao", []),
+            estrategia_eleita=regime_dados.get("estrategia_eleita"),
+            n_trades_reais=regime_dados.get("n_trades_reais"),
+            tp_calibrado=regime_dados.get("tp_calibrado"),
+            stop_calibrado=regime_dados.get("stop_calibrado"),
+            ir_calibrado=regime_dados.get("ir_calibrado"),
+            status_calibracao=regime_dados.get("status_calibracao"))
         emit_log(f"TUNE v3.1 [{TICKER}] {regime}: CALIBRADO — "
                  f"tp={tp_b} stop={stop_b} IR={ir_b:+.3f} ({trials_b} trials)", level="info")
         print(f"    → CALIBRADO: tp={tp_b} stop={stop_b} IR_calibrado={ir_b:+.3f} ({trials_b} trials)")

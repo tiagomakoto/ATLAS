@@ -35,7 +35,6 @@ except ImportError:
 # ── Parâmetros via config global ──────────────────────────────────
 _cfg_fire = carregar_config()["fire"]
 
-REGIMES_SIZING_PADRAO = _cfg_fire["regimes_sizing_padrao"]
 TAKE_PROFIT      = _cfg_fire["take_profit"]
 STOP_LOSS        = _cfg_fire["stop_loss"]
 ROLL_DIAS        = _cfg_fire["roll_dias"]

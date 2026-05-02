@@ -53,11 +53,24 @@ describe('CalibracaoDrawer - Step 3 GATE + FIRE', () => {
     });
   });
 
-  it('deve exibir critérios GATE quando evento dc_module_complete GATE chega', async () => {
+  it('deve exibir resultado BLOQUEADO quando GATE falha via WebSocket', async () => {
     let wsCallback = null;
     mockUseWebSocket.mockImplementation((url, callback) => {
       wsCallback = callback;
       return null;
+    });
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        steps: {
+          "1_backtest_dados": { status: "done" },
+          "2_tune": { status: "done" },
+          "3_gate_fire": { status: "running" }
+        },
+        gate_resultado: null,
+        fire_diagnostico: null
+      })
     });
 
     render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
@@ -337,6 +350,193 @@ describe('CalibracaoDrawer - Step 3 GATE + FIRE', () => {
   });
 });
 
+describe('CalibracaoDrawer - TuneRegimeProgressPanel TP/STOP/IR exibição', () => {
+  const mockOnClose = jest.fn();
+  const mockUseWebSocket = require('../../hooks/useWebSocket');
+
+  beforeEach(() => {
+    mockUseWebSocket.mockClear();
+    mockOnClose.mockClear();
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('exibe TP/STOP/IR calibrados para regime competitiva após Etapa 3B', async () => {
+    let wsCallback = null;
+    mockUseWebSocket.mockImplementation((url, callback) => {
+      wsCallback = callback;
+      return null;
+    });
+
+    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+
+    const tuneStartEvent = {
+      type: "dc_module_start",
+      data: { modulo: "TUNE", timestamp: new Date().toISOString() }
+    };
+    wsCallback(tuneStartEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/EXECUTANDO/i)).toBeInTheDocument();
+    });
+
+    const regimeCompleteEvent = {
+      type: "dc_tune_eleicao_regime_complete",
+      data: {
+        ticker: "PETR4",
+        regime: "ALTA",
+        eleicao_status: "competitiva",
+        estrategia_eleita: "CSP",
+        tp_calibrado: 0.54,
+        stop_calibrado: 0.32,
+        ir_calibrado: 1.234,
+        ranking_eleicao: [
+          { estrategia: "CSP", ir_mediana: 1.2, n_trades_reais: 30 },
+          { estrategia: "Put", ir_mediana: 0.8, n_trades_reais: 30 }
+        ],
+        n_trades_reais: 30
+      }
+    };
+    wsCallback(regimeCompleteEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/CSP \| TP: 0\.54 \| Stop: 0\.32 \| IR: 1\.234/)).toBeInTheDocument();
+    });
+  });
+
+  it('exibe IR mediana para regime competitiva antes da Etapa 3B', async () => {
+    let wsCallback = null;
+    mockUseWebSocket.mockImplementation((url, callback) => {
+      wsCallback = callback;
+      return null;
+    });
+
+    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+
+    const tuneStartEvent = {
+      type: "dc_module_start",
+      data: { modulo: "TUNE", timestamp: new Date().toISOString() }
+    };
+    wsCallback(tuneStartEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/EXECUTANDO/i)).toBeInTheDocument();
+    });
+
+    const regimeCompleteEvent = {
+      type: "dc_tune_eleicao_regime_complete",
+      data: {
+        ticker: "PETR4",
+        regime: "ALTA",
+        eleicao_status: "competitiva",
+        estrategia_eleita: "CSP",
+        tp_calibrado: null,
+        stop_calibrado: null,
+        ir_calibrado: null,
+        ranking_eleicao: [
+          { estrategia: "CSP", ir_mediana: 2.1, n_trades_reais: 30 },
+          { estrategia: "Put", ir_mediana: 0.8, n_trades_reais: 30 }
+        ],
+        n_trades_reais: 30
+      }
+    };
+    wsCallback(regimeCompleteEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/CSP \| IR mediana: 2\.100/)).toBeInTheDocument();
+      expect(screen.queryByText(/TP:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Stop:/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('exibe TP/STOP para regime estrutural_fixo com fallback (sem IR calibrado)', async () => {
+    let wsCallback = null;
+    mockUseWebSocket.mockImplementation((url, callback) => {
+      wsCallback = callback;
+      return null;
+    });
+
+    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+
+    const tuneStartEvent = {
+      type: "dc_module_start",
+      data: { modulo: "TUNE", timestamp: new Date().toISOString() }
+    };
+    wsCallback(tuneStartEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/EXECUTANDO/i)).toBeInTheDocument();
+    });
+
+    const regimeCompleteEvent = {
+      type: "dc_tune_eleicao_regime_complete",
+      data: {
+        ticker: "PETR4",
+        regime: "BAIXA",
+        eleicao_status: "estrutural_fixo",
+        estrategia_eleita: "Put",
+        tp_calibrado: 0.50,
+        stop_calibrado: 0.30,
+        ir_calibrado: null,
+        ranking_eleicao: [{ estrategia: "Put", ir_mediana: 1.5, n_trades_reais: 25 }],
+        n_trades_reais: 25
+      }
+    };
+    wsCallback(regimeCompleteEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Put \| TP: 0\.50 \| Stop: 0\.30/)).toBeInTheDocument();
+      expect(screen.queryByText(/IR:/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('exibe apenas estratégia quando não há dados de calibração nem IR mediana', async () => {
+    let wsCallback = null;
+    mockUseWebSocket.mockImplementation((url, callback) => {
+      wsCallback = callback;
+      return null;
+    });
+
+    render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
+
+    const tuneStartEvent = {
+      type: "dc_module_start",
+      data: { modulo: "TUNE", timestamp: new Date().toISOString() }
+    };
+    wsCallback(tuneStartEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/EXECUTANDO/i)).toBeInTheDocument();
+    });
+
+    const regimeCompleteEvent = {
+      type: "dc_tune_eleicao_regime_complete",
+      data: {
+        ticker: "PETR4",
+        regime: "ALTA",
+        eleicao_status: "estrutural_fixo",
+        estrategia_eleita: "CSP",
+        tp_calibrado: null,
+        stop_calibrado: null,
+        ir_calibrado: null,
+        ranking_eleicao: [],
+        n_trades_reais: 0
+      }
+    };
+    wsCallback(regimeCompleteEvent);
+
+    await waitFor(() => {
+      expect(screen.getByText(/CSP/)).toBeInTheDocument();
+      expect(screen.queryByText(/TP:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Stop:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/IR mediana:/)).not.toBeInTheDocument();
+    });
+  });
+});
+
 describe('CalibracaoDrawer - Guard e Skip Step 1', () => {
   const mockOnClose = jest.fn();
   const mockUseWebSocket = require('../../hooks/useWebSocket');
@@ -409,8 +609,7 @@ describe('CalibracaoDrawer - Guard e Skip Step 1', () => {
     render(<CalibracaoDrawer ticker="PETR4" onClose={mockOnClose} />);
 
     await waitFor(() => {
-      const pularButton = screen.getByText(/Pular step 1/i);
-      fireEvent.click(pularButton);
+      fireEvent.click(screen.getByText(/Pular step 1/i));
     });
 
     await waitFor(() => {

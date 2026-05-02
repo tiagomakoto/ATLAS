@@ -27,7 +27,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B19_versionamento_modulos\|B19]] | Versionamento de código — delta_chaos_versions.json | BOARD_REVIEW_REQUIRED | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B21_anos_validos_dinamico\|B21]] | anos_validos dinâmico no GATE v2.0 | GATE v2.0 | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B22_gate_v2_duas_janelas\|B22]] | GATE v2.0 — duas janelas de validação | BOARD_REVIEW_REQUIRED | 2026-03-22 |
-| [[BOARD/tensoes_abertas/B27_BBAS3_edge_nao_testado\|B27]] | BBAS3 ALTA e NEUTRO_BEAR — edge não testado | REFLECT Edge B por 2-3 ciclos | 2026-03-22 |
+| [[BOARD/tensoes_abertas/B27_BBAS3_edge_nao_testado\|B27]] | BBAS3 ALTA e LATERAL_BEAR — edge não testado | REFLECT Edge B por 2-3 ciclos | 2026-03-22 |
 | [[BOARD/tensoes_abertas/B28_bootstrap_ciclos_reflect\|B28]] | Bootstrap ciclos 1–3 REFLECT — exclusão backtest | antes de publicar backtest | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B29_condicao_taleb_alpha_edge_A\|B29]] | Condição Taleb — alpha Edge A após 1º trimestre | após 1º trimestre paper | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B31_calmar_ratio_alavancas\|B31]] | Calmar ratio — alavancas mapeadas | múltiplos gatilhos | 2026-03-23 |
@@ -35,7 +35,6 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B35_REFLECT_backtest\|B35]] | REFLECT no backtest — sequência obrigatória pré-capital real | pré-capital real | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B36_PETR4_adverso_2025\|B36]] | PETR4 adverso em 2025 — estrutural ou cíclico? | monitorar paper / TUNE v2.0 | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B37_BOVA11_baseline_superior\|B37]] | BOVA11 baseline com P&L absoluto superior | TUNE v2.0 após 1º trimestre | 2026-03-23 |
-| [[BOARD/tensoes_abertas/B38_BOVA11_NEUTRO_TRANSICAO\|B38]] | BOVA11 NEUTRO_TRANSICAO sem estratégia | definição de estratégia | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B39_inconsistencia_liquidez_backtest_paper\|B39]] | Inconsistência filtro liquidez backtest vs paper | após 1º trimestre paper | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B40_vol_financeiro_nao_mapeado\|B40]] | Vol. Financeiro não mapeado no tape_paper | revisão após 1º mês paper | 2026-03-23 |
 | [[BOARD/tensoes_abertas/B41_delta_alvo_fixo\|B41]] | Delta alvo fixo — calibração Fase 2 | Fase 2 com API de vol | 2026-03-23 |
@@ -51,7 +50,6 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/tensoes_abertas/B52_tp_stop_ativos_table\|B52]] | TP/STOP visível na AtivosTable (Visão Geral) | implementação PLAN | 2026-04-13 |
 | [[BOARD/tensoes_abertas/B61_tune_v31_tp_stop_por_regime\|B61]] | TUNE v3.1 — TP/STOP por regime + migração FIRE/GATE/BOOK | TUNE v3.0 validado em paper trading | 2026-04-25 |
 | [[BOARD/tensoes_abertas/B62_tune_grid_stop_range_revisao\|B62]] | Grid Etapa A — range Stop 1.5–2.5 amplo demais para vendedor de vol | 1 trimestre paper trading TUNE v3.1 | 2026-04-29 |
-| [[BOARD/tensoes_abertas/B63_regimes_renomeacao_lateral\|B63]] | Renomeação NEUTRO_* → LATERAL_* + colapso MORTO + elimina TRANSICAO | CEO confirmado — aguarda SPEC | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B64_petr4_historico_duplicado_orbit\|B64]] | PETR4 historico[] duplicado 26x — origem bug orbit.py | imediato | 2026-04-29 |
 | [[BOARD/tensoes_abertas/B65_timezone_utc_vs_gmt3_relatorios\|B65]] | Timezone UTC vs GMT-3 no gerador de relatórios | imediato | 2026-04-30 |
 | [[BOARD/tensoes_abertas/B66_n_minimo_grid_criterio_bidimensional\|B66]] | N_MINIMO grid competitivo — critério bidimensional (volume + dispersão temporal) | após 1º trimestre paper trading | 2026-04-30 |
@@ -81,6 +79,7 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/atas/2026-04-29_fechamento_b53_b54_b55_b56_b57\|2026-04-29]] | Fechamento B53/B54/B55/B56/B57 — SCAN aprovado | off-ata |
 | [[BOARD/atas/2026-04-30_rastreabilidade_relatorio_calibracao\|2026-04-30]] | Rastreabilidade do relatório de calibração — SCAN + PE-010 + B65 | board |
 | [[BOARD/atas/2026-04-30_tune_v31_estrutural_fixo_n_minimo\|2026-04-30]] | TUNE v3.1: estrutural_fixo por regime + N_MINIMO critério bidimensional | board |
+| [[BOARD/atas/2026-04-30_b63_fechamento_regimes_lateral\|2026-04-30]] | Fechamento B63 — patch config.json v1.4 + B38 obsoleta | off-ata |
 
 ---
 
@@ -106,3 +105,5 @@ Status: open = tensão ativa | closed = resolvida e confirmada pelo CEO.
 | [[BOARD/decisoes/B55_reflect_estados_ABCDX_redesign\|B55]] | REFLECT estados E→T implementado (etapa 1) | reflect_cycle_calcular e sizing_calcular usam T. TODO etapa 2 em B04. SCAN aprovado. | 2026-04-29 |
 | [[BOARD/decisoes/B56_reflect_sizing_por_estado\|B56]] | REFLECT sizing por estado + regimes_sizing removido | Lookup A/B/C/D/T. TODOs no código. regimes_sizing zerado em tape.py. SCAN aprovado. | 2026-04-29 |
 | [[BOARD/decisoes/B57_relatorio_calibracao_lacunas\|B57]] | Relatório calibração — 6 campos implementados | 5 seções novas em formatar_relatorio_markdown. Threshold campo 5 como PE provisório. SCAN aprovado. | 2026-04-29 |
+| [[BOARD/decisoes/B38_BOVA11_NEUTRO_TRANSICAO\|B38]] | BOVA11 NEUTRO_TRANSICAO sem estratégia | Obsoleta por B63 — regime eliminado do universo | 2026-04-30 |
+| [[BOARD/decisoes/B63_regimes_renomeacao_lateral\|B63]] | Renomeação NEUTRO_* → LATERAL_* + colapso MORTO + elimina TRANSICAO | config.json v1.4 patch cirúrgico — 0 ocorrências NEUTRO_* confirmadas CEO | 2026-04-30 |

@@ -28,6 +28,7 @@ function RegimeRow({ regime, dados, runId, ticker, nMinimoCalib, onResolvido }) 
   const statusCalib = dados.status_calibracao;
 
   const isBlocked = eleicao === "bloqueado";
+  const isAmostraInsuficiente = eleicao === "amostra_insuficiente";
   const isAnomaliaPendente = anomalyDetected && aplicacao === "pendente_anomalia";
   const isAnomaliaAprovada = aplicacao === "anomalia_aprovada_ceo";
   const isAnomaliaAprovadaCalibrado = isAnomaliaAprovada && statusCalib === "calibrado";
@@ -144,6 +145,11 @@ function RegimeRow({ regime, dados, runId, ticker, nMinimoCalib, onResolvido }) 
         {isBlocked && (
           <span style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)" }}>
             BLOQUEADO
+          </span>
+        )}
+        {isAmostraInsuficiente && (
+          <span style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)" }}>
+            AMOSTRA INSUFICIENTE — sem estratégia eleita
           </span>
         )}
       </div>
@@ -263,6 +269,13 @@ function RegimeRow({ regime, dados, runId, ticker, nMinimoCalib, onResolvido }) 
       {isBlocked && (
         <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
           Sem candidatos definidos para este regime
+        </div>
+      )}
+
+      {/* Amostra insuficiente */}
+      {isAmostraInsuficiente && (
+        <div style={{ fontFamily: "monospace", fontSize: 8, color: "var(--atlas-text-secondary)", marginTop: 2 }}>
+          N={nAtual ?? 0} &lt; mínimo, e regime sem fallback estrutural — nada a operar
         </div>
       )}
     </div>

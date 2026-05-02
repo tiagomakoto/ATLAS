@@ -21,13 +21,17 @@
             }
           },
           {
-            "id": "7e6da89f5cc241cf",
+            "id": "934f145dce334133",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "markdown",
+              "state": {
+                "file": "BOARD/decisoes/B57_relatorio_calibracao_lacunas.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "B57_relatorio_calibracao_lacunas"
             }
           }
         ],
@@ -88,7 +92,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 240
+    "width": 566.5
   },
   "right": {
     "id": "right",
@@ -104,16 +108,17 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "BOARD/decisoes/B57_relatorio_calibracao_lacunas.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
-                "showSearch": false,
-                "searchQuery": "",
+                "showSearch": true,
+                "searchQuery": "relatório",
                 "backlinkCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Links inversos"
+              "title": "Links inversos para B57_relatorio_calibracao_lacunas"
             }
           },
           {
@@ -189,8 +194,19 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "7e6da89f5cc241cf",
+  "active": "934f145dce334133",
   "lastOpenFiles": [
+    "BOARD/decisoes/B63_regimes_renomeacao_lateral.md",
+    "BOARD/decisoes/B57_relatorio_calibracao_lacunas.md",
+    "BOARD/decisoes/B56_reflect_sizing_por_estado.md",
+    "BOARD/decision_log.md",
+    "BOARD/tensoes_abertas/B59_tune_estrategia_selecao_competitiva.md",
+    "BOARD/atas/2026-04-24_reflect_estados_sizing.md",
+    "BOARD/decisoes/Q10_S6_VALE3_congelado.md",
+    "BOARD/decisoes/Q11_TUNE_VALE3_afetado_Q10.md",
+    "BOARD/tensoes_abertas/B65_timezone_utc_vs_gmt3_relatorios.md",
+    "BOARD/atas/2026-04-13_atlas_onboarding_drawer_relatorio_tune.md",
+    "SYSTEMS/atlas/modules/CalibracaoDrawer.md",
     "SYSTEMS/atlas/modules/CalibracaoDrawer.test.md",
     "SYSTEMS/advantage/modules/conftest.md",
     "SYSTEMS/advantage/modules/pytest.md",
@@ -198,7 +214,6 @@
     "BOARD/tensoes_abertas/B27_BBAS3_edge_nao_testado.md",
     "BOARD/tensoes_abertas/B11_pesos_reflect_optuna.md",
     "TEMPLATES/ata_template.md",
-    "BOARD/decision_log.md",
     "BOARD/tensoes_abertas/B17_proximos_ativos.md",
     "BOARD/tensoes_abertas/B15_documentacao_sistema.md",
     "BOARD/tensoes_abertas/B14_pilares_pre_paper.md",

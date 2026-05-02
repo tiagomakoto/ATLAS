@@ -513,10 +513,10 @@ def get_ativo(ticker: str) -> Dict[str, Any]:
         reflect_state = raw_data.get("reflect_state", "B")
         reflect_history = raw_data.get("reflect_history", [])
 
-        # Quedas consecutivas REFLECT (D ou E)
+        # Quedas consecutivas REFLECT (D, E ou T)
         quedas_consecutivas = 0
         for r in reversed(reflect_history[-5:]):
-            if r.get("state", "?") in ("D", "E"):
+            if r.get("state", "?") in ("D", "E", "T"):
                 quedas_consecutivas += 1
             else:
                 break

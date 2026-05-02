@@ -699,7 +699,7 @@ async def dc_calibracao_iniciar(ticker: str) -> dict:
 
 async def _executar_calibracao_step1(ticker: str):
     """Executa step 1 da calibração em background."""
-    from atlas_backend.core.delta_chaos_reader import get_ativo
+    from atlas_backend.core.delta_chaos_reader import get_ativo, get_ativo_raw
     from datetime import datetime
     import json
     import os
@@ -788,8 +788,10 @@ async def _executar_calibracao_step1(ticker: str):
             # 5. Se step 2 concluído com sucesso, iniciar step 3 automaticamente
             # D8 (TUNE v3.0): pausa antes do step 3 se ainda há regimes elegíveis pendentes de confirmação.
             if result_tune.get("status") == "OK":
+                # get_ativo_raw retorna o JSON cru; get_ativo descarta tune_ranking_estrategia.
+                raw_dados = get_ativo_raw(ticker)
+                ranking_root = raw_dados.get("tune_ranking_estrategia") or {}
                 dados = get_ativo(ticker)
-                ranking_root = dados.get("tune_ranking_estrategia") or {}
                 regimes_pendentes = any(
                     v.get("anomalia", {}).get("detectada", False)
                     and not v.get("confirmado", False)
@@ -882,6 +884,68 @@ async def _executar_calibracao_step1(ticker: str):
             pass  # Se falhar, pelo menos tentamos
 
 
+async def _executar_calibracao_gate_fire(ticker: str):
+    """Executa step 3 (GATE + FIRE) em background após retomada."""
+    import json
+    import os
+
+    def _update_step3(ticker: str, updates: dict):
+        from atlas_backend.core.paths import get_paths
+        paths = get_paths()
+        config_path = os.path.join(paths["config_dir"], f"{ticker}.json")
+        with open(config_path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+        calib = current.get("calibracao", {})
+        calib.update(updates)
+        current["calibracao"] = calib
+        current["atualizado_em"] = datetime.now(tz=ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d %H:%M:%S")
+        tmp_path = config_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, config_path)
+
+    try:
+        result_gate = await dc_gate_backtest(ticker)
+
+        from atlas_backend.core.delta_chaos_reader import get_ativo
+        dados = get_ativo(ticker)
+        calib = dados.get("calibracao", {})
+
+        if result_gate.get("status") == "OK":
+            calib["gate_resultado"] = result_gate.get("gate_resultado")
+            gate_aprovado = result_gate.get("gate_resultado", {}).get("resultado") == "OPERAR"
+            if gate_aprovado:
+                result_fire = await dc_fire_diagnostico(ticker)
+                if result_fire.get("status") == "OK":
+                    calib["fire_diagnostico"] = result_fire.get("fire_diagnostico")
+                    calib["steps"]["3_gate_fire"]["status"] = "done"
+                else:
+                    calib["steps"]["3_gate_fire"]["status"] = "error"
+                    calib["steps"]["3_gate_fire"]["erro"] = result_fire.get("output", "Erro desconhecido")
+            else:
+                calib["steps"]["3_gate_fire"]["status"] = "done"
+        else:
+            calib["steps"]["3_gate_fire"]["status"] = "error"
+            calib["steps"]["3_gate_fire"]["erro"] = result_gate.get("output", "Erro desconhecido")
+
+        calib["steps"]["3_gate_fire"]["concluido_em"] = iso_utc()
+        calib["ultimo_evento_em"] = iso_utc()
+        _update_step3(ticker, calib)
+
+    except Exception as e:
+        try:
+            from atlas_backend.core.delta_chaos_reader import get_ativo
+            dados = get_ativo(ticker)
+            calib = dados.get("calibracao", {})
+            calib["steps"]["3_gate_fire"]["status"] = "error"
+            calib["steps"]["3_gate_fire"]["erro"] = str(e)
+            calib["steps"]["3_gate_fire"]["concluido_em"] = iso_utc()
+            calib["ultimo_evento_em"] = iso_utc()
+            _update_step3(ticker, calib)
+        except Exception:
+            pass
+
+
 async def dc_calibracao_retomar(ticker: str) -> dict:
     """
     Retoma calibração do step atual (usado quando status == "paused")
@@ -892,7 +956,7 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
     if not re.match(r"^[A-Z0-9]{4,6}$", ticker):
         raise ValueError(f"Ticker inválido: {ticker}")
 
-    from atlas_backend.core.delta_chaos_reader import get_ativo
+    from atlas_backend.core.delta_chaos_reader import get_ativo, get_ativo_raw
 
     # Carregar estado atual
     dados = get_ativo(ticker)
@@ -925,7 +989,8 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
 
     elif step_atual == 3:
         # D8 (TUNE v3.0): rejeitar retomada do step 3 se ainda há regimes pendentes de confirmação
-        ranking_root = dados.get("tune_ranking_estrategia") or {}
+        # get_ativo_raw retorna o JSON cru; get_ativo descarta tune_ranking_estrategia.
+        ranking_root = get_ativo_raw(ticker).get("tune_ranking_estrategia") or {}
         regimes_pendentes = any(
             v.get("anomalia", {}).get("detectada", False)
             and not v.get("confirmado", False)
@@ -936,20 +1001,24 @@ async def dc_calibracao_retomar(ticker: str) -> dict:
         if regimes_pendentes:
             raise ValueError("Confirme todos os regimes elegíveis no ranking TUNE v3.0 antes de iniciar o step 3")
 
-        # Retomar gate + fire
-        result = await dc_gate_backtest(ticker)
-        if result.get("status") == "OK":
-            dados["calibracao"]["gate_resultado"] = result.get("gate_resultado")
-            if result.get("gate_resultado", {}).get("resultado") == "OPERAR":
-                fire_result = await dc_fire_diagnostico(ticker)
-                if fire_result.get("status") == "OK":
-                    dados["calibracao"]["fire_diagnostico"] = fire_result.get("fire_diagnostico")
-
-        # Atualizar estado
+        # Marcar "running" no JSON ANTES de executar GATE, para que o polling
+        # não regride step 3 de "running" → "paused" enquanto GATE/FIRE rodam.
         dados["calibracao"]["steps"][step_key]["status"] = "running"
         dados["calibracao"]["steps"][step_key]["iniciado_em"] = iso_utc()
+        dados["calibracao"]["ultimo_evento_em"] = iso_utc()
 
-    # Atualizar ultimo_evento_em
+        path_ativo = Path(get_paths()["config_dir"]) / f"{ticker}.json"
+        path_tmp = path_ativo.with_suffix(".tmp")
+        with open(path_tmp, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=2, ensure_ascii=False)
+        os.replace(path_tmp, path_ativo)
+
+        # Despachar GATE + FIRE em background — retorna imediatamente para o frontend
+        asyncio.create_task(_executar_calibracao_gate_fire(ticker))
+
+        return {"status": "resumed", "step": step_atual}
+
+    # Atualizar ultimo_evento_em (steps 1 e 2 — step 3 retorna antes de chegar aqui)
     dados["calibracao"]["ultimo_evento_em"] = iso_utc()
 
     # Atualizar no arquivo com escrita atômica

@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-012
-version: 1.0.2
+version: 1.0.3
 status: validated
 owner: Chan
 
@@ -37,6 +37,7 @@ constraints:
   - TP/STOP exibe status: ok (mantendo), fechar (motivo), sem_xlsx
 
 notes:
+  - 2026-05-02: código modificado — DigestPanel.jsx
   - 2026-04-14: código modificado — DigestPanel.jsx
   - Componente puramente funcional — sem estado interno, renderiza props
 ---

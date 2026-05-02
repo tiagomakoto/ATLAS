@@ -143,7 +143,7 @@ def normalize_tune_ranking(
         if not isinstance(dados, dict):
             continue
         eleicao_status = dados.get("eleicao_status", "in_progress")
-        ranking_list = dados.get("ranking") or []
+        ranking_list = dados.get("ranking_eleicao") or dados.get("ranking") or []
         estrategia_eleita = dados.get("estrategia_eleita")
         aplicacao = dados.get("aplicacao")
         anomalia = dados.get("anomalia") or {}

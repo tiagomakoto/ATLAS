@@ -266,6 +266,7 @@ const ReflectTab = ({ ticker, data }) => {
     if (s === "B") return "var(--atlas-blue)";
     if (s === "C") return "var(--atlas-amber)";
     if (s === "D") return "var(--atlas-red)";
+    if (s === "T") return "var(--atlas-red)";
     if (s === "E") return "var(--atlas-text-secondary)";
     return "var(--atlas-text-secondary)";
   };
@@ -277,6 +278,7 @@ const ReflectTab = ({ ticker, data }) => {
     if (s === "B") return "rgba(59, 130, 246, 0.2)";
     if (s === "C") return "rgba(245, 158, 11, 0.2)";
     if (s === "D") return "rgba(239, 68, 68, 0.2)";
+    if (s === "T") return "rgba(239, 68, 68, 0.2)";
     if (s === "E") return "rgba(100, 100, 100, 0.2)";
     return "var(--atlas-surface)";
   };
@@ -287,6 +289,7 @@ const ReflectTab = ({ ticker, data }) => {
       B: "Edge normal — condições dentro do esperado. Sizing padrão.",
       C: "Edge enfraquecendo — atenção. Sizing reduzido.",
       D: "Edge deteriorado — risco elevado. Sizing mínimo ou zero.",
+      T: "Tail (cauda) — evento de cauda detectado. Sizing zero.",
       E: "Bloqueio — edge inválido. Sem operação até protocolo de 5 gates."
     };
     return tooltips[state?.toUpperCase()] || "Estado desconhecido";
@@ -352,7 +355,7 @@ const ReflectTab = ({ ticker, data }) => {
                     style={{ 
                       borderBottom: "1px solid var(--atlas-border)",
                       background: getStateBgColor(state),
-                      opacity: state === "E" ? 0.6 : 1
+                      opacity: (state === "E" || state === "T") ? 0.6 : 1
                     }}
                     title={getStateTooltip(state)}
                   >

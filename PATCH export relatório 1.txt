@@ -1,0 +1,390 @@
+### PARTE 1  PATCH — Enriquecimento do relatório de calibração exportado
+
+(1) Localização exata
+atlas_backend/core/relatorios.py → função exportar_relatorio_calibracao()
+
+(2) Comportamento atual → comportamento esperado
+Atual: lê apenas calibracao.gate_resultado, calibracao.fire_diagnostico e calibracao.steps do JSON do ativo. Retorna esses três campos + data.
+Esperado: enriquecer o payload com dados do último registro TUNE e do último registro GATE em historico_config[], lendo campos diretos (não regex sobre motivo).
+pythondef exportar_relatorio_calibracao(ticker: str) -> dict:
+    from atlas_backend.core.delta_chaos_reader import get_ativo_raw
+
+    dados_raw = get_ativo_raw(ticker)
+    calibracao = dados_raw.get("calibracao", {})
+    steps = calibracao.get("steps", {})
+
+    step3 = steps.get("3_gate_fire", {})
+    step3_status = step3.get("status", "idle")
+
+    if step3_status not in ("done", "error"):
+        return {
+            "erro": "Calibração não chegou ao step 3 (gate_fire)",
+            "step_atual": calibracao.get("step_atual"),
+            "step3_status": step3_status,
+        }
+
+    gate_resultado  = calibracao.get("gate_resultado") or {}
+    fire_diagnostico = calibracao.get("fire_diagnostico") or {}
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+
+    # ── NOVO: extrai campos estruturados do historico_config ──────────
+    historico_config = dados_raw.get("historico_config") or []
+
+    # Último registro TUNE v2.0
+    tune_rec = next(
+        (r for r in reversed(historico_config) if r.get("modulo") == "TUNE v2.0"),
+        {}
+    )
+
+    # Último registro GATE v1.0
+    gate_rec = next(
+        (r for r in reversed(historico_config) if r.get("modulo") == "GATE v1.0"),
+        {}
+    )
+
+    tune_stats = {
+        "tp_sugerido":   tune_rec.get("valor_novo"),          # "TP=0.95 STOP=2.25"
+        "ir_valido":     tune_rec.get("ir_valido"),           # float — campo direto (patch)
+        "n_trades":      tune_rec.get("trades_valido"),       # int
+        "confianca_n":   tune_rec.get("confianca_n"),         # "alta"|"baixa"|"amostra_insuficiente"
+        "janela_anos":   tune_rec.get("janela_anos"),         # int
+        "ano_teste_ini": tune_rec.get("ano_teste_ini"),       # int
+        "trials":        tune_rec.get("trials"),              # int
+        "reflect_mask":  tune_rec.get("reflect_mask"),        # int
+        "pnl_medio":     tune_rec.get("pnl_medio"),           # float (patch)
+        "pnl_mediana":   tune_rec.get("pnl_mediana"),         # float (patch)
+        "pnl_pior":      tune_rec.get("pnl_pior"),            # float (patch)
+        "n_stops":       tune_rec.get("n_stops"),             # int (patch)
+        "acerto_pct":    tune_rec.get("acerto_valido"),       # float
+    }
+
+    gate_stats = {
+        "n_trades_valido":       gate_rec.get("n_trades_valido"),       # int (patch)
+        "pnl_total":             gate_rec.get("pnl_total"),             # float (patch)
+        "pnl_medio":             gate_rec.get("pnl_medio"),             # float (patch)
+        "pnl_mediana":           gate_rec.get("pnl_mediana"),           # float (patch)
+        "pnl_pior":              gate_rec.get("pnl_pior"),              # float (patch)
+        "dd_max":                gate_rec.get("dd_max"),                # float (patch)
+        "stops_seguidos":        gate_rec.get("stops_seguidos"),        # int (patch)
+        "estrategia_por_regime": gate_rec.get("estrategia_por_regime"), # dict (patch)
+        "gate_valores":          gate_rec.get("gate_valores"),          # dict E0..E7
+    }
+    # ─────────────────────────────────────────────────────────────────
+
+    return {
+        "gate_resultado":  gate_resultado,
+        "fire_diagnostico": fire_diagnostico,
+        "steps":           steps,
+        "data":            data_hoje,
+        "tune_stats":      tune_stats,   # NOVO
+        "gate_stats":      gate_stats,   # NOVO
+    }
+O frontend já recebe o payload via este endpoint. Com tune_stats e gate_stats disponíveis, o template .md gerado client-side deve incluir as seções abaixo no Step 2 e Step 3 respectivamente.
+Adições ao template .md — Step 2 (TUNE):
+## Qualidade da otimização
+| Campo | Valor |
+|---|---|
+| IR válido (janela teste) | {ir_valido} |
+| N trades na janela | {n_trades} |
+| Confiança | {confianca_n} |
+| Janela de teste | {janela_anos} anos ({ano_teste_ini}–hoje) |
+| Trials rodados | {trials} |
+| Ciclos mascarados REFLECT | {reflect_mask} |
+| Acerto % | {acerto_pct}% |
+| P&L médio por trade | R${pnl_medio} |
+| P&L mediana por trade | R${pnl_mediana} |
+| Pior trade | R${pnl_pior} |
+| Stops totais | {n_stops} |
+Adições ao template .md — Step 3 (GATE):
+## Diagnóstico quantitativo
+| Campo | Valor |
+|---|---|
+| N trades válidos | {n_trades_valido} |
+| P&L total janela | R${pnl_total} |
+| P&L médio por trade | R${pnl_medio} |
+| P&L mediana | R${pnl_mediana} |
+| Pior trade | R${pnl_pior} |
+| Drawdown máximo | R${dd_max} |
+| Stops consecutivos máx | {stops_seguidos} |
+
+## Estratégia por regime (janela válida)
+| Regime | Estratégia |
+|---|---|
+{estrategia_por_regime — uma linha por regime}
+
+(3) Constraints críticos
+
+Não alterar gerar_relatorio_tune() — função separada, não é chamada neste fluxo
+Não alterar a lógica de validação do step3_status — guard permanece intacto
+Campos do patch ausentes (None) devem renderizar como "—" no .md, nunca quebrar o template
+Não usar regex sobre o campo motivo — todos os dados novos são campos diretos
+O frontend que monta o .md precisa ser atualizado junto — localizar o componente que chama exportar_relatorio_calibracao e consome o payload para adicionar as duas seções novas
+
+
+Patch pode ser encaminhado.
+
+
+
+
+### PARTE 2 - plano do Claude Opus 4.7
+
+# PATCH — Enriquecimento do relatório de calibração exportado
+
+## Context
+
+Hoje o endpoint `POST /delta-chaos/calibracao/{ticker}/exportar-relatorio` retorna apenas
+`gate_resultado`, `fire_diagnostico`, `steps` e `data`. O frontend monta o `.md`
+client-side com essas 4 peças, mas falta o material quantitativo dos últimos registros
+`historico_config[]` — IR, P&L por trade, drawdown, stops consecutivos, estratégia por
+regime, etc. Este patch enriquece o payload lendo **campos diretos** dos registros
+`"TUNE v2.0"` e `"GATE v1.0"` (sem regex sobre `motivo`) e o template do `.md` passa a
+incluir duas tabelas novas: "Qualidade da otimização" no Step 2 e "Diagnóstico
+quantitativo" + "Estratégia por regime" no Step 3.
+
+---
+
+## Arquivos a modificar
+
+1. [atlas_backend/core/relatorios.py:348](atlas_backend/core/relatorios.py:348) — função `exportar_relatorio_calibracao`
+2. [atlas_backend/api/routes/delta_chaos.py:550](atlas_backend/api/routes/delta_chaos.py:550) — endpoint, propagar novos campos
+3. [atlas_ui/src/components/GestaoView/CalibracaoDrawer.jsx:77](atlas_ui/src/components/GestaoView/CalibracaoDrawer.jsx:77) — `buildMarkdownReport` + handler
+
+**NÃO tocar:**
+- `gerar_relatorio_tune()` em [relatorios.py:437](atlas_backend/core/relatorios.py:437) — função separada, não é chamada neste fluxo
+- Writers em [delta_chaos/tune.py](delta_chaos/tune.py) e [delta_chaos/gate.py](delta_chaos/gate.py) — campos novos serão populados por patch separado; por enquanto renderizam "—"
+- Guard `step3_status not in ("done", "error")` — permanece intacto
+
+---
+
+## Mudança 1 — backend `exportar_relatorio_calibracao`
+
+Em [relatorios.py:348-383](atlas_backend/core/relatorios.py:348), após o guard do
+`step3_status` (linha 372) e antes do `return` atual (linha 378), inserir extração de
+`tune_rec` e `gate_rec` a partir de `dados_raw.get("historico_config")`:
+
+```python
+historico_config = dados_raw.get("historico_config") or []
+
+tune_rec = next(
+    (r for r in reversed(historico_config) if r.get("modulo") == "TUNE v2.0"),
+    {}
+)
+gate_rec = next(
+    (r for r in reversed(historico_config) if r.get("modulo") == "GATE v1.0"),
+    {}
+)
+
+tune_stats = {
+    "tp_sugerido":   tune_rec.get("valor_novo"),
+    "ir_valido":     tune_rec.get("ir_valido"),
+    "n_trades":      tune_rec.get("trades_valido"),
+    "confianca_n":   tune_rec.get("confianca_n"),
+    "janela_anos":   tune_rec.get("janela_anos"),
+    "ano_teste_ini": tune_rec.get("ano_teste_ini"),
+    "trials":        tune_rec.get("trials"),
+    "reflect_mask":  tune_rec.get("reflect_mask"),
+    "pnl_medio":     tune_rec.get("pnl_medio"),
+    "pnl_mediana":   tune_rec.get("pnl_mediana"),
+    "pnl_pior":      tune_rec.get("pnl_pior"),
+    "n_stops":       tune_rec.get("n_stops"),
+    "acerto_pct":    tune_rec.get("acerto_valido"),
+}
+
+gate_stats = {
+    "n_trades_valido":       gate_rec.get("n_trades_valido"),
+    "pnl_total":             gate_rec.get("pnl_total"),
+    "pnl_medio":             gate_rec.get("pnl_medio"),
+    "pnl_mediana":           gate_rec.get("pnl_mediana"),
+    "pnl_pior":              gate_rec.get("pnl_pior"),
+    "dd_max":                gate_rec.get("dd_max"),
+    "stops_seguidos":        gate_rec.get("stops_seguidos"),
+    "estrategia_por_regime": gate_rec.get("estrategia_por_regime"),
+    "gate_valores":          gate_rec.get("gate_valores"),
+}
+```
+
+Adicionar `tune_stats` e `gate_stats` ao dict retornado. Semântica "último registro
+ganha" (acessamos via `reversed(historico_config)`).
+
+---
+
+## Mudança 2 — endpoint em `delta_chaos.py`
+
+O endpoint em [delta_chaos.py:550-556](atlas_backend/api/routes/delta_chaos.py:550)
+monta a resposta HTTP cherry-pickando campos do resultado (estilo defensivo já usado no
+router, mantido). Estender explicitamente para incluir os dois novos campos:
+
+```python
+return {
+    "status": "ok",
+    "gate_resultado":  result.get("gate_resultado"),
+    "fire_diagnostico": result.get("fire_diagnostico"),
+    "steps":           result.get("steps"),
+    "data":            result.get("data"),
+    "tune_stats":      result.get("tune_stats"),
+    "gate_stats":      result.get("gate_stats"),
+}
+```
+
+---
+
+## Mudança 3 — frontend `CalibracaoDrawer.jsx`
+
+### 3a) Helper local de formatação (dentro de `buildMarkdownReport`)
+
+Adicionar helper que renderiza `null`/`undefined` como `"—"` (U+2014, per spec), usado
+**apenas nas tabelas novas**. O `"–"` (U+2013) existente nas outras seções permanece
+intacto para limitar o blast radius do diff.
+
+```javascript
+const fmt = (value, kind = "raw") => {
+  if (value == null) return "—";
+  switch (kind) {
+    case "currency":
+      return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    case "percent":
+      return `${Number(value).toFixed(2)}%`;
+    case "int":
+      return Number(value).toLocaleString("pt-BR");
+    case "float":
+      return Number(value).toFixed(4);
+    default:
+      return String(value);
+  }
+};
+```
+
+### 3b) Assinatura de `buildMarkdownReport` passa a aceitar `tuneStats` e `gateStats`
+
+Modificar chamada em
+[CalibracaoDrawer.jsx:716](atlas_ui/src/components/GestaoView/CalibracaoDrawer.jsx:716)
+(`handleExportarRelatorioBackend`) para passar `tuneStats: data.tune_stats` e
+`gateStats: data.gate_stats`. Fallback `handleExport()` continua chamando sem esses
+params — `fmt()` renderiza tudo como `"—"` (degradação graciosa).
+
+### 3c) Nova seção "Qualidade da otimização" no Step 2
+
+Concatenar após `step2Section` (depois da linha 94):
+
+```javascript
+const tuneQualidadeSection = tuneStats ? `
+## Qualidade da otimização
+| Campo | Valor |
+|---|---|
+| IR válido (janela teste) | ${fmt(tuneStats.ir_valido, "float")} |
+| N trades na janela | ${fmt(tuneStats.n_trades, "int")} |
+| Confiança | ${fmt(tuneStats.confianca_n)} |
+| Janela de teste | ${fmt(tuneStats.janela_anos)} anos (${fmt(tuneStats.ano_teste_ini)}–hoje) |
+| Trials rodados | ${fmt(tuneStats.trials, "int")} |
+| Ciclos mascarados REFLECT | ${fmt(tuneStats.reflect_mask, "int")} |
+| Acerto % | ${fmt(tuneStats.acerto_pct, "percent")} |
+| P&L médio por trade | R$${fmt(tuneStats.pnl_medio, "currency")} |
+| P&L mediana por trade | R$${fmt(tuneStats.pnl_mediana, "currency")} |
+| Pior trade | R$${fmt(tuneStats.pnl_pior, "currency")} |
+| Stops totais | ${fmt(tuneStats.n_stops, "int")} |
+` : "";
+```
+
+### 3d) Nova seção "Diagnóstico quantitativo" + "Estratégia por regime" no Step 3
+
+Concatenar após `gateSection`:
+
+```javascript
+const gateDiagSection = gateStats ? `
+## Diagnóstico quantitativo
+| Campo | Valor |
+|---|---|
+| N trades válidos | ${fmt(gateStats.n_trades_valido, "int")} |
+| P&L total janela | R$${fmt(gateStats.pnl_total, "currency")} |
+| P&L médio por trade | R$${fmt(gateStats.pnl_medio, "currency")} |
+| P&L mediana | R$${fmt(gateStats.pnl_mediana, "currency")} |
+| Pior trade | R$${fmt(gateStats.pnl_pior, "currency")} |
+| Drawdown máximo | R$${fmt(gateStats.dd_max, "currency")} |
+| Stops consecutivos máx | ${fmt(gateStats.stops_seguidos, "int")} |
+` : "";
+
+const estrategiaSection = gateStats?.estrategia_por_regime ? `
+## Estratégia por regime (janela válida)
+| Regime | Estratégia |
+|---|---|
+${Object.entries(gateStats.estrategia_por_regime)
+  .map(([regime, estrategia]) => `| ${regime} | ${fmt(estrategia)} |`)
+  .join("\n")}
+` : "";
+```
+
+Atualizar o `return` final (linha 131) para incluir as novas seções na ordem:
+`header → step1 → step2 → tuneQualidade → gate → gateDiag → estrategia → fire`.
+
+---
+
+## Constraints críticos (do prompt original)
+
+- [x] Não alterar `gerar_relatorio_tune()`
+- [x] Não alterar o guard `step3_status`
+- [x] Campos ausentes renderizam `"—"` (U+2014), nunca quebram template
+- [x] Não usar regex sobre `motivo` — todos os lookups são `.get()` direto
+- [x] Frontend atualizado no mesmo patch
+
+---
+
+## Limitação conhecida (não é blocker)
+
+Os writers em [delta_chaos/tune.py:575](delta_chaos/tune.py:575) e
+[delta_chaos/gate.py:127](delta_chaos/gate.py:127) ainda não emitem a maioria dos
+campos quantitativos novos (ex.: GATE só escreve `data`, `modulo`, `parametro`,
+`valor_nuevo`, `motivo`). Hoje as tabelas novas vão renderizar mostly `"—"` até os
+writers serem patchados — comportamento esperado via `fmt()`. Este patch é o lado
+leitor; shipar antes do writer é a ordem normal de layering.
+
+---
+
+## Verificação end-to-end
+
+1. **Backend isolado:**
+   ```bash
+   cd C:\Users\tiago\OneDrive\Documentos\ATLAS
+   python -c "from atlas_backend.core.relatorios import exportar_relatorio_calibracao; import json; print(json.dumps(exportar_relatorio_calibracao('VALE3'), indent=2, default=str))"
+   ```
+   Esperado: payload contém `tune_stats` e `gate_stats` (dicts, possivelmente com Nones).
+
+2. **Endpoint HTTP:**
+   ```bash
+   curl -X POST http://localhost:8000/delta-chaos/calibracao/VALE3/exportar-relatorio
+   ```
+   Esperado: `status: "ok"` + os dois novos campos no JSON.
+
+3. **Frontend E2E:**
+   - Abrir ATLAS no browser, selecionar um ticker com calibração no step 3 concluído
+   - Clicar "↓ Exportar relatório .md" no `CalibracaoDrawer`
+   - Abrir o `.md` baixado e confirmar presença de:
+     - Seção `## Qualidade da otimização` com tabela de 11 linhas (Step 2)
+     - Seção `## Diagnóstico quantitativo` com tabela de 7 linhas (Step 3)
+     - Seção `## Estratégia por regime (janela válida)` com uma linha por regime
+     - Células com dado ausente mostrando `"—"`, template inteiro renderizado sem erro
+   - Forçar fallback client-side (ex.: derrubando o backend): confirmar que as novas
+     seções ou somem (`tuneStats` undefined) ou renderizam com `"—"`, nunca quebram
+
+4. **Smoke do backend existente:**
+   ```bash
+   cd C:\Users\tiago\OneDrive\Documentos\ATLAS
+   pytest atlas_backend/tests/ -k relatorio -v
+   ```
+   Esperado: nenhum teste existente quebra.
+   
+   
+   
+   
+   
+   
+   
+   
+   
+### Parte 3  O que está faltando:
+
+Distribuição temporal dos stops — em que ciclo/ano ocorreram os 2 stops consecutivos. É a informação mais crítica para contextualizar E3 e E7 e está completamente ausente.
+Breakdown de P&L por ano — P&L total de R$-1.510 em 6 anos é distribuído como? 2020 pesou? 2025? Sem isso o diagnóstico é opaco.
+Estado REFLECT atual — o relatório não informa em qual estado (A/B/C/D/T) PRIO3 está após a calibração. Pós-B55 isso é dado obrigatório.
+Sizing final recomendado — consequência direta do estado REFLECT. O relatório bloqueia via GATE mas não informa qual seria o sizing se desbloqueado (para fins de auditoria).
+Diferença TUNE × GATE explicada — 52 vs 53 trades, R$110 vs R$-28. Qual trade está no GATE e não no TUNE? Isso deve aparecer como nota de reconciliação.
+Regime predominante na janela — a tabela de estratégia por regime está no relatório, mas não informa a frequência de ocorrência de cada regime. ALTA com 80% dos ciclos e ALTA com 20% são calibrações radicalmente diferentes.

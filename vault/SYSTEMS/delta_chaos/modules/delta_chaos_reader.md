@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-009
-version: 1.0.9
+version: 1.0.10
 status: validated
 owner: Chan
 
@@ -39,6 +39,7 @@ constraints:
   - get_book valida fonte antes de ler — aceita backtest, paper, live
 
 notes:
+  - 2026-05-02: código modificado — delta_chaos_reader.py
   - 2026-04-29: código modificado — delta_chaos_reader.py
   - 2026-04-26: código modificado — delta_chaos_reader.py
   - 2026-04-26: código modificado — delta_chaos_reader.py

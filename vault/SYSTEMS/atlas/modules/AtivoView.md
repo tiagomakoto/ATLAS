@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-011
-version: 1.0.3
+version: 1.0.4
 status: validated
 owner: Chan
 
@@ -35,6 +35,7 @@ constraints:
   - Componente monolítico (~62KB) — candidato a refatoração futura
 
 notes:
+  - 2026-05-02: código modificado — AtivoView.jsx
   - 2026-04-30: código modificado — AtivoView.jsx
   - 2026-04-13: código modificado — AtivoView.jsx
 ---

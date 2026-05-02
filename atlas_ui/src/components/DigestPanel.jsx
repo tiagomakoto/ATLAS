@@ -40,6 +40,7 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     if (state === "B") return "var(--atlas-blue)";
     if (state === "C") return "var(--atlas-amber)";
     if (state === "D") return "var(--atlas-red)";
+    if (state === "T") return "var(--atlas-red)";
     if (state === "E") return "var(--atlas-red)";
     return "var(--atlas-text-secondary)";
   };
@@ -51,6 +52,7 @@ export default function DigestPanel({ digestPorAtivo, timestamp }) {
     if (state === "B") return "~";
     if (state === "C") return "~";
     if (state === "D") return "✗";
+    if (state === "T") return "✗";
     if (state === "E") return "✗";
     return "·";
   };
