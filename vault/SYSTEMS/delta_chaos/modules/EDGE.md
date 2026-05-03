@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-005
-version: 1.3.16
+version: 1.3.17
 status: validated
 owner: Chan
 
@@ -50,6 +50,7 @@ constraints:
   - executar_eod() implementado — arquiva xlsx + GATE EOD + paper
 
 notes:
+  - 2026-05-02: código modificado — edge.py
   - 2026-05-02: código modificado — edge.py
   - 2026-04-29: código modificado — edge.py
   - 2026-04-26: código modificado — edge.py

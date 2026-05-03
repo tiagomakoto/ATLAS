@@ -24,8 +24,10 @@ const DEFAULT_STEPS = {
 };
 
 const STEP3_FASES = {
-  GATE: "gate",
+  TAPE: "tape",
+  ORBIT: "orbit",
   FIRE: "fire",
+  GATE: "gate",
 };
 
 function pad2(value) {
@@ -133,7 +135,7 @@ function buildMarkdownReport({ ticker, cycle, steps, bestTp, bestStop, bestIr, g
   const s3 = steps?.["3_gate_fire"] || {};
   const s3Status = s3.status === "done" ? "✓ ok" : s3.status === "error" ? `✗ erro: ${s3.erro || "?"}` : "–";
   const s3Dur = formatDuration(s3.iniciado_em, s3.concluido_em);
-  const gateTableHeader = `\n## Step 3 — Validação (GATE + FIRE)\n**Status:** ${s3Status}${s3Dur ? ` · duração: ${s3Dur}` : ""}\n### GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n`;
+  const gateTableHeader = `\n## Step 3 — Validação (TAPE → ORBIT → FIRE → GATE)\n**Status:** ${s3Status}${s3Dur ? ` · duração: ${s3Dur}` : ""}\n### GATE — Resultado por critério\n| Critério | Resultado | Valor |\n|----------|-----------|-------|\n`;
   let gateSection;
   if (!gateResult) {
     const errMsg = gateError ? `> GATE falhou com erro: \`${gateError}\`\n` : "> GATE não retornou dados.\n";
@@ -454,6 +456,12 @@ function TuneRegimeProgressPanel({ progressByRegime }) {
 export default function CalibracaoDrawer({ ticker, onClose }) {
   const [steps, setSteps] = useState(DEFAULT_STEPS);
   const [step3Fase, setStep3Fase] = useState(null);
+  const [step3SubFases, setStep3SubFases] = useState({
+    TAPE: "idle",
+    ORBIT: "idle",
+    FIRE: "idle",
+    GATE: "idle",
+  });
   const [watchdogAlert, setWatchdogAlert] = useState(null);
   const [trialAtual, setTrialAtual] = useState(0);
   const [trialTotal, setTrialTotal] = useState(200);
@@ -488,26 +496,10 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     return null;
   }, [steps]);
 
-  const step3GateStatus = useMemo(() => {
-    const s3 = steps["3_gate_fire"];
-    if (!s3) return "idle";
-    if (s3.status === "running" && step3Fase === STEP3_FASES.GATE) return "running";
-    if (s3.status === "done" && gateResult?.resultado === "OPERAR" && !fireDiag) return "done";
-    if (s3.status === "done" && gateResult?.resultado !== "OPERAR") return "done";
-    if (s3.status === "error") return "error";
-    if (s3.status === "paused") return "paused";
-    return "idle";
-  }, [steps, step3Fase, gateResult, fireDiag]);
-
-  const step3FireStatus = useMemo(() => {
-    const s3 = steps["3_gate_fire"];
-    if (!s3) return "idle";
-    if (s3.status === "running" && step3Fase === STEP3_FASES.FIRE) return "running";
-    if (fireDiag) return "done";
-    if (s3.status === "done" && gateResult?.resultado === "OPERAR" && !fireDiag) return "idle";
-    if (s3.status === "error") return "error";
-    return "idle";
-  }, [steps, step3Fase, gateResult, fireDiag]);
+  const step3TapeStatus = useMemo(() => step3SubFases.TAPE, [step3SubFases]);
+  const step3OrbitStatus = useMemo(() => step3SubFases.ORBIT, [step3SubFases]);
+  const step3FireStatus = useMemo(() => step3SubFases.FIRE, [step3SubFases]);
+  const step3GateStatus = useMemo(() => step3SubFases.GATE, [step3SubFases]);
 
     useEffect(() => {
     let mounted = true;
@@ -541,9 +533,15 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           if (step3Data.status === "running") {
             if (gateResultadoInit && !fireDiagInit) {
               setStep3Fase(STEP3_FASES.FIRE);
+              setStep3SubFases({ TAPE: "done", ORBIT: "done", FIRE: "running", GATE: "done" });
             } else {
               setStep3Fase(STEP3_FASES.GATE);
+              setStep3SubFases({ TAPE: "idle", ORBIT: "idle", FIRE: "idle", GATE: "running" });
             }
+          }
+
+          if (step3Data.status === "done") {
+            setStep3SubFases({ TAPE: "done", ORBIT: "done", FIRE: "done", GATE: "done" });
           }
 
           if (gateResultadoInit) setGateResult(gateResultadoInit);
@@ -767,6 +765,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         setFireDiag(null);
         setGateCriteriosProgresso([]);
         setStep3Fase(STEP3_FASES.GATE);
+        setStep3SubFases({ TAPE: "idle", ORBIT: "idle", FIRE: "idle", GATE: "running" });
         const gateStatus = evento?.data?.status === "paused" ? "paused" : "running";
         setSteps((prev) => ({
           ...prev,
@@ -777,8 +776,17 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           },
         }));
       }
+      if (modulo === "TAPE") {
+        setStep3Fase(STEP3_FASES.TAPE);
+        setStep3SubFases((prev) => ({ ...prev, TAPE: "running" }));
+      }
+      if (modulo === "ORBIT") {
+        setStep3Fase(STEP3_FASES.ORBIT);
+        setStep3SubFases((prev) => ({ ...prev, ORBIT: "running" }));
+      }
       if (modulo === "FIRE") {
         setStep3Fase(STEP3_FASES.FIRE);
+        setStep3SubFases((prev) => ({ ...prev, FIRE: "running" }));
       }
     }
 
@@ -833,6 +841,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         const payloadGate = evento?.data?.gate_resultado || null;
         const temCriterios = Array.isArray(payloadGate?.criterios) && payloadGate.criterios.length > 0;
 
+        setStep3SubFases((prev) => ({ ...prev, GATE: ok ? "done" : "error" }));
+
         if (payloadGate && temCriterios) {
           // Dados do evento são autoritativos — não chamar refreshGateResult()
           // que pode chegar antes do JSON ser gravado e sobrescrever com N/D
@@ -886,6 +896,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           // Evento sem fire_diagnostico — fallback para API
           refreshFireDiag();
         }
+        setStep3SubFases((prev) => ({ ...prev, FIRE: ok ? "done" : "error" }));
         setSteps((prev) => ({
           ...prev,
           "3_gate_fire": {
@@ -896,6 +907,14 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           },
         }));
         setStep3Fase(null);
+      }
+      if (modulo === "TAPE") {
+        const ok = evento?.data?.status === "ok";
+        setStep3SubFases((prev) => ({ ...prev, TAPE: ok ? "done" : "error" }));
+      }
+      if (modulo === "ORBIT") {
+        const ok = evento?.data?.status === "ok";
+        setStep3SubFases((prev) => ({ ...prev, ORBIT: ok ? "done" : "error" }));
       }
     }
 
@@ -1421,39 +1440,85 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
                   onClick={handleRetomar}
                   style={{ marginTop: 4, padding: "4px 10px", background: "var(--atlas-green)", border: "none", color: "#fff", fontFamily: "monospace", fontSize: 9, borderRadius: 2, cursor: "pointer" }}
                 >
-                  Iniciar step 3 (GATE + FIRE)
+                  Iniciar step 3 (TAPE → ORBIT → FIRE → GATE)
                 </button>
               )}
             </div>
           )}
 
-          {/* Step 3 GATE + FIRE */}
+          {/* Step 3 TAPE → ORBIT → FIRE → GATE */}
           {stepId === "3_gate_fire" && (
             <>
-              {/* Sub-fases GATE / FIRE quando step3 está rodando */}
+              {/* Sub-fases TAPE / ORBIT / FIRE / GATE quando step3 está rodando */}
               {status === "running" && (
                 <div style={{ marginTop: 8, marginLeft: 20, borderLeft: "2px solid var(--atlas-border)", paddingLeft: 12 }}>
-                  <div style={{ marginBottom: 4 }}>
-                    <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginRight: 6 }}>GATE:</span>
-                    <span style={{
-                      fontFamily: "monospace",
-                      fontSize: 9,
-                      color: step3GateStatus === "running" ? "var(--atlas-blue)" : step3GateStatus === "done" ? "var(--atlas-green)" : "var(--atlas-text-secondary)",
-                      fontWeight: step3GateStatus === "running" ? "bold" : "normal",
-                    }}>
-                      {step3GateStatus === "running" ? "⟳ executando..." : step3GateStatus === "done" ? "✓ ok" : "○ aguardando"}
-                    </span>
+                  {/* TAPE */}
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>TAPE:</span>
+                      <span style={{
+                        fontFamily: "monospace",
+                        fontSize: 9,
+                        color: step3TapeStatus === "running" ? "var(--atlas-blue)" : step3TapeStatus === "done" ? "var(--atlas-green)" : step3TapeStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
+                        fontWeight: step3TapeStatus === "running" ? "bold" : "normal",
+                      }}>
+                        {step3TapeStatus === "running" ? "⟳ executando..." : step3TapeStatus === "done" ? "✓ ok" : step3TapeStatus === "error" ? "✗ erro" : "○ aguardando"}
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: step3TapeStatus === "done" ? "100%" : step3TapeStatus === "running" ? "50%" : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
+                    </div>
                   </div>
+                  {/* ORBIT */}
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>ORBIT:</span>
+                      <span style={{
+                        fontFamily: "monospace",
+                        fontSize: 9,
+                        color: step3OrbitStatus === "running" ? "var(--atlas-blue)" : step3OrbitStatus === "done" ? "var(--atlas-green)" : step3OrbitStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
+                        fontWeight: step3OrbitStatus === "running" ? "bold" : "normal",
+                      }}>
+                        {step3OrbitStatus === "running" ? "⟳ executando..." : step3OrbitStatus === "done" ? "✓ ok" : step3OrbitStatus === "error" ? "✗ erro" : "○ aguardando"}
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: step3OrbitStatus === "done" ? "100%" : step3OrbitStatus === "running" ? "50%" : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+                  {/* FIRE */}
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>FIRE:</span>
+                      <span style={{
+                        fontFamily: "monospace",
+                        fontSize: 9,
+                        color: step3FireStatus === "running" ? "#a855f7" : step3FireStatus === "done" ? "var(--atlas-green)" : step3FireStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
+                        fontWeight: step3FireStatus === "running" ? "bold" : "normal",
+                      }}>
+                        {step3FireStatus === "running" ? "⟳ executando..." : step3FireStatus === "done" ? "✓ ok" : step3FireStatus === "error" ? "✗ erro" : "○ aguardando"}
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: step3FireStatus === "done" ? "100%" : step3FireStatus === "running" ? "50%" : "0%", height: "100%", background: "#a855f7", transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+                  {/* GATE */}
                   <div>
-                    <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginRight: 6 }}>FIRE:</span>
-                    <span style={{
-                      fontFamily: "monospace",
-                      fontSize: 9,
-                      color: step3FireStatus === "running" ? "#a855f7" : step3FireStatus === "done" ? "var(--atlas-green)" : "var(--atlas-text-secondary)",
-                      fontWeight: step3FireStatus === "running" ? "bold" : "normal",
-                    }}>
-                      {step3FireStatus === "running" ? "⟳ executando..." : step3FireStatus === "done" ? "✓ ok" : "○ aguardando"}
-                    </span>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>GATE:</span>
+                      <span style={{
+                        fontFamily: "monospace",
+                        fontSize: 9,
+                        color: step3GateStatus === "running" ? "var(--atlas-blue)" : step3GateStatus === "done" ? "var(--atlas-green)" : step3GateStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
+                        fontWeight: step3GateStatus === "running" ? "bold" : "normal",
+                      }}>
+                        {step3GateStatus === "running" ? "⟳ executando..." : step3GateStatus === "done" ? "✓ ok" : step3GateStatus === "error" ? "✗ erro" : "○ aguardando"}
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: step3GateStatus === "done" ? "100%" : step3GateStatus === "running" ? `${Math.round((gateCriteriosProgresso.length / 8) * 100)}%` : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
+                    </div>
                   </div>
                 </div>
               )}

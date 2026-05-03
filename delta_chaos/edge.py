@@ -412,11 +412,14 @@ class EDGE:
 
         # [1/3] TAPE
         print(f"\n  [1/3] TAPE")
+        emit_event("TAPE", "start", ticker=self.ativos[0])
         df_tape = tape_historico_carregar(
             ativos=self.ativos, anos=anos, forcar=False)
         if df_tape.empty:
             print("  ✗ TAPE vazio. Abortando.")
+            emit_event("TAPE", "error", ticker=self.ativos[0])
             return pd.DataFrame()
+        emit_event("TAPE", "done", ticker=self.ativos[0])
         print(f"  ✓ TAPE: {len(df_tape)} registros")
         df_selic = _obter_selic(min(anos), max(anos))
 
@@ -425,12 +428,14 @@ class EDGE:
 
         # [2/3] ORBIT
         print(f"\n  [2/3] ORBIT v3.4")
+        emit_event("ORBIT", "start", ticker=self.ativos[0])
         df_regimes = self.orbit.orbit_rodar(
             df_tape, anos, modo=modo_orbit, externas_dict=externas)
         if df_regimes.empty:
             print("  ✗ ORBIT vazio. Abortando.")
+            emit_event("ORBIT", "error", ticker=self.ativos[0])
             return pd.DataFrame()
-
+        emit_event("ORBIT", "done", ticker=self.ativos[0])
         print(f"  ✓ ORBIT: regimes calculados")
 
         df_regimes["ciclo_id"] = \
@@ -448,6 +453,7 @@ class EDGE:
 
         # [3/3] FIRE
         print(f"\n  [3/3] FIRE")
+        emit_event("FIRE", "start", ticker=self.ativos[0])
         datas = sorted(df_tape["data"].unique())
 
         reflect_ciclos_processados = set()
@@ -509,6 +515,7 @@ class EDGE:
                         if op.core.motivo_saida),
                 )
 
+        emit_event("FIRE", "done", ticker=self.ativos[0])
         print(f"\n  {'═'*55}")
         print(f"  EDGE.backtest concluído")
         print(f"  {'═'*55}")
