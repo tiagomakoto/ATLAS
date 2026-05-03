@@ -417,7 +417,7 @@ const SubFaseProgressBar = React.memo(function SubFaseProgressBar({ modulo, stat
   const statusLabel = status === "running" ? "⟳ executando..." : status === "done" ? "✓ ok" : status === "error" ? "✗ erro" : "○ aguardando";
   const textColor = status === "running" ? barColor : status === "done" ? "var(--atlas-green)" : status === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)";
   const fontWeight = status === "running" ? "bold" : "normal";
-  const numericPercent = status === "done" ? 100 : status === "running" ? (typeof percent === "number" ? percent : 50) : 0;
+  const numericPercent = status === "done" ? 100 : status === "running" ? Math.max(typeof percent === "number" ? percent : 50, 5) : 0;
 
   return (
     <div
@@ -526,6 +526,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   const [fireDiag, setFireDiag] = useState(null);
   const [gateCriteriosProgresso, setGateCriteriosProgresso] = useState([]);
   const [cotahistInfo, setCotahistInfo] = useState(null);
+  const [step2Tick, setStep2Tick] = useState(0); // força re-render para elapsedForStep2
+  const [step3Progress, setStep3Progress] = useState({ TAPE: 0, ORBIT: 0, FIRE: 0, GATE: 0 });
   const [showStep1Guard, setShowStep1Guard] = useState(false);
   const [subModules, setSubModules] = useState({ TAPE: null, ORBIT: null, REFLECT: null });
   const [tuneRanking, setTuneRanking] = useState(null);
@@ -580,7 +582,8 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               setStep3SubFases({ TAPE: "done", ORBIT: "done", FIRE: "running", GATE: "done" });
             } else {
               setStep3Fase(STEP3_FASES.GATE);
-              setStep3SubFases({ TAPE: "idle", ORBIT: "idle", FIRE: "idle", GATE: "running" });
+setStep3SubFases({ TAPE: "idle", ORBIT: "idle", FIRE: "idle", GATE: "running" });
+        setStep3Progress({ TAPE: 0, ORBIT: 0, FIRE: 0, GATE: 0 });
             }
           }
 
@@ -738,6 +741,13 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     return () => clearInterval(interval);
   }, [ultimoEventoEm, step2IniciadoEm, steps]);
 
+  // ── Timer 1s: força re-render para elapsedForStep2() durante Step 2 rodando ──
+  useEffect(() => {
+    if (steps["2_tune"]?.status !== "running") return undefined;
+    const interval = setInterval(() => setStep2Tick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [steps]);
+
   async function refreshGateResult() {
     try {
       const res = await fetch(`${API_BASE}/ativos/${ticker}/gate-resultado`);
@@ -810,6 +820,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
         setGateCriteriosProgresso([]);
         setStep3Fase(STEP3_FASES.GATE);
         setStep3SubFases({ TAPE: "idle", ORBIT: "idle", FIRE: "idle", GATE: "running" });
+        setStep3Progress({ TAPE: 0, ORBIT: 0, FIRE: 0, GATE: 0 });
         const gateStatus = evento?.data?.status === "paused" ? "paused" : "running";
         setSteps((prev) => ({
           ...prev,
@@ -831,6 +842,13 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
       if (modulo === "FIRE") {
         setStep3Fase(STEP3_FASES.FIRE);
         setStep3SubFases((prev) => ({ ...prev, FIRE: "running" }));
+      }
+    }
+
+    if (evento?.type === "dc_module_progress") {
+      const progress = evento?.data?.progress;
+      if (typeof progress === "number" && step3Fase !== null && ["TAPE", "ORBIT", "FIRE", "GATE"].includes(modulo)) {
+        setStep3Progress((prev) => ({ ...prev, [modulo]: Math.min(Math.round(progress), 100) }));
       }
     }
 
@@ -1451,7 +1469,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
                 </>
               )}
               <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)", marginTop: 4 }}>
-                Tempo decorrido {elapsedForStep2()} (est. restante {estimatedForStep2()})
+                Tempo decorrido {step2Tick, elapsedForStep2()} (est. restante {estimatedForStep2()})
               </div>
               <TuneRegimeProgressPanel progressByRegime={tuneRegimeProgress} />
             </div>
@@ -1500,9 +1518,9 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               {/* Sub-fases TAPE / ORBIT / FIRE / GATE quando step3 está rodando */}
               {status === "running" && (
                 <div style={{ marginTop: 8, marginLeft: 20, borderLeft: "2px solid var(--atlas-border)", paddingLeft: 12 }}>
-                  <SubFaseProgressBar modulo="TAPE" status={step3SubFases.TAPE} percent={50} errorText={step3SubFasesErrors.TAPE} barColor="var(--atlas-blue)" />
-                  <SubFaseProgressBar modulo="ORBIT" status={step3SubFases.ORBIT} percent={50} errorText={step3SubFasesErrors.ORBIT} barColor="var(--atlas-blue)" />
-                  <SubFaseProgressBar modulo="FIRE" status={step3SubFases.FIRE} percent={50} errorText={step3SubFasesErrors.FIRE} barColor="#a855f7" />
+                  <SubFaseProgressBar modulo="TAPE" status={step3SubFases.TAPE} percent={step3Progress.TAPE} errorText={step3SubFasesErrors.TAPE} barColor="var(--atlas-blue)" />
+                  <SubFaseProgressBar modulo="ORBIT" status={step3SubFases.ORBIT} percent={step3Progress.ORBIT} errorText={step3SubFasesErrors.ORBIT} barColor="var(--atlas-blue)" />
+                  <SubFaseProgressBar modulo="FIRE" status={step3SubFases.FIRE} percent={step3Progress.FIRE} errorText={step3SubFasesErrors.FIRE} barColor="#a855f7" />
                   <SubFaseProgressBar modulo="GATE" status={step3SubFases.GATE} percent={Math.round((gateCriteriosProgresso.length / 8) * 100)} errorText={step3SubFasesErrors.GATE} barColor="var(--atlas-blue)" />
                 </div>
               )}

@@ -73,6 +73,8 @@ def emit_event(modulo, status, ticker=None, **kwargs):
         emit_dc_event("dc_module_complete", modulo, "ok", ticker=ticker, **kwargs)
     elif status == "error":
         emit_dc_event("dc_module_complete", modulo, "error", ticker=ticker, **kwargs)
+    elif status == "progress":
+        emit_dc_event("dc_module_progress", modulo, "running", ticker=ticker, **kwargs)
     else:
         emit_dc_event("dc_module_complete", modulo, status, ticker=ticker, **kwargs)
 
@@ -463,6 +465,7 @@ class EDGE:
 
         reflect_ciclos_processados = set()
 
+        _fire_current = 0
         with _tqdm(total=len(datas), desc="FIRE",
                   unit="pregão", ncols=None) as pbar:
             for data in datas:
@@ -512,8 +515,12 @@ class EDGE:
                         configs_ativos[ativo] = tape_ativo_carregar(ativo)
                     reflect_ciclos_processados.add(ciclo_id)
 
-                pbar.update(1)
-                pbar.set_postfix(
+            pbar.update(1)
+            _fire_current += 1
+            if _fire_current % 50 == 0:
+                emit_event("FIRE", "progress", ticker=ticker,
+                           progress=round((_fire_current / len(datas)) * 100))
+            pbar.set_postfix(
                     abertas  = len(self.book.posicoes_abertas),
                     fechadas = sum(
                         1 for op in self.book._ops

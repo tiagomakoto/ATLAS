@@ -1,6 +1,6 @@
 ---
 uid: mod-delta-001
-version: 1.2.8
+version: 1.2.9
 status: validated
 owner: Chan
 
@@ -44,6 +44,7 @@ constraints:
   - Volume usa campo Lanc. como proxy quando Vol. Financeiro ausente
 
 notes:
+  - 2026-05-03: código modificado — tape.py
   - 2026-04-30: código modificado — tape.py
   - 2026-04-30: código modificado — tape.py
   - 2026-04-30: código modificado — tape.py

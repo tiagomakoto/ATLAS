@@ -436,7 +436,7 @@ def tune_eleicao_competitiva(ticker: str) -> dict:
     df_dias = {}
     for i, data in enumerate(datas):
         df_dias[str(data)[:10]] = df_tape_c[df_tape_c["data"] == data].copy()
-        if (i + 1) % 100 == 0 or (i + 1) == len(datas):
+        if (i + 1) % 25 == 0 or (i + 1) == len(datas):
             emit_dc_event("dc_tune_index_progress", "TUNE", "running",
                           ticker=TICKER, current=i + 1, total=len(datas))
     emit_log(f"TUNE v3.1 [{TICKER}] pré-cômputo concluído — iniciando Etapa A→B", level="info")

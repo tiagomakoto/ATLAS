@@ -1444,13 +1444,19 @@ def tape_historico_carregar(ativos, anos, forcar=False):
     print(f"{'═'*60}")
     df_selic = _obter_selic(min(anos), max(anos))
     frames   = []
-    total    = len(anos) * len(ativos)
+    total = len(anos) * len(ativos)
+    _tape_current = 0
     with _tqdm(total=total, desc="Progresso",
                unit="job", ncols=None) as pbar:
         for ano in anos:
             txts = _baixar_cotahist(ano, forcar=forcar)
             if not txts:
-                pbar.update(len(ativos)); continue
+                pbar.update(len(ativos))
+                _tape_current += len(ativos)
+                if _atlas_disponivel and total > 0:
+                    emit_dc_event("dc_module_progress", "TAPE", "running",
+                        progress=round((_tape_current / total) * 100), ticker=ativo)
+                continue
 
             for txt in txts:                     # anual = 1 item, mensais = N itens
                 for ativo in ativos:
@@ -1479,6 +1485,10 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                             os.remove(cache)
                         else:
                             pbar.update(1)
+                            _tape_current += 1
+                            if _atlas_disponivel and total > 0:
+                                emit_dc_event("dc_module_progress", "TAPE", "running",
+                                    progress=round((_tape_current / total) * 100), ticker=ativo)
                             continue
 
                     try:
@@ -1488,12 +1498,20 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                         pbar.write(f"  ⚠ {ativo} {ano} "
                                    f"erro COTAHIST: {e} — pulando")
                         pbar.update(1)
+                        _tape_current += 1
+                        if _atlas_disponivel and total > 0:
+                            emit_dc_event("dc_module_progress", "TAPE", "running",
+                                progress=round((_tape_current / total) * 100), ticker=ativo)
                         continue
 
                     if df_raw.empty:
                         pbar.write(f"  ~ {ativo} {ano}: "
                                    f"sem dados — pulando")
                         pbar.update(1)
+                        _tape_current += 1
+                        if _atlas_disponivel and total > 0:
+                            emit_dc_event("dc_module_progress", "TAPE", "running",
+                                progress=round((_tape_current / total) * 100), ticker=ativo)
                         continue
 
                     n_op = (df_raw["tipo"].isin(
@@ -1502,6 +1520,10 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                         pbar.write(f"  ~ {ativo} {ano}: "
                                    f"sem opções — pulando")
                         pbar.update(1)
+                        _tape_current += 1
+                        if _atlas_disponivel and total > 0:
+                            emit_dc_event("dc_module_progress", "TAPE", "running",
+                                progress=round((_tape_current / total) * 100), ticker=ativo)
                         continue
 
                     pbar.write(f"  {ativo} {ano}: "
@@ -1515,12 +1537,20 @@ def tape_historico_carregar(ativos, anos, forcar=False):
                                    f"erro enriquecimento: {e} "
                                    f"— pulando")
                         pbar.update(1)
+                        _tape_current += 1
+                        if _atlas_disponivel and total > 0:
+                            emit_dc_event("dc_module_progress", "TAPE", "running",
+                                progress=round((_tape_current / total) * 100), ticker=ativo)
                         continue
 
                     if df_enr.empty:
                         pbar.write(f"  ~ {ativo} {ano}: "
                                    f"enriquecimento vazio — pulando")
                         pbar.update(1)
+                        _tape_current += 1
+                        if _atlas_disponivel and total > 0:
+                            emit_dc_event("dc_module_progress", "TAPE", "running",
+                                progress=round((_tape_current / total) * 100), ticker=ativo)
                         continue
 
                     try:
@@ -1535,6 +1565,10 @@ def tape_historico_carregar(ativos, anos, forcar=False):
 
                     frames.append(df_enr)
                     pbar.update(1)
+                    _tape_current += 1
+                    if _atlas_disponivel and total > 0:
+                        emit_dc_event("dc_module_progress", "TAPE", "running",
+                            progress=round((_tape_current / total) * 100), ticker=ativo)
 
     if not frames:
         print("  ✗ Nenhum dado.")
