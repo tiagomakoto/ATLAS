@@ -1,6 +1,6 @@
 ---
 uid: mod-atlas-022
-version: 1.0.17
+version: 1.0.19
 status: validated
 owner: Chan
 
@@ -31,6 +31,8 @@ constraints:
   - Aplicação de parâmetros requer POST /delta-chaos/tune/aplicar com confirmação
 
 notes:
+  - 2026-05-03: código modificado — CalibracaoDrawer.jsx
+  - 2026-05-03: código modificado — CalibracaoDrawer.jsx
   - 2026-05-02: código modificado — CalibracaoDrawer.jsx
   - 2026-05-02: código modificado — CalibracaoDrawer.jsx
   - 2026-04-29: código modificado — CalibracaoDrawer.jsx

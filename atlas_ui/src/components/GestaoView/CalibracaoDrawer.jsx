@@ -408,6 +408,40 @@ function step1ModulesText(status, subModules) {
   return "TAPE";
 }
 
+// ── SubFaseProgressBar ────────────────────────────────────────────────────────
+// Barra de progresso de sub-fase do Step 3 (TAPE/ORBIT/FIRE/GATE).
+// React.memo evita re-render desnecessário quando apenas outra sub-fase muda.
+// Props: modulo (string), status (idle|running|done|error), percent (number 0-100),
+//        errorText (string|null), barColor (CSS color string).
+const SubFaseProgressBar = React.memo(function SubFaseProgressBar({ modulo, status, percent, errorText, barColor }) {
+  const statusLabel = status === "running" ? "⟳ executando..." : status === "done" ? "✓ ok" : status === "error" ? "✗ erro" : "○ aguardando";
+  const textColor = status === "running" ? barColor : status === "done" ? "var(--atlas-green)" : status === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)";
+  const fontWeight = status === "running" ? "bold" : "normal";
+  const numericPercent = status === "done" ? 100 : status === "running" ? (typeof percent === "number" ? percent : 50) : 0;
+
+  return (
+    <div
+      style={{ marginBottom: 6 }}
+      title={status === "error" ? (errorText || "Erro") : ""}
+      role="progressbar"
+      aria-label={`Progresso ${modulo}: ${statusLabel}`}
+      aria-valuenow={numericPercent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+        <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>{modulo}:</span>
+        <span style={{ fontFamily: "monospace", fontSize: 9, color: textColor, fontWeight }}>
+          {statusLabel}
+        </span>
+      </div>
+      <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ width: `${numericPercent}%`, height: "100%", background: barColor, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+});
+
 function TuneRegimeProgressPanel({ progressByRegime }) {
   const rows = Object.entries(progressByRegime || {});
   if (!rows.length) return null;
@@ -510,11 +544,6 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
     }
     return null;
   }, [steps]);
-
-  const step3TapeStatus = useMemo(() => step3SubFases.TAPE, [step3SubFases]);
-  const step3OrbitStatus = useMemo(() => step3SubFases.ORBIT, [step3SubFases]);
-  const step3FireStatus = useMemo(() => step3SubFases.FIRE, [step3SubFases]);
-  const step3GateStatus = useMemo(() => step3SubFases.GATE, [step3SubFases]);
 
     useEffect(() => {
     let mounted = true;
@@ -1471,74 +1500,10 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
               {/* Sub-fases TAPE / ORBIT / FIRE / GATE quando step3 está rodando */}
               {status === "running" && (
                 <div style={{ marginTop: 8, marginLeft: 20, borderLeft: "2px solid var(--atlas-border)", paddingLeft: 12 }}>
-                  {/* TAPE */}
-                  <div style={{ marginBottom: 6 }} title={step3TapeStatus === "error" ? step3SubFasesErrors.TAPE || "Erro" : ""}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>TAPE:</span>
-                      <span style={{
-                        fontFamily: "monospace",
-                        fontSize: 9,
-                        color: step3TapeStatus === "running" ? "var(--atlas-blue)" : step3TapeStatus === "done" ? "var(--atlas-green)" : step3TapeStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
-                        fontWeight: step3TapeStatus === "running" ? "bold" : "normal",
-                      }}>
-                        {step3TapeStatus === "running" ? "⟳ executando..." : step3TapeStatus === "done" ? "✓ ok" : step3TapeStatus === "error" ? "✗ erro" : "○ aguardando"}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{ width: step3TapeStatus === "done" ? "100%" : step3TapeStatus === "running" ? "50%" : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
-                    </div>
-                  </div>
-                  {/* ORBIT */}
-                  <div style={{ marginBottom: 6 }} title={step3OrbitStatus === "error" ? step3SubFasesErrors.ORBIT || "Erro" : ""}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>ORBIT:</span>
-                      <span style={{
-                        fontFamily: "monospace",
-                        fontSize: 9,
-                        color: step3OrbitStatus === "running" ? "var(--atlas-blue)" : step3OrbitStatus === "done" ? "var(--atlas-green)" : step3OrbitStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
-                        fontWeight: step3OrbitStatus === "running" ? "bold" : "normal",
-                      }}>
-                        {step3OrbitStatus === "running" ? "⟳ executando..." : step3OrbitStatus === "done" ? "✓ ok" : step3OrbitStatus === "error" ? "✗ erro" : "○ aguardando"}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{ width: step3OrbitStatus === "done" ? "100%" : step3OrbitStatus === "running" ? "50%" : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
-                    </div>
-                  </div>
-{/* FIRE */}
-                   <div style={{ marginBottom: 6 }} title={step3FireStatus === "error" ? step3SubFasesErrors.FIRE || "Erro" : ""}>
-                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                       <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>FIRE:</span>
-                       <span style={{
-                         fontFamily: "monospace",
-                         fontSize: 9,
-                         color: step3FireStatus === "running" ? "#a855f7" : step3FireStatus === "done" ? "var(--atlas-green)" : step3FireStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
-                         fontWeight: step3FireStatus === "running" ? "bold" : "normal",
-                       }}>
-                         {step3FireStatus === "running" ? "⟳ executando..." : step3FireStatus === "done" ? "✓ ok" : step3FireStatus === "error" ? "✗ erro" : "○ aguardando"}
-                       </span>
-                     </div>
-                     <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
-                       <div style={{ width: step3FireStatus === "done" ? "100%" : step3FireStatus === "running" ? "50%" : "0%", height: "100%", background: "#a855f7", transition: "width 0.3s" }} />
-                     </div>
-                   </div>
-{/* GATE */}
-                   <div title={step3GateStatus === "error" ? step3SubFasesErrors.GATE || "Erro" : ""}>
-                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                       <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--atlas-text-secondary)" }}>GATE:</span>
-                       <span style={{
-                         fontFamily: "monospace",
-                         fontSize: 9,
-                         color: step3GateStatus === "running" ? "var(--atlas-blue)" : step3GateStatus === "done" ? "var(--atlas-green)" : step3GateStatus === "error" ? "var(--atlas-red)" : "var(--atlas-text-secondary)",
-                         fontWeight: step3GateStatus === "running" ? "bold" : "normal",
-                       }}>
-                         {step3GateStatus === "running" ? "⟳ executando..." : step3GateStatus === "done" ? "✓ ok" : step3GateStatus === "error" ? "✗ erro" : "○ aguardando"}
-                       </span>
-                     </div>
-                     <div style={{ width: "100%", height: 6, background: "var(--atlas-border)", borderRadius: 4, overflow: "hidden" }}>
-                       <div style={{ width: step3GateStatus === "done" ? "100%" : step3GateStatus === "running" ? `${Math.round((gateCriteriosProgresso.length / 8) * 100)}%` : "0%", height: "100%", background: "var(--atlas-blue)", transition: "width 0.3s" }} />
-                     </div>
-                   </div>
+                  <SubFaseProgressBar modulo="TAPE" status={step3SubFases.TAPE} percent={50} errorText={step3SubFasesErrors.TAPE} barColor="var(--atlas-blue)" />
+                  <SubFaseProgressBar modulo="ORBIT" status={step3SubFases.ORBIT} percent={50} errorText={step3SubFasesErrors.ORBIT} barColor="var(--atlas-blue)" />
+                  <SubFaseProgressBar modulo="FIRE" status={step3SubFases.FIRE} percent={50} errorText={step3SubFasesErrors.FIRE} barColor="#a855f7" />
+                  <SubFaseProgressBar modulo="GATE" status={step3SubFases.GATE} percent={Math.round((gateCriteriosProgresso.length / 8) * 100)} errorText={step3SubFasesErrors.GATE} barColor="var(--atlas-blue)" />
                 </div>
               )}
 
@@ -1635,6 +1600,9 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
   return (
     <>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Calibração"
         style={{
           position: "fixed",
           top: 0,
@@ -1656,6 +1624,7 @@ export default function CalibracaoDrawer({ ticker, onClose }) {
           </h3>
           <button
             onClick={onClose}
+            aria-label="Fechar calibração"
             style={{ background: "transparent", border: "none", fontSize: 16, color: "var(--atlas-text-secondary)", cursor: "pointer" }}
           >
             ×
