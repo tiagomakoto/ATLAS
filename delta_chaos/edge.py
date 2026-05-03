@@ -391,6 +391,11 @@ class EDGE:
 
         self.book._ativo_atual = "_".join(self.ativos)
 
+        # Validação: garante ticker válido para eventos WS
+        ticker = self.ativos[0] if self.ativos else "DESCONHECIDO"
+        if not self.ativos:
+            print("  ⚠ AVISO: self.ativos vazio — usando ticker padrão para eventos")
+
         # Limpa BOOK antes de backtest
         for ext in ["json", "parquet"]:
             p = os.path.join(BOOK_DIR, f"book_backtest.{ext}")
@@ -412,14 +417,14 @@ class EDGE:
 
         # [1/3] TAPE
         print(f"\n  [1/3] TAPE")
-        emit_event("TAPE", "start", ticker=self.ativos[0])
+        emit_event("TAPE", "start", ticker=ticker)
         df_tape = tape_historico_carregar(
             ativos=self.ativos, anos=anos, forcar=False)
         if df_tape.empty:
             print("  ✗ TAPE vazio. Abortando.")
-            emit_event("TAPE", "error", ticker=self.ativos[0])
+            emit_event("TAPE", "error", ticker=ticker)
             return pd.DataFrame()
-        emit_event("TAPE", "done", ticker=self.ativos[0])
+        emit_event("TAPE", "done", ticker=ticker)
         print(f"  ✓ TAPE: {len(df_tape)} registros")
         df_selic = _obter_selic(min(anos), max(anos))
 
@@ -428,14 +433,14 @@ class EDGE:
 
         # [2/3] ORBIT
         print(f"\n  [2/3] ORBIT v3.4")
-        emit_event("ORBIT", "start", ticker=self.ativos[0])
+        emit_event("ORBIT", "start", ticker=ticker)
         df_regimes = self.orbit.orbit_rodar(
             df_tape, anos, modo=modo_orbit, externas_dict=externas)
         if df_regimes.empty:
             print("  ✗ ORBIT vazio. Abortando.")
-            emit_event("ORBIT", "error", ticker=self.ativos[0])
+            emit_event("ORBIT", "error", ticker=ticker)
             return pd.DataFrame()
-        emit_event("ORBIT", "done", ticker=self.ativos[0])
+        emit_event("ORBIT", "done", ticker=ticker)
         print(f"  ✓ ORBIT: regimes calculados")
 
         df_regimes["ciclo_id"] = \
@@ -453,7 +458,7 @@ class EDGE:
 
         # [3/3] FIRE
         print(f"\n  [3/3] FIRE")
-        emit_event("FIRE", "start", ticker=self.ativos[0])
+        emit_event("FIRE", "start", ticker=ticker)
         datas = sorted(df_tape["data"].unique())
 
         reflect_ciclos_processados = set()
@@ -515,7 +520,7 @@ class EDGE:
                         if op.core.motivo_saida),
                 )
 
-        emit_event("FIRE", "done", ticker=self.ativos[0])
+        emit_event("FIRE", "done", ticker=ticker)
         print(f"\n  {'═'*55}")
         print(f"  EDGE.backtest concluído")
         print(f"  {'═'*55}")
