@@ -96,3 +96,13 @@ status: pendente
   campos pendentes: function, role, intent, constraints
 
 status: pendente
+
+---
+## b8c802f — 2026-05-03 15:30
+
+### Módulos novos (Categoria B — todos os campos pendentes)
+- SYSTEMS/atlas/modules/CalibracaoDrawer.usability.test.md
+  arquivo de código: atlas_ui/src/components/GestaoView/__tests__/CalibracaoDrawer.usability.test.jsx
+  campos pendentes: function, role, intent, constraints
+
+status: pendente

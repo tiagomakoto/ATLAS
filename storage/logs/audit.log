@@ -542,3 +542,8 @@
 {"timestamp": "2026-05-02T20:42:30.744330", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
 {"timestamp": "2026-05-02T20:45:51.397153", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
 {"timestamp": "2026-05-02T20:47:37.949262", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-03T12:02:36.142941", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-03T12:05:25.612508", "user": "CEO", "action": "dc_tune", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-03T12:06:42.552901", "user": "CEO", "action": "dc_backtest_gate", "payload": {"ticker": "PRIO3"}, "response": {"status": "OK"}}
+{"timestamp": "2026-05-03T21:47:26.390425", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "ERRO", "error": "NameError(\"name 'emit_dc_event' is not defined\")"}}
+{"timestamp": "2026-05-03T21:54:24.941089", "user": "CEO", "action": "dc_orbit", "payload": {"ticker": "PRIO3", "anos": null}, "response": {"status": "ERRO", "error": "NameError(\"name 'emit_dc_event' is not defined\")"}}
